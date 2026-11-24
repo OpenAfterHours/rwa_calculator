@@ -429,10 +429,14 @@ double-default capital charge
 K_dd = K_obligor × (0.15 + 160 × PD_guarantor)
 ```
 
-instead of the standard guarantee-substitution treatment. Eligibility for
-the protection provider follows CRR Art. 202 (institutions, investment
-firms, insurance undertakings, export credit agencies meeting the CQS
-threshold) and the operational requirements of Art. 217.
+instead of the standard guarantee-substitution treatment, where that is
+lower. CRR Art. 202 limits the protection provider to institutions,
+investment firms, insurance and reinsurance undertakings and export credit
+agencies. The calculator treats only `institution` and `bank` guarantors as
+providers; sovereign, MDB, CCP, generic financial-institution and corporate
+guarantors never get double default. The Art. 202(b)–(d) rating and PD
+conditions are not checked. See
+[Double Default Overlay](../specifications/basel31/credit-risk-mitigation.md#double-default-overlay-crr-only-art-1533).
 
 !!! warning "CRR-only — removed under Basel 3.1"
     PRA PS1/26 blanks Art. 153(3), Art. 202, and Art. 217. Setting

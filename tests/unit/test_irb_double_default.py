@@ -8,7 +8,10 @@ recognising that both borrower AND guarantor must default simultaneously:
 Only available under CRR (Basel 3.1 removes it). Requires:
 - A-IRB permission (own LGD estimates)
 - Corporate underlying exposure
-- Eligible guarantor (institution, sovereign, or rated corporate CQS ≤ 2)
+- A protection provider on the Art. 202 list. Of the input entity types only
+  ``institution`` and ``bank`` are certainly on it (P1.203): sovereigns, central
+  banks, MDBs, international organisations, RGLAs, PSEs, CCPs, generic financial
+  institutions and corporates are NOT eligible providers, whatever their rating
 - Guarantor has internal PD
 """
 
@@ -20,7 +23,9 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import PermissionMode
+from rwa_calc.data import schemas
+from rwa_calc.domain.enums import ExposureClass, PermissionMode
+from rwa_calc.engine.entity_class_maps import entity_type_to_sa_class
 from rwa_calc.engine.irb.formulas import calculate_double_default_k
 from rwa_calc.engine.irb.transforms import (
     apply_guarantee_substitution,
@@ -70,7 +75,7 @@ def _make_guaranteed_frame(
     unguaranteed_portion: float = 400_000.0,
     guarantor_entity_type: str = "bank",
     guarantor_exposure_class: str = "institution",
-    guarantor_cqs: int = 2,
+    guarantor_cqs: int | None = 2,
     guarantor_pd: float | None = 0.003,
     guarantor_approach: str = "irb",
     is_airb: bool = True,
@@ -95,7 +100,7 @@ def _make_guaranteed_frame(
             "unguaranteed_portion": [unguaranteed_portion],
             "guarantor_entity_type": [guarantor_entity_type],
             "guarantor_exposure_class": [guarantor_exposure_class],
-            "guarantor_cqs": [guarantor_cqs],
+            "guarantor_cqs": pl.Series([guarantor_cqs], dtype=pl.Int64),
             "guarantor_pd": [guarantor_pd],
             "guarantor_approach": [guarantor_approach],
             "is_airb": [is_airb],
@@ -179,7 +184,7 @@ class TestDoubleDefaultEligibility:
         assert result["is_double_default_eligible"][0] is False
 
     def test_corporate_guarantor_cqs3_not_eligible(self):
-        """Corporate guarantor with CQS 3 → not eligible (must be CQS ≤ 2)."""
+        """Corporate guarantor with CQS 3 → not eligible (no corporate is an Art. 202 provider)."""
         lf = _make_guaranteed_frame(
             guarantor_entity_type="company",
             guarantor_exposure_class="corporate",
@@ -187,26 +192,6 @@ class TestDoubleDefaultEligibility:
         )
         result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
         assert result["is_double_default_eligible"][0] is False
-
-    def test_corporate_guarantor_cqs2_eligible(self):
-        """Corporate guarantor with CQS 2 → eligible."""
-        lf = _make_guaranteed_frame(
-            guarantor_entity_type="company",
-            guarantor_exposure_class="corporate",
-            guarantor_cqs=2,
-        )
-        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
-        assert result["is_double_default_eligible"][0] is True
-
-    def test_sovereign_guarantor_eligible(self):
-        """Sovereign guarantor → eligible."""
-        lf = _make_guaranteed_frame(
-            guarantor_entity_type="central_government",
-            guarantor_exposure_class="central_govt_central_bank",
-            guarantor_cqs=1,
-        )
-        result = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect()
-        assert result["is_double_default_eligible"][0] is True
 
     def test_dd_disabled_in_config(self):
         """DD disabled in config → not eligible even if criteria met."""
@@ -284,9 +269,13 @@ class TestDoubleDefaultRWA:
         assert result["double_default_unfunded_protection"][0] == pytest.approx(0.0)
 
     def test_dd_floor_at_guarantor_rw(self):
-        """DD RW cannot be lower than direct exposure to guarantor (para 286)."""
+        """A high-PD guarantor makes DD non-beneficial, so the substitution RW is kept.
+
+        CRR Art. 153(3) has no "not lower than a direct exposure" floor (that was
+        Basel II para 286, not onshored — see TestDoubleDefaultReachable); DD is
+        simply not applied when rw_dd is not below the substitution RW.
+        """
         # High guarantor PD → DD multiplier > 1 → DD RW > substitution RW
-        # In this case DD is NOT better than substitution, so substitution used
         lf = _make_guaranteed_frame(
             guarantor_pd=0.01,  # 1% PD → multiplier = 1.75
             risk_weight=0.50,
@@ -375,3 +364,219 @@ class TestDoubleDefaultReachable:
         assert result["guarantor_rw"][0] == pytest.approx(0.23)
         assert result["risk_weight"][0] == pytest.approx(0.23)
         assert result["rwa"][0] == pytest.approx(230_000.0)
+
+
+class TestDoubleDefaultProviderList:
+    """P1.203 — CRR Art. 202 limits the Art. 153(3) double-default PROVIDER.
+
+    CRR Art. 202 (legislation.gov.uk): "An institution may use institutions,
+    investment firms, insurance and reinsurance undertakings and export credit
+    agencies as eligible providers of unfunded credit protection which qualify
+    for the treatment set out in Article 153(3) where they meet all the following
+    conditions: ...". Sovereigns, central banks and MDBs are not on that list, nor
+    are CCPs, and a generic Art. 4(1)(26) "financial institution" is by definition
+    "an undertaking other than an institution". Insurers are on the list but no
+    entity type tells them apart from a non-financial corporate, so no corporate
+    qualifies. Only ``institution`` / ``bank`` guarantors remain.
+
+    Every row is a 1,000,000 corporate exposure, fully guaranteed, obligor RW 1.00,
+    SA-routed guarantor with an internal PD of 0.05%. Where DD applies:
+    rw_dd = 1.00 x (0.15 + 160 x 0.0005) = 0.23 -> RWA 230,000. Where it does not,
+    the guarantor's SA substitution RW stands (CRR Art. 114 Table 1 CQS 3, Art. 117
+    MDB CQS 2, Art. 120 Table 3 institution CQS 2 and Art. 122 Table 6 corporate
+    CQS 2 are each 50%; the CQS 1 sovereign and the named MDB 0%; the CCP 2%).
+    """
+
+    @staticmethod
+    def _full_cover_frame(
+        guarantor_entity_type: str, guarantor_exposure_class: str, guarantor_cqs: int | None
+    ) -> pl.LazyFrame:
+        return _make_guaranteed_frame(
+            rwa=1_000_000.0,
+            risk_weight=1.00,
+            guaranteed_portion=1_000_000.0,
+            unguaranteed_portion=0.0,
+            guarantor_entity_type=guarantor_entity_type,
+            guarantor_exposure_class=guarantor_exposure_class,
+            guarantor_cqs=guarantor_cqs,
+            guarantor_pd=0.0005,
+            guarantor_approach="sa",
+        )
+
+    @pytest.mark.parametrize(
+        ("guarantor_entity_type", "guarantor_exposure_class", "guarantor_cqs", "substitution_rw"),
+        [
+            # Red before P1.203: each was DD-eligible AND DD-applied (RW 0.23).
+            pytest.param("sovereign", "central_govt_central_bank", 3, 0.50, id="sovereign_cqs3"),
+            pytest.param(
+                "central_bank", "central_govt_central_bank", 3, 0.50, id="central_bank_cqs3"
+            ),
+            pytest.param("mdb", "mdb", 2, 0.50, id="mdb_cqs2"),
+            pytest.param("company", "corporate", 2, 0.50, id="corporate_cqs2"),
+            pytest.param("corporate", "corporate_sme", 2, 0.50, id="corporate_sme_cqs2"),
+            pytest.param(
+                "financial_institution", "institution", 2, 0.50, id="financial_institution_cqs2"
+            ),
+            # Red before P1.203 on eligibility / C 08.01 col 0220 only: DD was never
+            # beneficial against a 0% or 2% substitution RW.
+            pytest.param("sovereign", "central_govt_central_bank", 1, 0.0, id="sovereign_cqs1"),
+            pytest.param("mdb_named", "mdb", 1, 0.0, id="named_mdb"),
+            pytest.param("ccp", "institution", 2, 0.02, id="ccp"),
+        ],
+    )
+    def test_provider_outside_art_202_list_takes_no_double_default(
+        self,
+        guarantor_entity_type: str,
+        guarantor_exposure_class: str,
+        guarantor_cqs: int,
+        substitution_rw: float,
+    ) -> None:
+        """A provider Art. 202 does not list is not DD-eligible and keeps its substitution RW."""
+        # Arrange
+        lf = self._full_cover_frame(guarantor_entity_type, guarantor_exposure_class, guarantor_cqs)
+
+        # Act
+        row = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect().row(0, named=True)
+
+        # Assert
+        assert row["is_double_default_eligible"] is False
+        assert row["guarantee_status"] == "SA_RW_SUBSTITUTION"
+        assert row["double_default_unfunded_protection"] == pytest.approx(0.0)
+        assert row["irb_lgd_double_default"] is None
+        assert row["risk_weight"] == pytest.approx(substitution_rw)
+        assert row["rwa"] == pytest.approx(1_000_000.0 * substitution_rw)
+
+    @pytest.mark.parametrize(
+        ("guarantor_entity_type", "guarantor_exposure_class", "guarantor_cqs"),
+        [
+            # The Art. 201 general provider list admits these; Art. 202 does not.
+            # Already ineligible before P1.203 — kept so that copying the Art. 201
+            # list into the DD gate cannot pass.
+            pytest.param("rgla_sovereign", "rgla", 1, id="rgla_sovereign"),
+            pytest.param("rgla_institution", "rgla", 2, id="rgla_institution"),
+            pytest.param("pse_sovereign", "pse", 2, id="pse_sovereign"),
+            pytest.param("pse_institution", "pse", 2, id="pse_institution"),
+            pytest.param(
+                "international_org", "international_organisation", 1, id="international_org"
+            ),
+        ],
+    )
+    def test_art_201_only_provider_stays_not_eligible(
+        self, guarantor_entity_type: str, guarantor_exposure_class: str, guarantor_cqs: int
+    ) -> None:
+        """RGLA, PSE and international-organisation guarantors are not Art. 202 providers."""
+        # Arrange
+        lf = self._full_cover_frame(guarantor_entity_type, guarantor_exposure_class, guarantor_cqs)
+
+        # Act
+        row = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect().row(0, named=True)
+
+        # Assert
+        assert row["is_double_default_eligible"] is False
+        assert row["guarantee_status"] != "DOUBLE_DEFAULT"
+        assert row["double_default_unfunded_protection"] == pytest.approx(0.0)
+
+    @pytest.mark.parametrize(
+        ("guarantor_entity_type", "guarantor_cqs"),
+        [
+            pytest.param("bank", 2, id="bank_cqs2"),
+            pytest.param("institution", 2, id="institution_cqs2"),
+            # Art. 202(b) is an either/or: a provider "regulated in a manner
+            # equivalent to the rules laid down in this Regulation" passes it with no
+            # ECAI rating, so the engine applies no CQS gate to an institution.
+            pytest.param("institution", None, id="institution_unrated"),
+        ],
+    )
+    def test_institution_provider_keeps_double_default(
+        self, guarantor_entity_type: str, guarantor_cqs: int | None
+    ) -> None:
+        """An institution / bank guarantor is still DD-eligible and DD still applies."""
+        # Arrange
+        lf = self._full_cover_frame(guarantor_entity_type, "institution", guarantor_cqs)
+
+        # Act
+        row = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect().row(0, named=True)
+
+        # Assert
+        assert row["is_double_default_eligible"] is True
+        assert row["guarantee_status"] == "DOUBLE_DEFAULT"
+        assert row["double_default_unfunded_protection"] == pytest.approx(1_000_000.0)
+        assert row["risk_weight"] == pytest.approx(0.23)
+        assert row["rwa"] == pytest.approx(230_000.0)
+
+    def test_listed_provider_types_are_valid_institution_entity_types(self) -> None:
+        """Each listed provider type is a valid entity type mapped to the institution class.
+
+        A misspelt entry, or one outside the institution class, would make double
+        default silently unreachable for that guarantor type.
+        """
+        # Arrange
+        sa_class = entity_type_to_sa_class()
+        provider_types = schemas.DOUBLE_DEFAULT_PROVIDER_ENTITY_TYPES
+
+        # Act
+        unknown = set(provider_types) - schemas.VALID_ENTITY_TYPES
+        not_institution = {
+            et for et in provider_types if sa_class.get(et) != ExposureClass.INSTITUTION.value
+        }
+
+        # Assert
+        assert provider_types, "an empty list disables double default"
+        assert unknown == set()
+        assert not_institution == set()
+
+    def test_art_201_rejected_bank_guarantor_not_eligible(self) -> None:
+        """A bank guarantor the Art. 201 gate rejected (class cleared) is not DD-eligible.
+
+        ``assign_guarantor_approach`` clears ``guarantor_exposure_class`` and
+        ``guarantor_approach`` on a rejected leg but leaves the entity type, so the
+        DD gate must test the class as well as the entity type.
+        """
+        # Arrange
+        lf = _make_guaranteed_frame(
+            rwa=1_000_000.0,
+            risk_weight=1.00,
+            guaranteed_portion=1_000_000.0,
+            unguaranteed_portion=0.0,
+            guarantor_entity_type="bank",
+            guarantor_exposure_class="",
+            guarantor_pd=0.0005,
+            guarantor_approach="",
+        )
+
+        # Act
+        row = lf.pipe(apply_guarantee_substitution, _crr_dd_config()).collect().row(0, named=True)
+
+        # Assert
+        assert row["is_double_default_eligible"] is False
+        assert row["double_default_unfunded_protection"] == pytest.approx(0.0)
+        assert row["rwa"] == pytest.approx(1_000_000.0)
+
+    @pytest.mark.parametrize(
+        ("guarantor_entity_type", "guarantor_exposure_class", "guarantor_cqs"),
+        [
+            pytest.param("bank", "institution", 2, id="bank"),
+            pytest.param("sovereign", "central_govt_central_bank", 3, id="sovereign"),
+            pytest.param("mdb", "mdb", 2, id="mdb"),
+            pytest.param("company", "corporate", 2, id="corporate"),
+        ],
+    )
+    def test_basel_3_1_has_no_double_default_for_any_provider(
+        self, guarantor_entity_type: str, guarantor_exposure_class: str, guarantor_cqs: int
+    ) -> None:
+        """PS1/26 leaves Art. 153(3), 202 and 217 blank: no provider takes DD under Basel 3.1.
+
+        Negative control. It passes before and after P1.203 — the Basel 3.1 side is
+        decided by the ``double_default_treatment`` pack Feature, not by the
+        provider list, so this regime cannot be reddened by the provider change.
+        """
+        # Arrange
+        lf = self._full_cover_frame(guarantor_entity_type, guarantor_exposure_class, guarantor_cqs)
+
+        # Act
+        row = lf.pipe(apply_guarantee_substitution, _b31_config()).collect().row(0, named=True)
+
+        # Assert
+        assert row["is_double_default_eligible"] is False
+        assert row["guarantee_status"] != "DOUBLE_DEFAULT"
+        assert row["double_default_unfunded_protection"] == pytest.approx(0.0)

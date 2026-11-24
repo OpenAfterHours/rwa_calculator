@@ -373,10 +373,24 @@ for investment-grade guarantors, providing meaningful capital relief.
 - Export credit agency protection must not benefit from any explicit central government
   counter-guarantee
 
+!!! note "What the calculator checks"
+    Only guarantors with entity type `institution` or `bank` (and the institution
+    exposure class) are treated as double-default providers. Sovereigns, central banks,
+    MDBs, international organisations, RGLAs, PSEs, CCPs, generic financial
+    institutions and corporates never get double default, whatever their rating.
+    The input data cannot identify an insurer among corporates, an investment firm
+    among generic financial institutions, or an export credit agency. Conditions
+    (b)–(d) above are not checked, because they need a regulatory-equivalence
+    attestation and the firm's own PD for corporate CQS 2 and 3. See
+    [Double Default Overlay](../../specifications/basel31/credit-risk-mitigation.md#double-default-overlay-crr-only-art-1533).
+
 **Eligibility — exposure & operational (Art. 153(3), Art. 154(2), Art. 217):**
 
-- Underlying exposure must be corporate, institution, central government/central bank, or
-  retail SME (the latter via Art. 154(2) cross-reference to Art. 153(3))
+- Underlying exposure must be (Art. 217(1)(a)) a corporate exposure other than to an
+  insurance or reinsurance undertaking, an exposure to a regional government, local
+  authority or PSE that is not treated as a central government exposure, or an SME
+  exposure classed as retail (Art. 154(2) cross-refers to Art. 153(3)). The calculator
+  applies double default to corporate underlyings only
 - Obligor and protection provider must not be in the same group
 - Risk weight on the underlying exposure must not already factor in any aspect of the
   credit protection
@@ -387,8 +401,11 @@ for investment-grade guarantors, providing meaningful capital relief.
   formula and must fall back to Art. 235 risk weight substitution or Art. 236 parameter
   substitution.
 
-The general Art. 161(3) floor still applies: the adjusted risk weight from the double-default
-treatment must not be lower than that of a comparable direct exposure to the guarantor.
+Art. 161(3) stops an *adjusted PD or LGD* from giving a risk weight below that of a
+comparable, direct exposure to the guarantor. The double-default formula is not a PD or LGD
+adjustment: it is set by Art. 153(3), which has no such floor. The calculator therefore
+applies the double-default risk weight unfloored, wherever it is below the substitution
+risk weight.
 
 > Formal definition and full eligibility text:
 > [CRR Credit Risk Mitigation Specification](../../specifications/crr/credit-risk-mitigation.md).

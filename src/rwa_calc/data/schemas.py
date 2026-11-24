@@ -2416,6 +2416,30 @@ B31_SOVEREIGN_LIKE_ENTITY_TYPES: tuple[str, ...] = (
     "international_org",
 )
 
+# Guarantor entity types that may be a CRR Art. 202 double-default protection
+# provider (Art. 153(3) treatment). Art. 202 lists "institutions, investment
+# firms, insurance and reinsurance undertakings and export credit agencies".
+# Only two entity types are certainly on that list:
+# - "institution": Art. 4(1)(3), a credit institution or a designated investment firm;
+# - "bank": a credit institution.
+# Left out on purpose, so they never get double default (the conservative choice):
+# - sovereign / central_bank / central_bank_ecb / mdb / mdb_named /
+#   international_org / rgla_* / pse_*: not on the Art. 202 list. Export credit
+#   agencies are on it, but no entity type identifies one;
+# - corporate / company / specialised_lending: insurers and reinsurers are on the
+#   list, but no entity type tells them apart from non-financial corporates;
+# - financial_institution: Art. 4(1)(26) defines it as "an undertaking other than
+#   an institution". It covers investment firms (listed) but also financial holding
+#   companies, payment institutions and asset management companies (not listed),
+#   and the input cannot tell them apart;
+# - ccp: a central counterparty is not on the list.
+# To admit a type, add it here. Consumed by engine/irb/guarantee.py::_apply_double_default
+# together with the guarantor's institution exposure class.
+DOUBLE_DEFAULT_PROVIDER_ENTITY_TYPES: tuple[str, ...] = (
+    "institution",
+    "bank",
+)
+
 VALID_COLLATERAL_TYPES = {
     "cash",
     "gold",

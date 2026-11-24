@@ -12,7 +12,8 @@ Key responsibilities:
 - Expected loss adjustment for guaranteed portions
 
 References:
-- CRR Art. 153(3), 202-203: Double default treatment
+- CRR Art. 153(3), 202-203: Double default treatment; Art. 202 limits the
+  protection provider to the institution entity types (P1.203)
 - CRR Art. 161(3): Guarantor PD substitution for expected loss
 - CRR Art. 193(1), (3): CRM recognition principles — the no-worse RWEA/EL cap
   and the election to amend, i.e. the basis for declining a guarantee
@@ -31,6 +32,8 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.schemas import DOUBLE_DEFAULT_PROVIDER_ENTITY_TYPES
+from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
     denomination_currency_expr,
@@ -70,8 +73,9 @@ def apply_guarantee_substitution(
 
     3. **Double default** (CRR Art. 153(3), 202-203, CRR only):
        K_dd = K_obligor × (0.15 + 160 × PD_guarantor). Requires A-IRB permission,
-       corporate underlying, and eligible guarantor with internal PD. Provides
-       lower capital charge than substitution for high-quality guarantors.
+       corporate underlying, and an Art. 202 protection provider (an institution
+       or bank guarantor) with an internal PD. Provides lower capital charge than
+       substitution for high-quality guarantors.
 
     The final RWA blends:
     - Unguaranteed portion: borrower's IRB RWA (pro-rated)
@@ -781,7 +785,13 @@ def _apply_double_default(
     *,
     pack: ResolvedRulepack,
 ) -> pl.LazyFrame:
-    """Apply double default treatment (CRR Art. 153(3), 202-203)."""
+    """Apply double default treatment (CRR Art. 153(3), 202-203).
+
+    A covered leg is DD-eligible when the underlying is corporate, the protection
+    provider is on the Art. 202 list (``_double_default_provider_expr``), the
+    provider has an internal PD and the beneficiary is A-IRB. DD is then applied
+    only where RW_dd is below the substitution RW.
+    """
     use_double_default = (
         pack.feature("double_default_treatment")
         and config.enable_double_default
@@ -797,24 +807,18 @@ def _apply_double_default(
             ]
         )
 
-    # Eligibility conditions per Art. 202:
-    # (a) Underlying is corporate (not sovereign, institution, retail, equity, SL)
+    # Art. 217(1)(a)(i): the underlying is corporate (not sovereign, institution,
+    # retail, equity, SL).
     _exp_class_upper = pl.col("exposure_class").cast(pl.String).fill_null("").str.to_uppercase()
     _is_corporate_underlying = _exp_class_upper.str.contains("CORPORATE")
 
-    # (b) Guarantor is institution, central govt, or rated corporate (CQS <= 2)
-    _guarantor_ec = pl.col("guarantor_exposure_class").fill_null("")
-    _is_eligible_guarantor_type = _guarantor_ec.is_in(
-        ["institution", "mdb", "central_govt_central_bank"]
-    ) | (
-        _guarantor_ec.is_in(["corporate", "corporate_sme"])
-        & (pl.col("guarantor_cqs").fill_null(99) <= 2)
-    )
+    # Art. 202: the protection provider is an institution or bank guarantor.
+    _is_eligible_guarantor_type = _double_default_provider_expr()
 
-    # (c) Guarantor has internal PD
+    # Art. 153(3): RW_dd needs the protection provider's internal PD.
     _has_guarantor_pd = pl.col("guarantor_pd").is_not_null()
 
-    # (d) Firm uses A-IRB (own LGD estimates) -- check is_airb column
+    # Firm uses A-IRB (own LGD estimates) -- check is_airb column
     _is_airb = pl.col("is_airb").fill_null(False) if "is_airb" in cols else pl.lit(False)
 
     # Combined eligibility
@@ -870,6 +874,39 @@ def _apply_double_default(
             .alias("_is_dd_applied"),
         ]
     )
+
+
+@cites("CRR Art. 202")
+def _double_default_provider_expr() -> pl.Expr:
+    """Whether the guarantor may provide Art. 153(3) double-default protection.
+
+    CRR Art. 202 admits only "institutions, investment firms, insurance and
+    reinsurance undertakings and export credit agencies" as providers. Of the input
+    entity types only those in ``data.schemas.DOUBLE_DEFAULT_PROVIDER_ENTITY_TYPES``
+    (``institution``, ``bank``) are certainly on that list. Sovereigns, central
+    banks, MDBs, international organisations, RGLAs, PSEs, CCPs, generic financial
+    institutions and corporates never qualify, whatever their rating: insurers are
+    on the list but cannot be told apart from other corporates, and a generic
+    financial institution may be an investment firm or a non-listed holding company.
+
+    The guarantor must also still hold the institution exposure class. The Art. 201
+    gate (``engine/crm/guarantor_eligibility.py``) clears the class of a rejected
+    guarantor but keeps its entity type, so the entity type alone is not enough.
+
+    Not tested here: Art. 202(a) expertise, (b) regulated-equivalent OR an ECAI
+    assessment of CQS 3 or better, and (c)/(d) an internal PD no worse than the
+    firm's PD for corporate CQS 2 (when the protection was provided, or at any time
+    after) and for corporate CQS 3 (now). They need inputs the schema does not
+    carry: an attestation and the firm's own grade-to-PD mapping, which is not a
+    regulatory value.
+    """
+    is_institution_class = pl.col("guarantor_exposure_class").eq_missing(
+        ExposureClass.INSTITUTION.value
+    )
+    is_listed_entity_type = pl.col("guarantor_entity_type").is_in(
+        list(DOUBLE_DEFAULT_PROVIDER_ENTITY_TYPES), nulls_equal=True
+    )
+    return is_institution_class & is_listed_entity_type
 
 
 def _adjust_expected_loss(

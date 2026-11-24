@@ -562,19 +562,53 @@ the CRR double-default branch.
 
 ### Double Default Overlay (CRR Only, Art. 153(3))
 
-Under CRR, A-IRB firms with a corporate underlying and an eligible institution /
-MDB / sovereign / rated-corporate guarantor may, in addition to PSM, apply the
+Under CRR, A-IRB firms with a corporate underlying and a guarantor that is an
+eligible Art. 202 protection provider may, in addition to PSM, apply the
 **double-default multiplier** of Art. 153(3) / Art. 202–203:
 
 ```
 RW_dd = RW_obligor * (0.15 + 160 * PD_g_floored)
 ```
 
-floored by `RW_g` (the substituted PSM RW from Steps 1–4). The Basel 3.1 rule
-instrument leaves Art. 153(3) "Provision left blank" — double default is not
-available under PS1/26. The CRR overlay is therefore gated in the engine on
-the `double_default_treatment` pack Feature together with
-`config.enable_double_default and has_guarantor_pd`
+`RW_dd` is not floored. It replaces the substituted RW `RW_g` (Steps 1–4, or the
+SA substitution RW for an SA-routed guarantor) only where it is lower. Art. 153(3)
+has no "not lower than a direct exposure to the protection provider" floor; that
+floor was Basel II paragraph 286 and was not onshored.
+
+**Eligible providers (Art. 202).** CRR Art. 202 admits only "institutions,
+investment firms, insurance and reinsurance undertakings and export credit
+agencies". The engine admits a guarantor only if its entity type is in
+`data.schemas.DOUBLE_DEFAULT_PROVIDER_ENTITY_TYPES` (`institution`, `bank`) **and**
+it still holds the institution exposure class. The Art. 201 gate clears the class
+of a rejected guarantor but keeps its entity type, which is why both are tested
+(`_double_default_provider_expr` in `engine/irb/guarantee.py`). Every other entity
+type is never a double-default provider, whatever its rating:
+
+| Guarantor entity type | Why it is excluded |
+|-----------------------|--------------------|
+| `sovereign`, `central_bank`, `central_bank_ecb`, `mdb`, `mdb_named`, `international_org`, `rgla_*`, `pse_*` | Not on the Art. 202 list. Export credit agencies are on it, but no entity type identifies one. |
+| `corporate`, `company`, `specialised_lending` | Insurers and reinsurers are on the list, but no entity type tells them apart from non-financial corporates. |
+| `financial_institution` | Art. 4(1)(26) defines it as "an undertaking other than an institution". It covers investment firms (listed) but also financial holding companies, payment institutions and asset management companies (not listed). |
+| `ccp` | A central counterparty is not on the list. |
+
+Before P1.203 the engine also admitted sovereign, MDB and CQS 1–2 corporate
+guarantors. That copied the general Art. 201 provider list, not Art. 202.
+
+**Not yet enforced.** The engine does not test Art. 202 conditions (a)–(d):
+(a) expertise; (b) regulated in a manner equivalent to the CRR, **or** an ECAI
+assessment of CQS 3 or better when the protection was provided; (c) an internal PD
+no worse than the PD the firm associates with corporate CQS 2, at the time the
+protection was provided or at any time afterwards; and (d) a current internal PD no
+worse than the PD for corporate CQS 3. Condition (b) needs an equivalence
+attestation. Conditions (c) and (d) need the firm's own grade-to-PD mapping, which is
+not a regulatory value. The schema carries neither, so an institution guarantor
+passes these conditions unchecked. The engine also does not apply the Art. 217(1)
+limits that exclude insurer obligors and providers in the obligor's own group.
+
+The Basel 3.1 rule instrument leaves Art. 153(3), Art. 202 and Art. 217
+"Provision left blank": double default is not available under PS1/26. The CRR
+overlay is therefore gated in the engine on the `double_default_treatment` pack
+Feature together with `config.enable_double_default and has_guarantor_pd`
 (`_apply_double_default`). See
 [Double Default Removal](airb-calculation.md#double-default-removal) on the
 Basel 3.1 A-IRB page for the framework-level rationale.

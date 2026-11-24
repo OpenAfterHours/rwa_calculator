@@ -406,6 +406,10 @@ def test_an_unusable_interpreter_exits_2_before_the_baseline_and_before_any_muta
     monkeypatch.setattr(
         defect_injection, "assert_targets_clean", lambda: reached.append("assert_targets_clean")
     )
+    # Provenance is read before the pre-flight (P5.46: a --resume mismatch knowable
+    # from the file is refused before anything is spawned), and ``root`` is no git
+    # checkout, so the commit is stubbed as the probe tests stub it.
+    monkeypatch.setattr(defect_injection, "head_commit", lambda: "0" * 40)
     for name in _DOWNSTREAM_OF_PREFLIGHT:
         monkeypatch.setattr(defect_injection, name, _tripwire(name, reached))
     monkeypatch.setattr(sys, "argv", ["defect_injection.py", *ladder_args, "--out", str(out)])

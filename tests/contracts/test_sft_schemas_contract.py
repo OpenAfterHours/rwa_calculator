@@ -90,6 +90,11 @@ _SFT_TRADE_COLUMNS = {
     # consolidated / sub-consolidated run.
     "book_code",
     "intragroup_entity_reference",
+    # P1.364 — CRR / PS1/26 Art. 113(6) intragroup 0% carrier. Additive,
+    # required=False, default False; the scope resolver overwrites it on an
+    # individual-basis run (it re-seals this frame, so the column must be
+    # declared rather than in-flight).
+    "intragroup_zero_rw_eligible",
 }
 
 

@@ -18,6 +18,8 @@ Key responsibilities:
 - PRA PS1/26 Art. 120(4) / 122(4) / 129(4A) due-diligence override (Basel 3.1)
 - The SA004 / SA010 entry censuses (Art. 110A attestation, Art. 123B income
   currency), returned as expressions for ``SACalculator``'s one entry collect
+- CRR / PS1/26 Art. 113(6) core-UK-group intragroup 0% (final step), with the
+  own-funds-item carve-out
 
 References:
 - CRR Art. 193: CRM recognition principles (the no-worse cap and the
@@ -34,6 +36,7 @@ References:
 - PRA PS1/26 Art. 120(4), 122(4), 129(4A): the "at least one step higher" risk
   weight the due-diligence override applies
 - PRA PS1/26 Art. 123B: Basel 3.1 currency mismatch multiplier
+- CRR Art. 113(6); PRA PS1/26 Art. 113(6)-(7): intragroup 0% risk weight
 """
 
 from __future__ import annotations
@@ -53,7 +56,13 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
 )
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.domain.enums import ApproachType, CRMCollateralMethod, ExposureClass, ReportingBasis
+from rwa_calc.domain.enums import (
+    ApproachType,
+    CRMCollateralMethod,
+    ExposureClass,
+    ReportingBasis,
+    Seniority,
+)
 from rwa_calc.engine.branch_split import is_sa_branch_approach
 from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
@@ -920,18 +929,21 @@ def due_diligence_not_performed_warnings(census: pl.DataFrame) -> list[Calculati
 
 
 @cites("CRR Art. 113")
+@cites("PS1/26, paragraph 113")
 def apply_intragroup_zero_rw(
     lf: pl.LazyFrame,
     config: CalculationConfig,
     *,
     pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
-    """Apply the CRR Art. 113(6) core-UK-group 0% risk weight.
+    """Apply the CRR / PS1/26 Art. 113(6) core-UK-group 0% risk weight.
 
     On an individual-basis run the scope resolver flips
     ``intragroup_zero_rw_eligible`` True for exposures to a core-UK-group entity
     (both the reporting entity and the counterparty inside the same permission
-    perimeter). Those rows take the pack's cited 0% final risk weight, applied
+    perimeter) — lending rows, and the synthetic rows of SA-CCR netting sets and
+    SFTs (neither regime excludes counterparty credit risk; Annex II para 126).
+    Those rows take the pack's cited 0% final risk weight, applied
     as the LAST risk-weight step — after standard SA assignment and every CRM
     adjustment (FCSM, life-insurance, guarantee substitution, currency mismatch,
     due diligence). The permission is a hard override, not a benefit blended
@@ -942,6 +954,17 @@ def apply_intragroup_zero_rw(
     eligible intragroup loan inherits the flag (splits copy row columns), while
     an external loan merely guaranteed BY a group member is untouched —
     Art. 113(6) covers direct exposures to members, not protection from them.
+
+    Own-funds carve-out, both regimes: "With the exception of exposures giving
+    rise to Common Equity Tier 1, Additional Tier 1 or Tier 2 items". The engine
+    has no "is an own-funds instrument of the counterparty" input, so a
+    ``seniority == "subordinated"`` row stands in for one (an owner-approved,
+    conservative proxy — wider than "Tier 2 item", never narrower) and keeps the
+    weight already assigned: its class weight under CRR, the PS1/26 Art. 133(5)
+    150% under Basel 3.1. A null seniority reads as senior, the engine-wide
+    convention. Equity holdings are left to their own routing: the scope
+    resolver never tags the equity frame, and an equity-class lending row
+    ordinarily routes to the EQUITY approach, which the SA-only gate excludes.
 
     SA-routed rows only. IRB rows are unaffected: the IRB route to a 0%
     intragroup exposure is Art. 150(1)(e) permanent partial use, which
@@ -978,7 +1001,11 @@ def apply_intragroup_zero_rw(
     zero_rw = scalar_value(resolved_pack.scalar_param("intragroup_zero_rw_pct"))
     # A null carrier routes to the ``otherwise`` branch below (unchanged RW),
     # identical to False — no fill needed (and the edge seal already null-fills).
-    eligible = pl.col("intragroup_zero_rw_eligible")
+    # Art. 113(6) opening words: an exposure giving rise to an own-funds item is
+    # never eligible. ``eq_missing`` keeps a null seniority (= senior) False here
+    # without a fill_null site.
+    gives_rise_to_own_funds_item = pl.col("seniority").eq_missing(Seniority.SUBORDINATED.value)
+    eligible = pl.col("intragroup_zero_rw_eligible") & ~gives_rise_to_own_funds_item
     # SA-routed rows only (Art. 150(1)(e) PPU is the IRB route to SA treatment).
     # On the output-floor path the SA pipe runs over the full unified frame, so
     # gate on the approach column to leave IRB / slotting SA-equivalent RWs alone.

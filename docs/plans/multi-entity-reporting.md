@@ -178,6 +178,15 @@ Design decisions (pinned):
 - Scope: SA lending frames only this wave. Excluded + documented: equity holdings in group
   entities (participations regime), CCR/SFT netting sets (solo intragroup at normal RW =
   conservative), IRB rows (Art. 150(1)(e) PPU is the IRB route to SA treatment).
+  **Superseded by P1.364 (2026-11-24, owner sign-off):** the carrier is also declared on
+  NETTING_SET_SCHEMA / SFT_TRADE_SCHEMA, the resolver tags surviving netting sets and SFT
+  trades on an individual run, and the SA-CCR / FCCM row builders project it onto the
+  synthetic rows (neither regime excludes CCR; Annex II para 126). The SA override now applies
+  the article's opening carve-out ("With the exception of exposures giving rise to Common
+  Equity Tier 1, Additional Tier 1 or Tier 2 items"): a `seniority = "subordinated"` row keeps
+  its weight (proxy for "gives rise to a T2 item"). Equity stays untagged; the approach == SA
+  gate is kept (output floor). Open: one perimeter per dataset, and PS1/26's "to the extent
+  and subject to any modifications set out in the permission".
 - Fixture: a `multi_entity_cug/` variant dataset — identical to `multi_entity/` except
   `core_uk_group=True` on all three entities. Hand-calc: BANK_A individual total RWA
   3m → 2m (intragroup loan 0%); BANK_B 2m → 1m; GRP consolidated unchanged 3m (elimination

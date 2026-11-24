@@ -287,7 +287,7 @@ Cost, and why every run is load-bearing:
     entry of ``RUNS`` (most portfolios under both regimes, a few under one only),
     one more for each IRB-permissioned entry's prior period, and two for leg (m)'s
     probe (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not
-    this prose — on 2026-11-24 it held forty-six runs, twenty-four of them Basel
+    this prose — on 2026-11-24 it held forty-eight runs, twenty-five of them Basel
     3.1 and twenty-five with a prior period. The gateway leg adds one canonical
     return and one ``validate_return`` per Basel 3.1 run and no pipeline run: the
     pack is loaded once per process and the COREP bundle is the one the template
@@ -477,6 +477,11 @@ from tests.fixtures.reporting_ig_election_portfolio import (
     build_reporting_ig_election_bundle,
     ig_election_config,
     ig_election_prior_config,
+)
+from tests.fixtures.reporting_intragroup_portfolio import (
+    INTRAGROUP_DATE,
+    build_reporting_intragroup_bundle,
+    intragroup_config,
 )
 from tests.fixtures.reporting_irb_classes_portfolio import build_reporting_irb_classes_bundle
 from tests.fixtures.reporting_irb_shapes_portfolio import build_reporting_irb_shapes_bundle
@@ -1619,6 +1624,48 @@ RUNS: tuple[GateInput, ...] = (
         build_reporting_qrre_mof_bundle,
         lambda: _irb_config("BASEL_3_1"),
         lambda: _prior_config("BASEL_3_1"),
+    ),
+    # A core-UK-group member's INDIVIDUAL return — LESSONS B5 (P1.364). The first
+    # registered run that sets ``reporting_entity`` / ``reporting_basis`` at all:
+    # the CRR / PS1/26 Art. 113(6) intragroup 0% fires only on a scoped
+    # individual-basis run, so until this run every cell the permission writes was
+    # dead estate-wide. It lights row 0140 (0%) of the C 07.00 / OF 07.00
+    # institutions and corporates sheets (intragroup loans) and that row's column
+    # 0210 "of which: arising from CCR" (an intragroup SA-CCR netting set on both
+    # sheets and an intragroup SFT on the institutions sheet — P1.364 extended the
+    # permission to counterparty credit risk), beside external controls at 100%
+    # and a subordinated intragroup loan that the own-funds carve-out keeps at its
+    # class weight (CRR) / the Art. 133(5) 150% (Basel 3.1). The Bank's PI-05
+    # rules close those 0% cells, so a CORRECT Basel 3.1 return of this book
+    # breaks boe_b0440 / boe_b0440_1 (institutions) and boe_b0441 / boe_b0441_1
+    # (corporates) at the gateway as WARNINGs: publisher issue PI-05, never
+    # figures to bend (Annex II paras 66-68 and 126).
+    #
+    # It is also the first registered book holding an SFT at all, so it is the
+    # first run to populate row 0090 ("securities financing transactions netting
+    # sets"): measured when registered, it brings CRR v0314_m and Basel 3.1
+    # boe_b0531 / boe_b0531_1 / boe_b0892 from VACUOUS-only to PASS, and CRR
+    # v6072_i / v6078_i / v6079_i / v6096_i (row 0090 col 0200 = col 0210) to a
+    # first verdict.
+    #
+    # Its OWN config, not ``_sa_config``, and the difference is load-bearing:
+    # ``_sa_config`` leaves the run unscoped, and every leg would take its full
+    # weight (B5's third form, registered with the wrong config). SA-only, no
+    # prior frame; dates relative to the reporting date, bound per regime with
+    # ``functools.partial``.
+    GateInput(
+        "crr",
+        "CRR",
+        "intragroup",
+        partial(build_reporting_intragroup_bundle, INTRAGROUP_DATE["CRR"]),
+        lambda: intragroup_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "intragroup",
+        partial(build_reporting_intragroup_bundle, INTRAGROUP_DATE["BASEL_3_1"]),
+        lambda: intragroup_config("BASEL_3_1"),
     ),
 )
 

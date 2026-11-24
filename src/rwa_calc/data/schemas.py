@@ -606,9 +606,10 @@ FACILITY_SCHEMA: dict[str, ColumnSpec] = {
     # CRR Art. 113(6) core-UK-group 0% risk weight. Carrier the scope resolver
     # overwrites on an individual-basis run when the reporting entity and the
     # tagged intragroup entity both sit in the "core UK group" (registry
-    # core_uk_group=True); the SA final-RW override then assigns 0%. Default
-    # False — unscoped / non-CUG / consolidated runs leave it all-False, so the
-    # override is a no-op and behaviour is byte-identical.
+    # core_uk_group=True); the SA final-RW override then assigns 0% unless the
+    # row is subordinated (the own-funds-item carve-out). Default False —
+    # unscoped / non-CUG / consolidated runs leave it all-False, so the override
+    # is a no-op and behaviour is byte-identical.
     "intragroup_zero_rw_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 148 (sequential IRB implementation) / Art. 150 (permanent partial
     # use): True flags an SA-treated exposure that the firm's approved roll-out
@@ -1836,6 +1837,13 @@ NETTING_SET_SCHEMA: dict[str, ColumnSpec] = {
     # on a consolidated / sub-consolidated run and keeps them on an individual
     # run. Null = external counterparty (never fabricated).
     "intragroup_entity_reference": ColumnSpec(pl.String, required=False),
+    # CRR / PS1/26 Art. 113(6) core-UK-group 0% risk weight — the same carrier as
+    # on the lending schemas: neither regime excludes counterparty credit risk
+    # from the permission (Annex II para 126). The scope resolver overwrites it on
+    # an individual-basis run; the SA-CCR adapter projects it onto the netting
+    # set's synthetic exposure row. Default False (unscoped / consolidated runs
+    # are unchanged, and the SA override fires only on a scoped individual run).
+    "intragroup_zero_rw_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 #: Margin-agreement-level (CSA) input for SA-CCR. Separate from
@@ -2070,6 +2078,11 @@ SFT_TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # The scope resolver eliminates such rows on a consolidated / sub-consolidated
     # run and keeps them on an individual run. Null = external counterparty.
     "intragroup_entity_reference": ColumnSpec(pl.String, required=False),
+    # CRR / PS1/26 Art. 113(6) core-UK-group 0% risk weight carrier — see
+    # NETTING_SET_SCHEMA. Declared (not an in-flight column) because the scope
+    # resolver re-seals the SFT trade frame, which strips undeclared columns. The
+    # FCCM row builder collapses it to netting-set grain (every trade eligible).
+    "intragroup_zero_rw_eligible": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
 #: Netting-set-keyed collateral received against an SFT, feeding the

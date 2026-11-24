@@ -18,9 +18,14 @@ Key responsibilities:
   individual run. On an individual run, when the pack ``intragroup_zero_rw``
   Feature is enabled and both the reporting entity and the tagged intragroup
   entity are in the core UK group (registry ``core_uk_group=True``), set the
-  ``intragroup_zero_rw_eligible`` carrier so the SA final-RW override applies
-  the CRR Art. 113(6) 0% risk weight. Guarantees whose guarantor is a member
-  are internal protection at the consolidated level and are dropped there.
+  ``intragroup_zero_rw_eligible`` carrier — on facility / loan / contingent
+  rows, SA-CCR netting sets and SFT trades — so the SA final-RW override applies
+  the CRR / PS1/26 Art. 113(6) 0% risk weight. The equity frame is never tagged:
+  an equity stake in a group institution gives rise to a CET1 item, which the
+  article excludes, and for other group counterparties the input cannot tell,
+  so equity conservatively keeps its normal weight. Guarantees whose guarantor
+  is a member are internal
+  protection at the consolidated level and are dropped there.
 - Publish the whole reporting group's population (``resolve_group_population``)
   so a solo / sub-consolidated run can count the debt an obligor owes to the
   OTHER group entities in the retail threshold (CRR Art. 123(c); PS1/26
@@ -47,6 +52,10 @@ References:
 - CRR Part One Title II (Art. 6, 11-18): individual / sub-consolidated /
   consolidated levels of application; consolidation eliminates intragroup
   exposures, solo books include them.
+- CRR Art. 113(6); PS1/26 Art. 113(6): core-UK-group 0% intragroup risk weight
+  ("With the exception of exposures giving rise to Common Equity Tier 1,
+  Additional Tier 1 or Tier 2 items"); Annex II para 126 (0%-weighted
+  intragroup counterparty credit risk).
 - CRR Art. 123(c) / Art. 501(1); PS1/26 Art. 123(1)(b)(ii), 123A(1)(b)(ii),
   147(5)(a)(ii): group-wide "amount owed" obligor aggregates.
 - docs/plans/multi-entity-reporting.md: scope resolver specification.
@@ -107,9 +116,11 @@ def resolve_scope(
     When ``intragroup_zero_rw`` is enabled (the pack ``intragroup_zero_rw``
     Feature, passed by the stage adapter) and the run is INDIVIDUAL basis, the
     resolver additionally sets the ``intragroup_zero_rw_eligible`` carrier on
-    facility / loan / contingent rows whose ``intragroup_entity_reference``
-    names a core-UK-group entity — see :func:`_cug_eligibility` and CRR
-    Art. 113(6). On every other run the carrier keeps its injected False default.
+    facility / loan / contingent rows, SA-CCR netting sets and SFT trades whose
+    ``intragroup_entity_reference`` names a core-UK-group entity — see
+    :func:`_cug_eligibility` and CRR / PS1/26 Art. 113(6). On every other run the
+    carrier keeps its input value (False by default), which the SA override's own
+    scoped-individual gate makes inert.
     """
     requested = config.reporting_entity
     basis = config.reporting_basis
@@ -150,8 +161,9 @@ def resolve_scope(
     # CRR Art. 113(6): resolve the core-UK-group set for the 0% intragroup RW.
     # None => leave the carrier untouched (Feature off, or not individual basis —
     # the override cannot fire there). A set (possibly EMPTY) => the resolver
-    # authoritatively overwrites the carrier on every individual-run lending row,
-    # clobbering any user-supplied True (bypass closure).
+    # authoritatively overwrites the carrier on every individual-run lending,
+    # netting-set and SFT-trade row, clobbering any user-supplied True (bypass
+    # closure).
     cug_eligible = _cug_eligibility(registry_df, requested, basis, enabled=intragroup_zero_rw)
 
     errors = _diagnose(bundle, entity_set, all_mapping_books, unknown_mapping_entities)
@@ -294,16 +306,20 @@ def _cug_eligibility(
     registry entities carrying ``core_uk_group=True`` (the valid 0% targets), or
     an **empty** set when the reporting entity is not itself in the core UK group
     — a non-None result signals the caller to overwrite the carrier on EVERY
-    lending row (True where the per-row tag test in :func:`_set_cug_eligibility`
-    matches, explicit False otherwise). Clobbering False on the only path where
-    the override can fire (a scoped individual run) closes the user-loadable
-    ``intragroup_zero_rw_eligible`` bypass: an input file cannot smuggle in a
-    True that survives to the 0% override.
+    lending, netting-set and SFT-trade row (True where the per-row tag test in
+    :func:`_set_cug_eligibility` matches, explicit False otherwise). Clobbering
+    False on the only path where the override can fire (a scoped individual run)
+    closes the user-loadable ``intragroup_zero_rw_eligible`` bypass: an input file
+    cannot smuggle in a True that survives to the 0% override.
 
     Note: ``core_uk_group`` is a single Boolean perimeter, so one dataset can
     model only one core UK group — a firm with two distinct Art. 113(6) groups
     would need a group-identifier column instead (a future refinement; matches
-    the pinned Wave-4 design).
+    the pinned Wave-4 design). Flagging both perimeters lets an entity of one
+    zero-weight exposures to the other (an understatement); flagging one
+    overstates the other. Nor is PS1/26's "to the extent and subject to any
+    modifications set out in the permission" modelled: relief is all-or-nothing
+    across the perimeter. Both await an owner data-model decision.
     """
     if not enabled or basis is not ReportingBasis.INDIVIDUAL:
         return None
@@ -386,10 +402,17 @@ def _filter_bundle(
 
     ``cug_eligible`` (non-None only on an individual-basis run — where
     ``drop_intragroup`` is False, so the two never interact) is the set of
-    core-UK-group entities. When set, facility / loan / contingent rows tagged
-    intragroup to one of those entities have ``intragroup_zero_rw_eligible``
-    flipped True (CRR Art. 113(6)); every other row keeps False. Equity / CCR /
-    SFT frames are deliberately out of scope this wave and are never tagged.
+    core-UK-group entities. When set, facility / loan / contingent rows, SA-CCR
+    netting sets and SFT trades tagged intragroup to one of those entities have
+    ``intragroup_zero_rw_eligible`` flipped True (CRR / PS1/26 Art. 113(6) — no
+    regime excludes counterparty credit risk); every other such row is set
+    False. The equity frame is never tagged: condition (a) limits the
+    counterparty to an institution, financial institution or ancillary services
+    undertaking. An equity stake in a group institution gives rise to a CET1
+    item (the article's CET1 / AT1 / T2 carve-out); for a financial institution
+    or ancillary services undertaking outside the own-funds regime the input
+    cannot say whether the carve-out applies, so equity conservatively keeps its
+    normal weight.
     """
     books = sorted(membership_books)
     members = sorted(membership)
@@ -414,8 +437,12 @@ def _filter_bundle(
         contingents=_lending(bundle.contingents, "contingents", tag_cug=True),
         equity_exposures=_lending(bundle.equity_exposures, "equity_exposures"),
         guarantees=_filter_guarantees(bundle.guarantees, members, drop_intragroup=drop_intragroup),
-        ccr=_filter_ccr(bundle.ccr, books, members, drop_intragroup=drop_intragroup),
-        sft=_filter_sft(bundle.sft, books, members, drop_intragroup=drop_intragroup),
+        ccr=_filter_ccr(
+            bundle.ccr, books, members, drop_intragroup=drop_intragroup, cug_members=cug_members
+        ),
+        sft=_filter_sft(
+            bundle.sft, books, members, drop_intragroup=drop_intragroup, cug_members=cug_members
+        ),
     )
 
 
@@ -431,8 +458,10 @@ def _drop_intragroup(frame: pl.LazyFrame, members: list[str]) -> pl.LazyFrame:
     return frame.filter(tag.is_null() | ~tag.is_in(members))
 
 
+@cites("CRR Art. 113")
+@cites("PS1/26, paragraph 113")
 def _set_cug_eligibility(frame: pl.LazyFrame, cug_members: list[str]) -> pl.LazyFrame:
-    """Authoritatively (re)set ``intragroup_zero_rw_eligible`` on every lending row.
+    """Authoritatively (re)set ``intragroup_zero_rw_eligible`` on every row of a grain.
 
     CRR Art. 113(6): a row qualifies for the 0% intragroup risk weight when its
     ``intragroup_entity_reference`` names a registry entity with
@@ -441,7 +470,8 @@ def _set_cug_eligibility(frame: pl.LazyFrame, cug_members: list[str]) -> pl.Lazy
     non-CUG tags, and any user-supplied value) — so the resolver, not the input
     file, is the source of truth on an individual run. An empty ``cug_members``
     (the reporting entity is not itself in the core UK group) clears every row to
-    False. Called only on an individual-basis run.
+    False. Called only on an individual-basis run, on the lending frames, the
+    CCR netting sets and the SFT trades — each carries ``intragroup_entity_reference``.
     """
     tag = pl.col("intragroup_entity_reference")
     eligible = (tag.is_not_null() & tag.is_in(cug_members)) if cug_members else pl.lit(value=False)
@@ -470,6 +500,7 @@ def _filter_ccr(
     members: list[str],
     *,
     drop_intragroup: bool,
+    cug_members: list[str] | None = None,
 ) -> RawCCRBundle | None:
     """Filter the nested CCR bundle at netting-set grain.
 
@@ -478,13 +509,17 @@ def _filter_ccr(
     netting-set-keyed collateral via a semi-join. Margin agreements are keyed
     by CSA, not netting set, so an orphaned CSA is left in place (inert — it
     joins to nothing downstream). CCR leaf frames are not brand-validated, so no
-    re-seal is required.
+    re-seal is required. ``cug_members`` (individual run only) sets the
+    Art. 113(6) carrier on every surviving netting set, which the SA-CCR adapter
+    projects onto the netting set's synthetic exposure row.
     """
     if ccr is None:
         return ccr
     netting_sets = _apply_booking(ccr.netting_sets.netting_sets, books)
     if drop_intragroup:
         netting_sets = _drop_intragroup(netting_sets, members)
+    if cug_members is not None:
+        netting_sets = _set_cug_eligibility(netting_sets, cug_members)
     surviving = netting_sets.select("netting_set_id")
     trades = ccr.trades.trades.join(surviving, on="netting_set_id", how="semi")
     collateral = ccr.ccr_collateral.ccr_collateral.join(surviving, on="netting_set_id", how="semi")
@@ -502,19 +537,24 @@ def _filter_sft(
     members: list[str],
     *,
     drop_intragroup: bool,
+    cug_members: list[str] | None = None,
 ) -> RawSFTBundle | None:
     """Filter the nested SFT bundle: trades by booking, collateral by semi-join.
 
     SFT trades denormalise the single-counterparty netting set, so the booking
     filter runs at trade grain; surviving trades keep their netting-set-keyed
     collateral via a semi-join. Both SFT leaf frames are brand-validated, so
-    they are re-sealed to their ``raw_sft_*`` edges after filtering.
+    they are re-sealed to their ``raw_sft_*`` edges after filtering — which is
+    why the Art. 113(6) carrier ``cug_members`` sets here (individual run only)
+    is a declared ``SFT_TRADE_SCHEMA`` column rather than an in-flight one.
     """
     if sft is None:
         return sft
     trades = _apply_booking(sft.trades.sft_trades, books)
     if drop_intragroup:
         trades = _drop_intragroup(trades, members)
+    if cug_members is not None:
+        trades = _set_cug_eligibility(trades, cug_members)
     new_trades = replace(sft.trades, sft_trades=seal(trades, SFT_TABLE_EDGES["sft_trades"]))
 
     new_collateral = sft.collateral

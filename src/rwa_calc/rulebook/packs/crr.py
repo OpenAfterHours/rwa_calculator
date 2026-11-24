@@ -373,8 +373,10 @@ ENTRIES: dict[str, RuleEntry] = {
     # the scope resolver computes the per-row eligibility carrier
     # (intragroup_zero_rw_eligible) and the SA final-RW override in
     # engine/sa/rw_adjustments.py::apply_intragroup_zero_rw reads the 0% value
-    # below. SA lending rows only — IRB rows reach SA via the Art. 150(1)(e) PPU
-    # route, so they are out of scope here.
+    # below. SA-routed rows only — lending, SA-CCR netting sets and SFTs (no
+    # regime excludes counterparty credit risk), never a subordinated row (the
+    # article's CET1 / AT1 / T2 carve-out) nor the equity frame. IRB rows reach
+    # SA via the Art. 150(1)(e) PPU route, so they are out of scope here.
     "intragroup_zero_rw": Feature(
         name="intragroup_zero_rw",
         enabled=True,

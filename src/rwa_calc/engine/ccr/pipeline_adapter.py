@@ -167,6 +167,8 @@ def ccr_rows_to_exposures(
         value_date            = config.reporting_date
         maturity_date         = max(trade maturity in the NS)
         seniority             = "senior"   (conservative default)
+        intragroup_zero_rw_eligible = the netting set's Art. 113(6) carrier
+                                (scope resolver; False unless tagged)
         source_netting_set_id = <netting_set_id>
         ccr_method            = "sa_ccr"
         addon_aggregate       = per-NS asset-class add-on aggregate
@@ -447,8 +449,15 @@ def ccr_rows_to_exposures(
     # null; when the gate did not run (no specific-WWR trades) ``ensure_columns``
     # backfills the schema default (null) so the column rides the lazy plan
     # unchanged. No-op when already present.
+    # Same pattern for the Art. 113(6) intragroup 0% carrier: the scope resolver
+    # sets it on an individual-basis run; a netting-set frame that never passed
+    # the loader (direct callers) gets its schema default False.
     ns_frame = ensure_columns(
-        ns_frame, {"wwr_lgd_override": NETTING_SET_SCHEMA["wwr_lgd_override"]}
+        ns_frame,
+        {
+            "wwr_lgd_override": NETTING_SET_SCHEMA["wwr_lgd_override"],
+            "intragroup_zero_rw_eligible": NETTING_SET_SCHEMA["intragroup_zero_rw_eligible"],
+        },
     )
 
     # Per-NS supervisory alpha: 1.4 under CRR (CCR (CRR) Part Art. 274(2));
@@ -525,6 +534,12 @@ def ccr_rows_to_exposures(
             # downstream IRB consumer (deferred P8.31) reads this to apply
             # LGD = 100%; SA-routed CCR rows carry it as an audit tag only.
             pl.col("wwr_lgd_override"),
+            # CRR / PS1/26 Art. 113(6): the netting set's own intragroup 0%
+            # eligibility, set by the scope resolver (individual run only). An
+            # Art. 272(4) / Art. 291(5) split set inherits it with every other NS
+            # column; an orphan trade's stand-in set has none (null -> False at
+            # the ccr_exit seal). The SA override reads it after CRM.
+            pl.col("intragroup_zero_rw_eligible"),
             # Preserve the SA-CCR component columns so downstream tests /
             # COREP exports can reconcile the EAD back to RC + PFE without
             # re-running the chain.

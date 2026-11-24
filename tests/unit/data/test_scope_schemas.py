@@ -46,12 +46,19 @@ _NEW_BOOK_CODE_SCHEMAS = {
     "SFT_TRADE_SCHEMA": SFT_TRADE_SCHEMA,
 }
 
-# SA lending schemas that gain the CRR Art. 113(6) 0%-RW eligibility carrier
-# (Wave 4). Deliberately NOT equity / CCR / SFT — those grains are out of scope.
+# Schemas that carry the CRR / PS1/26 Art. 113(6) 0%-RW eligibility carrier: the
+# SA lending schemas (Wave 4) and — since P1.364 — the SA-CCR netting set and the
+# SFT trade, because neither regime excludes counterparty credit risk from the
+# permission (Annex II para 126). Deliberately NOT equity: an equity stake in a
+# group institution is a holding of its own-funds instruments, which the article
+# excludes ("With the exception of exposures giving rise to Common Equity Tier 1,
+# Additional Tier 1 or Tier 2 items").
 _ZERO_RW_CARRIER_SCHEMAS = {
     "FACILITY_SCHEMA": FACILITY_SCHEMA,
     "LOAN_SCHEMA": LOAN_SCHEMA,
     "CONTINGENTS_SCHEMA": CONTINGENTS_SCHEMA,
+    "NETTING_SET_SCHEMA": NETTING_SET_SCHEMA,
+    "SFT_TRADE_SCHEMA": SFT_TRADE_SCHEMA,
 }
 
 
@@ -131,7 +138,7 @@ class TestIntragroupEntityReferenceColumn:
 class TestIntragroupZeroRwEligibleColumn:
     """``intragroup_zero_rw_eligible`` — CRR Art. 113(6) 0%-RW carrier (Wave 4)."""
 
-    def test_present_on_the_sa_lending_schemas(self) -> None:
+    def test_present_on_the_lending_ccr_and_sft_schemas(self) -> None:
         for name, schema in _ZERO_RW_CARRIER_SCHEMAS.items():
             assert "intragroup_zero_rw_eligible" in schema, name
 
@@ -144,14 +151,11 @@ class TestIntragroupZeroRwEligibleColumn:
             assert spec.required is False, name
             assert spec.default is False, name
 
-    def test_absent_from_equity_ccr_and_sft_grains(self) -> None:
-        # The 0% treatment is SA lending only this wave.
-        for name, schema in (
-            ("EQUITY_EXPOSURE_SCHEMA", EQUITY_EXPOSURE_SCHEMA),
-            ("NETTING_SET_SCHEMA", NETTING_SET_SCHEMA),
-            ("SFT_TRADE_SCHEMA", SFT_TRADE_SCHEMA),
-        ):
-            assert "intragroup_zero_rw_eligible" not in schema, name
+    def test_absent_from_the_equity_grain(self) -> None:
+        # An equity holding in a group entity gives rise to an own-funds item of
+        # that entity — the Art. 113(6) carve-out — so the equity frame is never
+        # tagged and carries no carrier.
+        assert "intragroup_zero_rw_eligible" not in EQUITY_EXPOSURE_SCHEMA
 
 
 class TestGuarantorEntityReferenceColumn:

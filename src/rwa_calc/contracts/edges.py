@@ -699,11 +699,13 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "product_type": EdgeColumn(dtype=pl.String),
         "book_code": EdgeColumn(dtype=pl.String),
         # CRR Art. 113(6) core-UK-group 0% RW carrier. Additive scope column
-        # threaded from the lending schemas (facility / loan / contingent) so the
-        # SA final-RW override can read the row's own eligibility after CRM;
-        # stripped at the branch-exit edge (never reaches the aggregator). Optional
-        # with a False default + Boolean null-fill so CCR/SFT synthetic rows (out of
-        # scope this wave) and any diagonal-concat gap resolve to "not eligible".
+        # threaded from the lending schemas (facility / loan / contingent) — and
+        # projected onto the SA-CCR / SFT synthetic rows from their netting sets /
+        # trades — so the SA final-RW override can read the row's own eligibility
+        # after CRM; stripped at the branch-exit edge (never reaches the
+        # aggregator). Optional with a False default + Boolean null-fill so an
+        # untagged synthetic row and any diagonal-concat gap resolve to "not
+        # eligible".
         "intragroup_zero_rw_eligible": EdgeColumn(
             dtype=pl.Boolean,
             required=False,

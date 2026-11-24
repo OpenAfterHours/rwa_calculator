@@ -1,7 +1,8 @@
 """
 Contract tests: the CRR Art. 113(6) ``intragroup_zero_rw_eligible`` carrier is
-whitelisted on every sealed edge between the raw lending tables and the SA
-risk-weight code, and is stripped again at the branch exit.
+whitelisted on every sealed edge between the raw lending tables (and, since
+P1.364, the raw SFT trade table) and the SA risk-weight code, and is stripped
+again at the branch exit.
 
 The carrier must survive the hierarchy / classifier / CRM / RE-split seals (so
 the SA final-RW override can read a row's own eligibility after CRM), but it is
@@ -30,6 +31,7 @@ from rwa_calc.contracts.edges import (
     RAW_TABLE_EDGES,
     RE_SPLIT_EXIT_CCR_EDGE,
     RE_SPLIT_EXIT_EDGE,
+    SFT_TABLE_EDGES,
 )
 
 _CARRIER = "intragroup_zero_rw_eligible"
@@ -57,6 +59,13 @@ def test_raw_lending_edges_carry_the_carrier(table: str) -> None:
     assert edge.columns[_CARRIER].dtype == pl.Boolean
 
 
+def test_raw_sft_trade_edge_carries_the_carrier() -> None:
+    """The SFT trade frame is re-sealed by the scope resolver, so it must declare it."""
+    edge = SFT_TABLE_EDGES["sft_trades"]
+    assert _CARRIER in edge.columns
+    assert edge.columns[_CARRIER].dtype == pl.Boolean
+
+
 @pytest.mark.parametrize("edge", _INTERMEDIATE_EDGES, ids=lambda e: e.name)
 def test_intermediate_edges_carry_the_carrier(edge) -> None:
     """The carrier survives every seal from hierarchy through RE-split."""
@@ -64,7 +73,12 @@ def test_intermediate_edges_carry_the_carrier(edge) -> None:
 
 
 def test_carrier_is_conservative_optional_boolean() -> None:
-    """Optional Boolean, default False, null-filled — CCR/SFT/gap rows are 'not eligible'."""
+    """Optional Boolean, default False, null-filled — an untagged or gap row is 'not eligible'.
+
+    CCR / SFT synthetic rows carry the carrier from their netting set / trades
+    (P1.364); a row that never received it (an orphan trade's stand-in netting
+    set, a default-fund or failed-trade row, a diagonal-concat gap) seals False.
+    """
     col = HIERARCHY_RESOLVED_EDGE.columns[_CARRIER]
     assert col.dtype == pl.Boolean
     assert col.required is False

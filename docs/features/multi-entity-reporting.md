@@ -25,8 +25,10 @@ positions against it.
 !!! success "Art. 113(6) core-UK-group 0% risk weight is applied on solo runs"
     CRR Art. 113(6) lets firms in a qualifying "core UK group" apply a **0% risk weight** to
     retained intragroup exposures on an individual (solo) return, subject to PRA permission —
-    a treatment retained under PS1/26. The calculator applies it when both the reporting entity
-    and the tagged intragroup counterparty carry `core_uk_group=True` in the registry. See
+    a treatment retained under PS1/26. The calculator applies it — to lending, derivative
+    (SA-CCR) and SFT exposures, but not to subordinated or equity exposures, which give rise to
+    own-funds items — when both the reporting entity and the tagged intragroup counterparty
+    carry `core_uk_group=True` in the registry. See
     [Art. 113(6) core UK group 0% risk weight](#art-1136-core-uk-group-0-risk-weight) for the
     exact eligibility conditions and scope.
 
@@ -145,14 +147,54 @@ all credit-risk-mitigation adjustments. It is keyed on the row's **own** intragr
 - An **external** loan that merely happens to be *guaranteed by* a group member is **not** given
   the 0% — Art. 113(6) covers direct exposures *to* members, not protection *from* them.
 
-**Scope (this treatment).** SA-routed lending exposures only (facilities, loans, contingents,
-and their undrawn commitments). Deliberately excluded:
+**Scope (this treatment).** SA-routed exposures to the core-UK-group counterparty:
 
+- **Lending** — facilities, loans, contingents, and their undrawn commitments.
+- **Derivatives (SA-CCR) and SFTs (FCCM)** — an SA-CCR netting set (on `ccr/netting_sets`) or
+  an SFT (on `ccr/sft_trades`) whose `intragroup_entity_reference` names a core-UK-group entity
+  takes the 0% on its synthetic exposure row. Neither CRR nor PS1/26 Art. 113(6) excludes
+  counterparty credit risk, and the C 34.06 reporting instructions (Annex II paragraph 126,
+  both regimes) refer to "Intra-group exposures or other exposures that give raise to
+  counterparty credit risk but for which the institutions assign a risk weight of zero". An
+  SFT netting set qualifies only when every trade in it is tagged — a netted set with one
+  untagged trade keeps the counterparty's normal weight. A derivative netting set
+  split by the Art. 272(4) or Art. 291(5) gates keeps its tag on every split set.
+
+Deliberately excluded:
+
+- **Exposures giving rise to own-funds items.** Both regimes open Art. 113(6) with "With the
+  exception of exposures giving rise to Common Equity Tier 1, Additional Tier 1 or Tier 2
+  items". The calculator has no "is an own-funds instrument of the counterparty" input, so a
+  row with `seniority = "subordinated"` stands in for one and **keeps its normal weight** — its
+  class weight under CRR, the PS1/26 Art. 133(5) 150% under Basel 3.1. This is conservative: a
+  subordinated loan that is not a Tier 2 item of the borrower could take the 0%, and does not.
+- **Equity holdings** in group entities — the equity frame is never tagged. An equity stake in
+  a group institution gives rise to a CET1 item, which the article excludes; for a financial
+  institution or ancillary services undertaking outside the own-funds regime the input cannot
+  say whether the carve-out applies, so equity keeps its normal weight (conservative).
 - **IRB exposures** — the IRB route to a 0% intragroup exposure is Art. 150(1)(e) permanent
   partial use, which reclassifies the exposure to the Standardised Approach upstream; it then
-  picks up this override as an SA row.
-- **Equity holdings** in group entities (participations regime), and **CCR / SFT** netting sets
-  (a solo intragroup position at its normal risk weight is conservative).
+  picks up this override as an SA row. An IRB-routed row (intragroup CCR included) keeps both
+  its IRB weight and its SA-equivalent weight, so the Basel 3.1 output floor's S-TREA is not
+  lowered — relevant because PS1/26 Art. 92(2A)(a)(i) floors a stand-alone UK institution on an
+  individual basis.
+
+**Not yet modelled.** `core_uk_group` is one Boolean per registry, so a dataset can hold only
+one Art. 113(6) perimeter; and PS1/26 grants the permission "to the extent and subject to any
+modifications set out in the permission", which the calculator does not represent — relief
+applies to every eligible exposure to a flagged entity. Both are open data-model decisions.
+
+**Reporting.** Annex II paragraphs 66-68 (both regimes) report an intragroup exposure in its
+counterparty's own exposure class, so a 0%-weighted leg lands on row 0140 ("0%") of C 07.00 /
+OF 07.00 on the counterparty's class sheet — institutions, or corporates for a group financial
+institution such as a holding company — and a derivative or SFT leg also in that row's
+column 0210 ("of which: arising from counterparty credit risk"). Under Basel 3.1 the Bank of
+England's rules `boe_b0440` / `boe_b0441` (OF 07.00.01.01 row 0140) and `boe_b0440_1` /
+`boe_b0441_1` (OF 07.00.01.02 row 0140, column 0210) close those cells, so a correct return
+holding such a leg fails them at the gateway as WARNINGs. That is a recorded publisher issue
+([PI-05](../rwa-filer/publisher-issues.md#pi-05)), not a reason to move the figures. The
+supervisory register's `intragroup` portfolio (`tests/fixtures/reporting_intragroup_portfolio.py`)
+is the registered run that exercises these cells.
 
 With `core_uk_group=False` (the default) no row is ever eligible, so the flag is a pure opt-in:
 an individual run over a non-core-UK-group registry keeps every intragroup exposure at its normal

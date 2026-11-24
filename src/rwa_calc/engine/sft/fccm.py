@@ -170,7 +170,9 @@ def sft_bundle_to_exposures(
 
     Each emitted synthetic exposure row carries the FCCM provenance:
     ``exposure_reference = "ccr__<netting_set_id>"``, ``risk_type = "CCR_SFT"``,
-    ``ccr_method = "fccm_sft"``, ``drawn_amount = E*``, ``ead_ccr = E*``.
+    ``ccr_method = "fccm_sft"``, ``drawn_amount = E*``, ``ead_ccr = E*``, plus
+    the CRR / PS1/26 Art. 113(6) ``intragroup_zero_rw_eligible`` carrier
+    collapsed from the trades (True only when every trade in the set is).
 
     Args:
         raw_sft: The SFT (FCCM) input bundle — every trade row is an SFT with the
@@ -479,6 +481,13 @@ def _build_sft_exposure_rows(
                 pl.col("maturity_date").max().alias("_trade_max_maturity"),
                 # Exact: after the netting gate every set names one counterparty.
                 pl.col("counterparty_reference").first(),
+                # CRR / PS1/26 Art. 113(6): a set is 0%-eligible only when every
+                # trade in it is (the scope resolver's carrier, sealed False by
+                # default). ``ignore_nulls=False`` keeps an unstated carrier from
+                # reading as eligible — a null result seals False at ccr_exit.
+                pl.col("intragroup_zero_rw_eligible")
+                .all(ignore_nulls=False)
+                .alias("intragroup_zero_rw_eligible"),
             ]
         )
         .lazy()
@@ -601,6 +610,8 @@ def _build_sft_exposure_rows(
         pl.lit(0.0).alias("undrawn_amount"),
         pl.lit(0.0).alias("nominal_amount"),
         pl.lit("senior").alias("seniority"),
+        # Art. 113(6) intragroup 0% carrier, read by the SA override after CRM.
+        pl.col("intragroup_zero_rw_eligible"),
         pl.lit("CCR_SFT").alias("risk_type"),
         pl.col("netting_set_id").alias("source_netting_set_id"),
         pl.lit("fccm_sft").alias("ccr_method"),

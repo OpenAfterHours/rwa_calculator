@@ -15,6 +15,9 @@ Key responsibilities:
 - Expand Multiple Option Facility (MOF) parents into per-sub CCF-descending
   waterfall rows plus an optional residual row, each sub-line governed by its
   OWN ``committed`` flag (SF-02).
+- Emit a headroom, MOF slice or residual row only when the amount exceeds the
+  rounding residue of the sums it is a difference of, so the row set does not
+  depend on summation order (``_exceeds_headroom_dust``; escape log 2026-11-24).
 - Facility Share candidate fan-out: emit one undrawn CANDIDATE row per member
   counterparty, each carrying the FULL headroom, so every member is priced by
   the real downstream pipeline and the aggregator can pick the riskiest.
@@ -76,6 +79,21 @@ logger = logging.getLogger(__name__)
 #: institution may cancel unconditionally at any time (CRR Annex I 4(a) 0%;
 #: PS1/26 Table A1 row (7) 10%) - what every ``committed=False`` row is priced as.
 UCC_RISK_TYPE = "LR"
+
+#: A headroom no larger than ``max(_HEADROOM_DUST_ABSOLUTE, _HEADROOM_DUST_RELATIVE
+#: x magnitude)`` - magnitude being the largest amount the difference was taken
+#: between - is the rounding residue of a difference of sums, not money. A
+#: headroom that is exactly zero in the inputs comes out one ulp either side of
+#: zero in binary (9.3e-10 at GBP 7.8m), and WHICH side depends on the order the
+#: grouped sums met their rows in; a bare ``> 0`` gate made that sign an exposure
+#: row, so the row set varied with summation order (escape log 2026-11-24). Not a
+#: regulatory value: the same pair, for the same reason, as
+#: ``reporting/filing/canonical.py``'s ``_SAME_FIGURE_*`` - summation-order
+#: rounding is of the order of 1e-13 of a total, a penny on GBP 50m is 2e-10.
+#: Duplicated rather than imported because check 12 bars ``engine/`` from
+#: importing ``reporting/``. On a GBP 1bn line the threshold is one penny.
+_HEADROOM_DUST_RELATIVE = 1e-11
+_HEADROOM_DUST_ABSOLUTE = 1e-6
 
 
 def calculate_facility_undrawn(
@@ -256,7 +274,11 @@ def calculate_facility_undrawn(
     # row (7) 10%; CRR Annex I 4(a) 0%), so its row is kept and priced as LR by
     # ``_undrawn_select_expressions`` — it used to be filtered out here, which
     # deleted the Basel 3.1 10% commitment outright (review finding CM-01).
-    return facility_with_drawn.filter(pl.col("undrawn_amount") > 0).select(select_exprs)
+    # "> 0" is read past float dust: a line drawn to exactly its limit nets to
+    # one ulp either side of zero, and must emit no row in either case.
+    return facility_with_drawn.filter(
+        _exceeds_headroom_dust(pl.col("undrawn_amount"), pl.col("limit"))
+    ).select(select_exprs)
 
 
 def facility_utilisation_rows(
@@ -816,6 +838,14 @@ def _expand_mof_facility_undrawn(
     FX rate, HIE005) has a null headroom and takes no slice; the residual
     carries it.
 
+    **Float dust.** "Positive" headroom, slice and residual all mean "above the
+    rounding residue of the sums they are differences of"
+    (:func:`_exceeds_headroom_dust`). Where sub-lines exactly cover the
+    umbrella's headroom, ``parent_headroom - sum(allocation)`` is one ulp either
+    side of zero in binary, its sign set by summation order; a bare ``> 0`` gate
+    emitted a ``_RESIDUAL`` row for the positive ulp, so the row set varied
+    between in-memory and spill-edge runs (escape log 2026-11-24).
+
     Args:
         facility_with_drawn: One row per parent with ``_is_mof_parent`` flag,
             aggregate ``undrawn_amount`` (= parent_headroom), parent fields,
@@ -937,6 +967,7 @@ def _expand_mof_facility_undrawn(
         [
             pl.col("facility_reference"),
             pl.col("undrawn_amount").alias("_parent_headroom"),
+            pl.col("limit").alias("_parent_limit"),
             pl.col("committed").alias("_parent_committed"),
             pl.col("currency").alias("_parent_currency"),
         ]
@@ -980,7 +1011,13 @@ def _expand_mof_facility_undrawn(
                 ).clip(lower_bound=0.0),
             ).clip(lower_bound=0.0)
         )
-        .filter(pl.col("allocation") > 0.0)
+        # A sub-line sorted after the headroom is exhausted is left
+        # ``H - (cum - h)``: exactly 0, or one ulp of the running sum in binary.
+        .filter(
+            _exceeds_headroom_dust(
+                pl.col("allocation"), pl.col("_parent_limit"), pl.col("cum_sub_headroom")
+            )
+        )
     )
 
     # Build sub waterfall rows: replicate parent's row per sub, then override
@@ -1003,6 +1040,7 @@ def _expand_mof_facility_undrawn(
         "cum_sub_headroom",
         "allocation",
         "_parent_headroom",
+        "_parent_limit",
         "_parent_committed",
         "_parent_currency",
     ]
@@ -1023,9 +1061,14 @@ def _expand_mof_facility_undrawn(
     # Residual: parent_headroom - sum(allocation). Emitted only when positive,
     # at parent's own risk_type / counterparty (mof_risk_type stays null so
     # select_exprs falls back through pl.coalesce to the parent's risk_type -
-    # the UCC bucket when the parent itself is uncommitted).
+    # the UCC bucket when the parent itself is uncommitted). "Positive" is read
+    # past float dust: sub-lines that exactly cover the headroom leave one ulp
+    # either side of zero, signed by summation order, which a bare "> 0" made a
+    # row in some runs and not others. ``_alloc_magnitude`` - the largest running
+    # sum a slice was cut from - is the scale that residue is a fraction of.
     parent_alloc_total = waterfall.group_by("facility_reference").agg(
-        pl.col("allocation").sum().alias("_total_alloc")
+        pl.col("allocation").sum().alias("_total_alloc"),
+        pl.col("cum_sub_headroom").max().alias("_alloc_magnitude"),
     )
     residual_rows = (
         mof_parents.join(parent_alloc_total, on="facility_reference", how="left")
@@ -1034,12 +1077,14 @@ def _expand_mof_facility_undrawn(
                 lower_bound=0.0
             )
         )
-        .filter(pl.col("_residual") > 0.0)
+        .filter(
+            _exceeds_headroom_dust(pl.col("_residual"), pl.col("limit"), pl.col("_alloc_magnitude"))
+        )
         .with_columns(
             undrawn_amount=pl.col("_residual"),
             _exposure_suffix=pl.lit("_RESIDUAL"),
         )
-        .drop(["_total_alloc", "_residual"])
+        .drop(["_total_alloc", "_alloc_magnitude", "_residual"])
     )
 
     return pl.concat([non_mof_rows, sub_rows, residual_rows], how="diagonal_relaxed")
@@ -1184,3 +1229,30 @@ def _derive_facility_share_members(
             ]
         )
     )
+
+
+def _exceeds_headroom_dust(amount: pl.Expr, *magnitudes: pl.Expr) -> pl.Expr:
+    """True where ``amount`` is real positive headroom, not the residue of a difference of sums.
+
+    Every headroom this module emits is a difference of sums - ``limit -
+    sum(drawn)``, an MOF slice ``H - (cum - h)``, the residual ``H -
+    sum(allocation)`` - so where the inputs make it exactly zero the binary result
+    is one ulp of the amounts involved, positive or negative by summation order.
+    The threshold is ``max(_HEADROOM_DUST_ABSOLUTE, _HEADROOM_DUST_RELATIVE x
+    max(|magnitudes|))``; a null magnitude is ignored, and with none known the
+    absolute floor applies alone. A null ``amount`` stays null, so a filter on it
+    still drops the row, as the bare ``> 0`` did.
+
+    Args:
+        amount: The headroom, slice or residual being gated.
+        magnitudes: The amounts the difference was taken between, or a bound on
+            them (the facility's limit; the waterfall's running sum).
+
+    Returns:
+        Boolean expression: ``amount`` exceeds the summation-residue threshold.
+    """
+    magnitude = pl.max_horizontal(*(m.abs() for m in magnitudes))
+    threshold = pl.max_horizontal(
+        pl.lit(_HEADROOM_DUST_ABSOLUTE), magnitude * _HEADROOM_DUST_RELATIVE
+    )
+    return amount > threshold

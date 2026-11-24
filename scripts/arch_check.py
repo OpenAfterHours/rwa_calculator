@@ -193,6 +193,14 @@ REGULATORY_SCALAR_ALLOWLIST: dict[str, set[str]] = {
     # Numerical epsilons for parallel-run reconciliation — mathematical
     # tolerances (float exactness / zero-division guards), not regulatory values.
     _PATH_COLLAPSE: {"_EAD_ZERO_GUARD"},
+    # Float-dust threshold on facility headroom (a difference of sums is one ulp
+    # from zero where the inputs make it zero; escape log 2026-11-24). Mirrors
+    # reporting/filing/canonical.py's _SAME_FIGURE_* pair — mathematical, not
+    # regulatory.
+    "engine/hierarchy/facility_undrawn.py": {
+        "_HEADROOM_DUST_RELATIVE",
+        "_HEADROOM_DUST_ABSOLUTE",
+    },
 }
 
 # Module-level float-rate COLLECTION literals (e.g. a ``{float: float}`` RW map)

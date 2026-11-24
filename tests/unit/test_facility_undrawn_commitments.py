@@ -1,8 +1,10 @@
 """Unit tests: what a facility's undrawn headroom row is, before any CCF is applied.
 
 Covers the review findings CM-01, SF-02 and CM-02 / SF-01 at the hierarchy
-stage (``calculate_facility_undrawn``), plus the HIE004 / HIE005 / HIE006
-warnings that make each non-default treatment visible (``unify_exposures``).
+stage (``calculate_facility_undrawn``), the float-dust headroom gates (escape
+log 2026-11-24: a headroom that is exactly zero in the inputs emits no row, in
+any summation order), plus the HIE004 / HIE005 / HIE006 warnings that make each
+non-default treatment visible (``unify_exposures``).
 The money these rows carry once a CCF is applied is pinned end to end, in both
 regimes, by ``tests/acceptance/test_facility_undrawn_commitments.py``.
 
@@ -33,7 +35,9 @@ a Table A1 row (7) commitment, not "no exposure", and the undrawn amount is
 from __future__ import annotations
 
 import dataclasses
+import random
 from datetime import date
+from decimal import Decimal
 from typing import Any
 
 import polars as pl
@@ -480,6 +484,130 @@ class TestFacilityHeadroomCurrency:
         assert undrawn["exposure_reference"].to_list() == ["P_UNDRAWN_RESIDUAL"]
         residual = _row(undrawn, "P_UNDRAWN_RESIDUAL")
         assert (residual["risk_type"], residual["undrawn_amount"]) == ("MR", pytest.approx(20.0))
+
+
+# =============================================================================
+# Float dust - a headroom that is zero in the inputs emits no row, in any order
+# =============================================================================
+
+
+def _exactly_drawn_book(
+    count: int, seed: int
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, str]]]:
+    """``count`` facilities, each drawn to exactly its limit by 3-5 cent-denominated loans.
+
+    The limit is the DECIMAL sum of the drawings, so every facility's headroom is
+    exactly zero. The binary sum of the same drawings lands an ulp either side of
+    the limit for roughly one facility in twelve - and which side depends on the
+    order the grouped sum meets the rows in.
+    """
+    rng = random.Random(seed)
+    facilities: list[dict[str, Any]] = []
+    loans: list[dict[str, Any]] = []
+    mappings: list[dict[str, str]] = []
+    for f in range(count):
+        drawings = [rng.randint(100, 10**9) / 100 for _ in range(rng.choice((3, 4, 5)))]
+        limit = float(sum(Decimal(str(d)) for d in drawings))
+        facilities.append(_facility(f"F{f}", limit))
+        for i, drawn in enumerate(drawings):
+            loans.append(_loan(f"F{f}L{i}", drawn))
+            mappings.append(_map(f"F{f}", f"F{f}L{i}", "loan"))
+    return facilities, loans, mappings
+
+
+class TestHeadroomFloatDust:
+    """Every headroom gate reads summation residue as zero, whatever order it was summed in.
+
+    Headroom is a difference of sums (``limit - sum(drawn)``; the MOF residual is
+    ``headroom - sum(allocation)``). Where the inputs make it exactly zero, the
+    binary result is +/- one ulp of the amounts involved - 9.3e-10 at GBP 7.8m -
+    and a ``> 0`` gate turned a positive ulp into an exposure row. The sign of the
+    ulp depends on summation order, which is what made ``spill_edges=True`` (parquet
+    re-read in chunks) emit a different, run-to-run varying set of
+    ``<facility>_UNDRAWN_RESIDUAL`` rows on the 200K benchmark. Every amount below
+    is cent-denominated and chosen because it reproduces the residue.
+    """
+
+    def test_subs_absorbing_the_umbrella_headroom_leave_no_residual_row(self) -> None:
+        # Arrange - P 7,816,127.22; S1 1,343,643.31 + S2 8,474,337.52 cover it.
+        # S1 takes 1,343,643.31, S2 the remaining 6,472,483.91: residual exactly 0
+        # (binary: 9.313225746154785e-10).
+        facilities = [
+            _facility("P", 7_816_127.22),
+            _facility("S1", 1_343_643.31),
+            _facility("S2", 8_474_337.52),
+        ]
+        mappings = [_map("P", "S1", "facility"), _map("P", "S2", "facility")]
+
+        # Act
+        undrawn = _undrawn(facilities, [], mappings)
+
+        # Assert
+        assert undrawn["exposure_reference"].to_list() == ["P_UNDRAWN_S1", "P_UNDRAWN_S2"]
+        assert undrawn["undrawn_amount"].sum() == pytest.approx(7_816_127.22)
+
+    def test_a_sub_after_the_umbrella_is_exhausted_takes_no_slice(self) -> None:
+        """S1 (FR, sorted first) takes the whole headroom; S2 is left exactly nothing.
+
+        Binary: S2's slice is ``H - ((h1 + h2) - h2)`` = 4.656612873077393e-10.
+        """
+        facilities = [
+            _facility("P", 3_751_040.52),
+            _facility("S1", 3_751_040.52, risk_type="FR"),
+            _facility("S2", 9_823_853.46, risk_type="OC"),
+        ]
+        mappings = [_map("P", "S1", "facility"), _map("P", "S2", "facility")]
+
+        undrawn = _undrawn(facilities, [], mappings)
+
+        assert undrawn["exposure_reference"].to_list() == ["P_UNDRAWN_S1"]
+
+    def test_a_facility_drawn_to_its_limit_emits_no_undrawn_row(self) -> None:
+        """6,737,013.93 + 6,259,882.56 is 12,996,896.49; binary headroom 1.86e-09."""
+        facilities = [_facility("F1", 12_996_896.49)]
+        loans = [_loan("L1", 6_737_013.93), _loan("L2", 6_259_882.56)]
+        mappings = [_map("F1", "L1", "loan"), _map("F1", "L2", "loan")]
+
+        undrawn = _undrawn(facilities, loans, mappings)
+
+        assert undrawn["exposure_reference"].to_list() == []
+
+    def test_headroom_rows_do_not_depend_on_the_order_drawings_are_summed_in(self) -> None:
+        """The spill-mode mechanism at unit scale: same book, rows met in reverse.
+
+        Measured before the fix on 3,000 exactly-drawn facilities: 258 dust
+        ``_UNDRAWN`` rows in input order, 271 in reverse, and the two sets differed.
+        Every facility here is drawn to exactly its limit, so the only correct row
+        set - in either order - is the empty one.
+        """
+        facilities, loans, mappings = _exactly_drawn_book(count=1_000, seed=11)
+
+        forward = set(_undrawn(facilities, loans, mappings)["exposure_reference"])
+        reverse = set(_undrawn(facilities, loans[::-1], mappings)["exposure_reference"])
+
+        assert (forward, reverse) == (set(), set())
+
+    def test_a_penny_of_real_headroom_on_a_large_line_is_kept(self) -> None:
+        """The tolerance is dust-sized, not money-sized: GBP 0.01 on a GBP 50m line survives."""
+        facilities = [_facility("F1", 50_000_000.01)]
+        loans = [_loan("L1", 50_000_000.0)]
+
+        undrawn = _undrawn(facilities, loans, [_map("F1", "L1", "loan")])
+
+        assert _row(undrawn, "F1_UNDRAWN")["undrawn_amount"] == pytest.approx(0.01, abs=1e-6)
+
+    def test_a_penny_of_real_umbrella_residual_is_kept(self) -> None:
+        facilities = [
+            _facility("P", 50_000_000.01),
+            _facility("S1", 30_000_000.0),
+            _facility("S2", 20_000_000.0),
+        ]
+        mappings = [_map("P", "S1", "facility"), _map("P", "S2", "facility")]
+
+        undrawn = _undrawn(facilities, [], mappings)
+
+        residual = _row(undrawn, "P_UNDRAWN_RESIDUAL")
+        assert residual["undrawn_amount"] == pytest.approx(0.01, abs=1e-6)
 
 
 # =============================================================================

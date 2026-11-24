@@ -40,7 +40,27 @@ in Art. 138 resolution.
     has only (a)–(f); CRR Art. 139 has only paragraphs (1)–(4)). The new provisions
     apply **only where the obligor is an institution** and only on the ECRA (rated)
     path — they do not change the per-agency dedup or second-best selection mechanics
-    above for corporate, sovereign, or retail obligors. See
+    above for corporate, sovereign, or retail obligors.
+
+    **Art. 138(1)(g) is implemented** (pack Feature
+    `sa_implicit_support_ratings_disapplied`, Basel 3.1 only): before step 1 above,
+    and before the per-exposure short-term override reads the same table, the
+    resolver removes every external (ECAI) assessment flagged
+    `rating_incorporates_government_support = True` whose counterparty is an
+    institution obligor not flagged `is_government_owned_or_sponsored`. Internal
+    ratings are never removed — Art. 138 governs ECAI credit assessments — so the
+    internal PD / model id selection and its parent inheritance are unaffected. Because the
+    assessments leave the *selection set*, the remaining ones go through the 1 / 2 /
+    ≥ 3 rule above (a flagged CQS 2 among CQS 1 / 2 / 3 turns a second-best 2 into a
+    worse-of-two 3); with none left the institution is unrated (SCRA). Because the
+    removal comes before the per-agency dedup in step 1, an agency whose newest
+    assessment is flagged is represented by its latest *unflagged* assessment — the
+    intended result for one agency's concurrent support-uplifted and stand-alone
+    ratings (e.g. Moody's long-term rating and BCA, S&P ICR and SACP), which the
+    engine would otherwise treat as history and reduce to the flagged one. The
+    consequence: the ratings input must not carry superseded assessments, or an
+    agency's stale unflagged rating is used in place of its flagged current one.
+    Art. 139(6) is not yet implemented (P1.259b). See
     [B31 SA Risk Weights — Art. 138(1)(g), Art. 139(6)](../basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396)
     for the full treatment, including the government-owned / government-sponsored
     exemption and the distinction from Art. 121(6).

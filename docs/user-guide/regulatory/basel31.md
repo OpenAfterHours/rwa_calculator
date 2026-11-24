@@ -664,10 +664,15 @@ External Credit Risk Assessment Approach (ECRA, PRA PS1/26 Art. 120 Table 3):
     recognition of the unsupported creditworthiness (often one or two CQS bands
     lower, e.g. BB+ / 100% instead of BBB+ / 50%).
 
-    **Not yet implemented** — the schema lacks both an issue-specific vs general-
-    issuer distinction and an implicit-support flag. Firms must pre-adjust
-    `external_cqs` offline or use `due_diligence_override_rw` (Art. 110A pathway)
-    as a workaround. CRR has no equivalent provision. See the
+    **Art. 138(1)(g) is implemented** from two input flags —
+    `rating_incorporates_government_support` (per external (ECAI) rating row; ignored
+    on internal ratings) and
+    `is_government_owned_or_sponsored` (per counterparty): flagged assessments of a
+    non-exempt institution obligor are removed before the Art. 138 selection and the
+    short-term override, which can raise or lower the weight. **Art. 139(6) is not
+    yet implemented** — where it applies, pre-adjust `external_cqs` offline or use
+    `due_diligence_override_rw` (Art. 110A pathway). CRR has no equivalent
+    provision. See the
     [B31 SA spec](../../specifications/basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396)
     for the full trigger, worked example, and exemption scope.
 

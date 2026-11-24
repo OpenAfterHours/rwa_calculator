@@ -38,7 +38,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.21 | Real estate framework routing (Art. 124(1)–(3)) and mixed RE proportional split (Art. 124(4)) | P1 | Partial — single-property routing done; mixed-property split requires per-component property values (input-schema gap, see D3.59) |
 | FR-1.22 | RE valuation requirements — qualifying valuation, >10% market decline and GBP 2.6m / 5% own funds revaluation triggers, self-build floor, pre-2027 transitional (Art. 124D(1)–(11)) | P1 | Input-driven — calculator consumes `property_value` as already Art. 124D-compliant; valuation governance is firm-side (no Art. 124D-specific input fields for valuation source, revaluation date, or self-build flag) |
 | FR-1.23 | Output-floor S-TREA election for unrated corporates by IRB firms — 100% vs IG/non-IG split with PRA notification obligation (Art. 122(7)–(8)) | P2 | Input-driven — the S-TREA leg of the output floor reuses the firm's Art. 122(5)/(6) branch selection from its regular SA application; notification to PRA on adoption or cessation is a firm governance step upstream of the calculator |
-| FR-1.24 | Implicit government support higher-of rule for rated institution exposures (Art. 138(1)(g), Art. 139(6)) | P2 | Not implemented — input-schema gap (no distinction between issue-specific and general issuer ratings; no flag for implicit-support assumption). Firms must pre-adjust `external_cqs` offline or use the Art. 110A `due_diligence_override_rw` pathway. See D3.60. |
+| FR-1.24 | Implicit government support for rated institution exposures (Art. 138(1)(g), Art. 139(6)) | P2 | Partial — Art. 138(1)(g) done (input-driven: `rating_incorporates_government_support` per assessment, `is_government_owned_or_sponsored` per counterparty; flagged assessments of institution obligors are removed before the Art. 138 selection and the short-term override, P1.259). Art. 139(6) higher-of for an exposure to an issue not implemented (P1.259b) — firms pre-adjust offline or use the Art. 110A `due_diligence_override_rw` pathway. |
 | FR-1.25 | Real estate underwriting-standards policy obligation — affordability assessment at origination (Art. 124B) | P2 | Firm-governance only — no calculator input or validation; compliance evidenced through underwriting-policy documentation and supervisory review |
 
 ---
@@ -965,32 +965,90 @@ than the ECAI rating directly for many institution exposures.
 
 ### Implementation Status
 
-!!! warning "Not Yet Implemented — Input-Schema Gap"
-    The calculator does not currently implement Art. 138(1)(g) or Art. 139(6). Two
-    schema-level gaps preclude implementation:
+**Art. 138(1)(g) — implemented (P1.259).** Pack Feature
+`sa_implicit_support_ratings_disapplied` (enabled in the Basel 3.1 pack, disabled in
+the CRR pack). Inputs:
 
-    - The facility schema exposes a single `external_cqs` (post Art. 138 resolution)
-        with no indicator of whether the rating is **issue-specific** versus
-        **general issuer** — a prerequisite for Art. 139(6)(b).
-    - No input field flags whether an ECAI assessment **incorporates implicit
-        government support** — a prerequisite for the Art. 138(1)(g) suppression step
-        and the Art. 139(6) "clean" vs "with-support" comparison.
+| Input | Grain | Meaning |
+|-------|-------|---------|
+| `ratings.rating_incorporates_government_support` | per assessment — **external (ECAI) rows only** | `True` = the assessment incorporates implicit government support (e.g. a support-uplifted long-term rating rather than the agency's stand-alone one). **No default**: null means no ECAI methodology review is recorded, and the assessment stays usable. |
+| `counterparties.is_government_owned_or_sponsored` | per counterparty | `True` = owned by, or set up and sponsored by, a central government, regional government or local authority — the (g) tail clause. Defaults to `False`. |
 
-    As a result, the calculator treats every rated institution exposure as if the
-    rating complies with Art. 138(1)(g) — i.e. no higher-of uplift is applied.
-    Firms with material rated-institution portfolios whose ratings embed implicit
-    support must either (a) pre-adjust the `external_cqs` input offline to reflect
-    the Art. 139(6) higher of the two candidate weights, or (b) use the Art. 110A
-    `due_diligence_override_rw` pathway to floor the risk weight at the higher-of
-    value. See code-side finding **D3.60** in the docs implementation plan.
+`engine/hierarchy/ratings.py::disregard_implicit_support_ratings`, called once by
+`HierarchyResolver.resolve`, removes from the **ratings table** every **external
+(ECAI) assessment** (`rating_type = "external"`) that is flagged `True` and belongs to
+an institution obligor that is not government-owned or sponsored. Art. 138 governs
+credit assessments by nominated ECAIs, so an `internal` rating row is never removed,
+whatever its flag says: dropping it would strip the obligor's IRB PD and model id
+(sending a model-permissioned exposure to SA, or letting the parent's internal rating
+be inherited in its place). It runs **before** both readers of that table:
+
+- the long-term Art. 138 selection — so the remaining assessments go through the
+  1 / 2 / ≥ 3 rule (a flagged CQS 2 among CQS 1 / 2 / 3 turns the second-best CQS 2
+  into the worse-of-two CQS 3; nulling the *selected* rating instead, the Art. 139(2B)
+  pattern, would leave the institution unrated); with none left the institution is
+  unrated and takes its SCRA grade (a null grade is Grade C);
+- the per-exposure short-term ECAI override — a flagged dedicated short-term
+  assessment no longer routes the exposure to Table 4A; the long-term rating, if any,
+  routes it by Table 4 (Art. 120(2)).
+
+**Same agency, more than one assessment.** The removal also comes before the
+per-agency "most recent assessment" reduction that precedes the Art. 138 ranking, so
+the latest *unflagged* assessment from each agency is used. That is the intended
+result where one agency publishes two concurrent long-term assessments of a bank — a
+support-uplifted rating and a stand-alone one (e.g. Moody's long-term rating and BCA,
+S&P ICR and SACP): (g) bars the first and the second is still usable. Reducing to the
+newest row first would select the flagged rating and then remove it, leaving the bank
+unrated. The consequence is that the ratings input **must not carry superseded
+assessments**: an agency's stale unflagged rating would be used in place of its
+flagged current one.
+
+Everything downstream reads the resulting `cqs`: guarantor substitution (an
+institution guarantor's flagged assessments are disregarded too, Art. 235), the CCR
+rows, and the SA-equivalent weight of the output floor for IRB institution exposures.
+
+**Who counts as "an institution".** The counterparties whose `entity_type` the run's
+pack maps to the `institution` SA class — `bank` / `institution`, `financial_institution`
+(Art. 119(5) "treated as exposures to institutions") and a **qualifying** CCP (Art.
+107(2)(a): other exposures to a QCCP are treated "as exposures to an institution").
+A **non-qualifying** CCP (`is_qccp` not `True`) is excluded: Art. 107(2)(b) treats it
+"as exposures to a corporate", the same reading the classifier applies. Corporates,
+sovereigns, RGLAs, PSEs and MDBs are out of scope.
+
+**The weight can move either way.** Removing an assessment raises the weight where the
+fallback is worse (a CQS 1 bank with a clean CQS 3 → 50%; a sole CQS 2 → SCRA B 75%)
+and lowers it where it is better (a sole CQS 4 → SCRA A 40%; a flagged short-term CQS 3
+beside a clean long-term CQS 1 → Table 4 20% instead of Table 4A 100%).
+
+**Out of scope, by decision.**
+
+- `counterparties.institution_cqs` (the Art. 129(5) covered-bond issuer weight and the
+  MDB / non-QCCP CQS lift) and `collateral.issuer_cqs` (Art. 197 / 222 / 224 / 232) are
+  **firm-resolved single CQS values** with no per-assessment rows, so the engine cannot
+  apply Art. 138 to them. They are taken as already Art. 138-compliant, including (g):
+  the firm must supply a CQS that does not rest on a barred assessment.
+- **Art. 139(6)** — the higher-of for an exposure to an *issue* with an institution
+  obligor and no clean issue-specific assessment — is **not implemented** (P1.259b). It
+  can only raise the weight above the (g) result. Until it lands, firms with such
+  exposures must pre-adjust offline or use the Art. 110A `due_diligence_override_rw`
+  pathway to floor the risk weight at the higher-of value.
+
+**Reporting.** A disregarded assessment leaves `external_cqs` null, so an institution
+whose only assessments were disregarded reports in the Pillar 3 CR5 "of which unrated"
+column (Annex XX: "a credit assessment by a nominated ECAI is not available") — under
+(g) the assessment is not available for that exposure.
 
 ### Firm responsibility
 
 Determining whether a specific ECAI assessment incorporates implicit government
 support is a **firm governance responsibility** (ECAI methodology review under the
-institution's use-test framework) and cannot be automated by the calculator. The
-Art. 138(1)(g) exemption (government-owned or government-sponsored) likewise requires
-firm-level determination of the ownership / sponsorship relationship.
+institution's use-test framework) and cannot be automated by the calculator: the firm
+records the outcome in `rating_incorporates_government_support`, and the calculator
+applies it. The Art. 138(1)(g) exemption (government-owned or government-sponsored)
+likewise requires firm-level determination of the ownership / sponsorship
+relationship, recorded in `is_government_owned_or_sponsored`. A null support flag is
+read as "not reviewed", not as `True`, and raises no warning — a firm with a material
+rated-institution book should populate it for every institution assessment.
 
 ---
 

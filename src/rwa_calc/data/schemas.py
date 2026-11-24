@@ -982,6 +982,10 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     "borrower_income_currency": ColumnSpec(pl.String, required=False),
     "sovereign_cqs": ColumnSpec(pl.Int32, required=False, domain=_CQS_DOMAIN),
     "local_currency": ColumnSpec(pl.String, required=False),
+    # Firm-resolved CQS (one value, no per-assessment rows), so the engine cannot
+    # apply Art. 138 to it: it is taken as already compliant with Art. 138 —
+    # under Basel 3.1 including the (1)(g) implicit-support limb, which the engine
+    # applies only to RATINGS_SCHEMA rows (P1.259 scope decision).
     "institution_cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
     # CRR Art. 116(5): True where the Treasury has determined by regulations
     # that this counterparty's third-country jurisdiction "applies supervisory
@@ -1002,6 +1006,14 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     # concept, which is modelled by the rgla_sovereign / pse_sovereign
     # entity_type values.
     "is_equivalent_jurisdiction": ColumnSpec(pl.Boolean, required=False),
+    # PRA PS1/26 Art. 138(1)(g) tail clause (Basel 3.1 only): True where the
+    # counterparty is an institution "owned by or set up and sponsored by central
+    # governments, regional governments or local authorities" — its assessments
+    # may be used even where they incorporate implicit government support
+    # (RATINGS_SCHEMA.rating_incorporates_government_support). An actual ownership
+    # or sponsorship relationship, not a market expectation of support. Defaults
+    # to False: the carve-out is affirmative, so its absence cannot manufacture it.
+    "is_government_owned_or_sponsored": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 137(1)-(2) Table 9: nominated ECA's minimum export insurance
     # premium (MEIP) score 0-7 used as a direct sovereign risk-weight input
     # when no ECAI rating is available. Null when ECA path is not used.
@@ -1039,6 +1051,9 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "pledge_percentage": ColumnSpec(pl.Float64, required=False, domain=_PLEDGE_FRACTION_DOMAIN),
     "beneficiary_type": ColumnSpec(pl.String),
     "beneficiary_reference": ColumnSpec(pl.String),
+    # Firm-resolved issuer CQS: like COUNTERPARTY_SCHEMA.institution_cqs it is
+    # taken as already Art. 138-compliant (under Basel 3.1 including the (1)(g)
+    # implicit-support limb for an institution issuer) — P1.259 scope decision.
     "issuer_cqs": ColumnSpec(pl.Int8, required=False, domain=_CQS_DOMAIN),
     "issuer_type": ColumnSpec(pl.String, required=False),
     "residual_maturity_years": ColumnSpec(
@@ -1334,6 +1349,23 @@ RATINGS_SCHEMA: dict[str, ColumnSpec] = {
     # directly applicable (issue-specific) and not inferred.
     "rating_is_issue_specific": ColumnSpec(pl.Boolean, default=True, required=False),
     "rating_is_inferred": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 138(1)(g) (Basel 3.1 only): True where the assessment
+    # incorporates assumptions of implicit government support (e.g. an agency's
+    # support-uplifted long-term rating rather than its stand-alone one). Such an
+    # assessment is not used for an exposure to an institution unless the
+    # institution is government-owned or sponsored
+    # (COUNTERPARTY_SCHEMA.is_government_owned_or_sponsored). External (ECAI)
+    # assessments only (rating_type "external"): Art. 138 governs ECAI credit
+    # assessments, so a flag on an internal rating row is ignored and that row's
+    # PD / model_id stay in use. Per assessment,
+    # because the answer differs by agency methodology. A flagged row is removed
+    # BEFORE the per-agency "most recent" reduction, so the agency's latest
+    # unflagged assessment is used: do not carry superseded assessments, or a
+    # stale unflagged one is revived. NO default on purpose:
+    # null means "no ECAI methodology review recorded" and is NOT treated as
+    # True — the assessment stays usable — so the tri-state survives for the
+    # Art. 139(6) "clean issue-specific assessment" test (P1.259b).
+    "rating_incorporates_government_support": ColumnSpec(pl.Boolean, required=False),
     # Firm-supplied internal rating grade (COREP Annex II, C 08.02 obligor grade
     # scale). Free-text firm master-scale label; no COLUMN_VALUE_CONSTRAINTS entry.
     "internal_rating_grade": ColumnSpec(pl.String, required=False),

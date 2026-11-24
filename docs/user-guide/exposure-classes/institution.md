@@ -139,20 +139,39 @@ Both apply only where the obligor is an institution and only on the ECRA (rated)
     support assessments suppressed, and (ii) the RW from the issue-specific rating
     disregarding Art. 138(1)(g).
 
-!!! warning "Not Yet Implemented — Use Art. 110A Override as Workaround"
-    The calculator does not distinguish issue-specific from general-issuer ratings
-    and has no flag for implicit-support assumption — so the Art. 139(6) higher-of
-    comparison cannot be computed automatically. Firms with material rated-institution
-    exposures whose ratings embed implicit support should either:
+!!! info "Art. 138(1)(g) implemented; Art. 139(6) not yet"
+    **Art. 138(1)(g)** is applied from your inputs. Flag each **external (ECAI)**
+    rating row (`rating_type = "external"`) whose assessment incorporates implicit
+    government support with `rating_incorporates_government_support = True`. The flag
+    is read on external assessments only: on an `internal` rating row it is ignored,
+    and that row's `pd` and `model_id` stay in use. Flag each government-owned or
+    government-sponsored institution with `is_government_owned_or_sponsored = True` on
+    the counterparty. Under Basel 3.1 the calculator removes the flagged assessments of
+    every other institution obligor (a bank, a `financial_institution`, or a qualifying
+    CCP) **before** the Art. 138 multi-rating selection and the short-term ECAI
+    override, so the remaining assessments are selected as usual — or, if none remain,
+    the institution is unrated and takes its `scra_grade` (a null grade is Grade C).
+    The weight can therefore go up or down: a sole flagged CQS 4 with SCRA Grade A falls
+    to the Grade A weight. A null flag means "not reviewed" and leaves the assessment in
+    use. Where one agency gives both a support-uplifted and a stand-alone rating, supply
+    both and flag the first: the agency's latest *unflagged* rating is the one used, so
+    do not keep superseded ratings in the file, or a stale one comes back into use.
+    Guaranteed exposures follow: an institution guarantor's flagged assessments are
+    disregarded too. `institution_cqs` and collateral `issuer_cqs` are single values you
+    resolve yourself, so they must already exclude barred assessments.
+
+    **Art. 139(6)** (the higher-of for an exposure to an *issue*) is not implemented.
+    It can only raise the weight above the Art. 138(1)(g) result. Where it applies,
+    either:
 
     - **Pre-adjust** `external_cqs` offline to reflect the Art. 139(6) higher-of
         result before loading, or
     - Set `due_diligence_override_rw` to the required floor via the framework-wide
         Art. 110A pathway ([see Art. 110A discussion](../../user-guide/regulatory/basel31.md#10-due-diligence-requirements)).
 
-    Firms must also independently determine whether the rated institution falls
-    within the Art. 138(1)(g) exemption (government-owned / government-sponsored) —
-    this is a firm governance question, not a calculator input. See
+    Whether an assessment incorporates implicit support, and whether the institution
+    falls within the government-owned / government-sponsored exemption, are firm
+    governance determinations; the calculator applies them. See
     [B31 SA Risk Weights — Art. 138(1)(g), Art. 139(6)](../../specifications/basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396)
     for the full trigger, worked example, exemption scope, and distinction from the
     Art. 121(6) SCRA sovereign floor.

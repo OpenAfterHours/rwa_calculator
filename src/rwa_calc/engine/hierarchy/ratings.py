@@ -12,19 +12,36 @@ Key responsibilities:
 - Combine multiple external assessments per CRR Art. 138 (second-best rule).
 - Inherit internal ratings from the ultimate parent when the entity has no
   own internal rating; external ratings are never inherited.
+- Basel 3.1 only (pack Feature ``sa_implicit_support_ratings_disapplied``):
+  remove the external (ECAI) assessments PS1/26 Art. 138(1)(g) bars — those
+  incorporating implicit government support, on an institution obligor that
+  is not government-owned or sponsored — from the ratings table before ANY
+  selection reads it (``disregard_implicit_support_ratings``, applied by the
+  resolver). Internal ratings are never removed.
 
 References:
 - CRR Art. 135: Use of external credit assessments (ECAIs)
 - CRR Art. 136: Mapping of ECAI ratings to credit quality steps
 - CRR Art. 138: Issuer / issue credit assessment
+- PS1/26 Art. 138(1)(g): implicit government support (no CRR equivalent)
+- PS1/26 Art. 107(2): exposures to a QCCP / non-QCCP treated as to an
+  institution / a corporate; CRR Art. 119(5): financial institutions
 - CRR Art. 171(1) / Art. 175(3): internal rating assignment within groups
 """
 
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import polars as pl
+from watchfire import cites
+
+from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.engine.entity_class_maps import entity_types_by_sa_class
+
+if TYPE_CHECKING:
+    from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
 
@@ -212,4 +229,102 @@ def build_rating_inheritance_lazy(
             "cqs",
             "pd",
         ]
+    )
+
+
+@cites("PS1/26, paragraph 138")
+def disregard_implicit_support_ratings(
+    ratings: pl.LazyFrame | None,
+    counterparties: pl.LazyFrame,
+    pack: ResolvedRulepack,
+) -> pl.LazyFrame | None:
+    """
+    Drop the assessments PS1/26 Art. 138(1)(g) bars, before any selection reads them.
+
+    Art. 138(1)(g): "an institution shall not use a credit assessment that
+    incorporates assumptions of implicit government support for the purposes of
+    assigning a risk weight to an exposure to an institution, unless the
+    respective credit assessment applies to an institution owned by or set up
+    and sponsored by central governments, regional governments or local
+    authorities." UK CRR Art. 138(1) has limbs (a)-(f) only, so the filter runs
+    only where the pack enables ``sa_implicit_support_ratings_disapplied``
+    (Basel 3.1); otherwise ``ratings`` is returned unchanged.
+
+    A row is removed when all of the following hold:
+
+    - It is an external (ECAI) assessment: ``rating_type == "external"``,
+      matched as the Art. 138 selection matches it. Art. 138 governs credit
+      assessments by nominated ECAIs; an INTERNAL rating is the firm's own IRB
+      grade, so a flag on an internal row is ignored — removing it would strip
+      the obligor's PD and model id (and let the parent's be inherited).
+    - ``rating_incorporates_government_support`` is True. Null — no ECAI
+      methodology review recorded — keeps the assessment (it is not treated as
+      True; the column has no default on purpose).
+    - The rated counterparty is an exposure-to-an-institution obligor: its
+      ``entity_type`` maps to the ``institution`` SA class under ``pack``
+      (bank / institution; a financial institution treated as an institution
+      under Art. 119(5); a qualifying CCP, whose other exposures Art. 107(2)(a)
+      treats "as exposures to an institution"), excluding a NON-qualifying CCP,
+      which Art. 107(2)(b) treats "as exposures to a corporate" — the same
+      ``is_qccp`` reading the classifier applies.
+    - The counterparty is not ``is_government_owned_or_sponsored``.
+
+    The filter acts on the ratings TABLE, not on a selected rating, because
+    (g) shrinks the set Art. 138(1)(d)-(f) choose from: with a flagged CQS 2
+    among CQS 1 / 2 / 3, the second-best rule picks 2 before the filter and the
+    worse-of-two rule picks 3 after it, where nulling the selected rating would
+    leave the institution unrated. It also runs before the per-agency "most
+    recent" reduction in :func:`build_rating_inheritance_lazy`: where one
+    agency publishes a support-uplifted and a stand-alone long-term assessment
+    of the same bank, (g) bars only the first, so that agency's latest
+    UNFLAGGED assessment is its assessment — reducing first would select the
+    flagged row and then drop it, leaving the bank unrated. The consequence is
+    that a ratings feed must not carry superseded assessments, or an agency's
+    stale unflagged rating is revived. The resolver applies it once to the table
+    both readers take — the long-term selection
+    (:func:`build_rating_inheritance_lazy`) and the per-exposure short-term
+    override (``enrich.apply_short_term_rating_override``) — and everything
+    downstream (guarantor substitution, CCR rows, the output floor's SA
+    equivalent) inherits the result through ``cqs``. The DQ015
+    unsolicited-assessment count is also taken on the filtered table, so under
+    Basel 3.1 a disregarded unsolicited assessment — one that is never used —
+    is not counted.
+
+    Out of scope here, by decision (P1.259): the firm-resolved single-value
+    CQS carriers ``institution_cqs`` and collateral ``issuer_cqs`` carry no
+    per-assessment rows and are taken as already Art. 138-compliant; and the
+    Art. 139(6) higher-of for an exposure to an issue (P1.259b).
+    """
+    if ratings is None or not pack.feature("sa_implicit_support_ratings_disapplied"):
+        return ratings
+
+    logger.debug("PS1/26 Art. 138(1)(g): disregarding implicit-support assessments")
+    in_scope = counterparties.filter(_art_138_1_g_obligor(pack)).select("counterparty_reference")
+    # ECAI assessments only, matched exactly as the Art. 138 selection matches
+    # them; eq_missing keeps both predicates two-valued, so no row is lost to null.
+    flagged = pl.col("rating_type").eq_missing("external") & pl.col(
+        "rating_incorporates_government_support"
+    ).eq_missing(True)
+    return pl.concat(
+        [
+            ratings.filter(flagged.not_()),
+            ratings.filter(flagged).join(in_scope, on="counterparty_reference", how="anti"),
+        ]
+    )
+
+
+def _art_138_1_g_obligor(pack: ResolvedRulepack) -> pl.Expr:
+    """Counterparty predicate: an institution obligor (g) applies to, not exempt.
+
+    ``entity_type`` is lowercased exactly as the classifier and the Art. 140(1)
+    short-term gate lowercase it; a null type matches nothing (kept). The
+    exemption flag defaults to False at the loader, and ``eq_missing`` keeps a
+    stray null from opening the carve-out.
+    """
+    institution_types = entity_types_by_sa_class(pack).get(ExposureClass.INSTITUTION.value, ())
+    entity_type = pl.col("entity_type").str.to_lowercase()
+    non_qualifying_ccp = entity_type.eq_missing("ccp") & pl.col("is_qccp").eq_missing(False)
+    government_owned = pl.col("is_government_owned_or_sponsored").eq_missing(True)
+    return (
+        entity_type.is_in(institution_types) & non_qualifying_ccp.not_() & government_owned.not_()
     )

@@ -5,7 +5,8 @@ Pipeline position:
     Loader -> HierarchyResolver -> Classifier
 
 Key responsibilities:
-- ``HierarchyResolver.resolve``: the stage recipe — counterparty lookup
+- ``HierarchyResolver.resolve``: the stage recipe — the PS1/26 Art.
+  138(1)(g) implicit-support ratings filter, counterparty lookup
   build, exposure unification, short-term rating override, FX conversion,
   LTV / property-coverage / lending-group enrichment, lending_group_totals
   aggregate, and the ``hierarchy_resolved`` producer seal.
@@ -17,6 +18,7 @@ Key responsibilities:
 References:
 - CRR Art. 131: Short-term rating override for institutional exposures
 - CRR Art. 135 / 136 / 138 / 139 / 140: ECAI rating use and mapping
+- PS1/26 Art. 138(1)(g): implicit-government-support assessments (Basel 3.1)
 - CRR Art. 4(1)(39): Group of connected clients (hierarchy resolution)
 
 Usage:
@@ -54,7 +56,10 @@ from rwa_calc.engine.hierarchy.graph import (
     build_facility_root_lookup,
     build_ultimate_parent_lazy,
 )
-from rwa_calc.engine.hierarchy.ratings import build_rating_inheritance_lazy
+from rwa_calc.engine.hierarchy.ratings import (
+    build_rating_inheritance_lazy,
+    disregard_implicit_support_ratings,
+)
 from rwa_calc.engine.hierarchy.unify import unify_exposures
 from rwa_calc.rulebook import RulepackV0
 
@@ -97,7 +102,8 @@ class HierarchyResolver:
                 ``RulepackV0.from_config(config).pack`` when ``None``. Read by
                 the Art. 140(1) short-term-ECAI obligor-class gate, whose
                 entity-type -> SA-class map must be the one the classifier
-                reads (P1.370).
+                reads (P1.370), and by the PS1/26 Art. 138(1)(g)
+                implicit-support filter (its Feature and the same map).
 
         Returns:
             ResolvedHierarchyBundle with hierarchy metadata added
@@ -105,10 +111,20 @@ class HierarchyResolver:
         resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         errors: list[CalculationError] = []
 
+        # PS1/26 Art. 138(1)(g) (Basel 3.1 only): drop the implicit-support
+        # external assessments of institution obligors from the TABLE, before the
+        # long-term Art. 138 selection and the short-term override below both read
+        # it — (g) shrinks the set those selections choose from. A no-op under CRR.
+        # The DQ015 unsolicited count is taken on this filtered table, so a
+        # disregarded unsolicited assessment (never used) is not counted.
+        ratings = disregard_implicit_support_ratings(
+            data.ratings, data.counterparties, resolved_pack
+        )
+
         counterparty_lookup, cp_errors = self._build_counterparty_lookup(
             data.counterparties,
             data.org_mappings,
-            data.ratings,
+            ratings,
         )
         errors.extend(cp_errors)
 
@@ -136,7 +152,7 @@ class HierarchyResolver:
         # counterparty as a whole; when present, they override the counterparty-
         # level long-term rating for SA risk-weight routing.
         exposures = self._apply_short_term_rating_override(
-            exposures, data.ratings, counterparty_lookup, errors, pack=resolved_pack
+            exposures, ratings, counterparty_lookup, errors, pack=resolved_pack
         )
 
         # Apply FX conversion so threshold calculations use consistent currency.

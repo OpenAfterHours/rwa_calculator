@@ -303,6 +303,14 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "139", "inferred/issuer-level ECAI assessments apply to SL"),
     ),
+    # UK CRR Art. 138(1) has limbs (a)-(f) only: no implicit-government-support
+    # prohibition (PRA PS1/26 adds (g) — see packs/b31.py). Gates
+    # engine/hierarchy/ratings.py::disregard_implicit_support_ratings.
+    "sa_implicit_support_ratings_disapplied": Feature(
+        name="sa_implicit_support_ratings_disapplied",
+        enabled=False,
+        citation=Citation("CRR", "138", "(1)(a)-(f) only: no implicit-support limb"),
+    ),
     # CRR has no SA project-finance phase weights (Art. 122B is Basel 3.1 only):
     # an unrated SL exposure is an Art. 122 corporate, so the supplied
     # project_phase is carried as-is and never defaulted. Gates

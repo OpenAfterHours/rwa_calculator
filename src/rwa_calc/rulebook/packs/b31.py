@@ -320,6 +320,19 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=True,
         citation=Citation("PS1/26", "139", "(2B) non-issue-specific ECAI disapplied for SL"),
     ),
+    # PRA PS1/26 Art. 138(1)(g): an assessment that incorporates assumptions of
+    # implicit government support is not used to risk-weight an exposure to an
+    # institution, unless the institution is government-owned or sponsored. Gates
+    # the pre-selection filter in
+    # engine/hierarchy/ratings.py::disregard_implicit_support_ratings, which acts
+    # before the Art. 138(1)(d)-(f) selection and before the short-term override.
+    "sa_implicit_support_ratings_disapplied": Feature(
+        name="sa_implicit_support_ratings_disapplied",
+        enabled=True,
+        citation=Citation(
+            "PS1/26", "138", "(1)(g) implicit-government-support assessments not used"
+        ),
+    ),
     # PRA PS1/26 Art. 122B(3) defines the project-finance operational phase by
     # conditions the firm must show (net cash flow covering the remaining
     # completion obligations; declining long-term debt), so a PF exposure whose

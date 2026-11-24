@@ -52,8 +52,9 @@ LINE_ALLOWLIST: dict[str, frozenset[int]] = {
     # null-keyed rows. See the comment block above the per_agency_latest
     # filter in engine/hierarchy/ratings.py. (Re-keyed from
     # the pre-split engine/hierarchy.py:450/451 by the Phase 4 Slice 2
-    # package split; that module no longer exists.)
-    "src/rwa_calc/engine/hierarchy/ratings.py": frozenset({126, 127}),
+    # package split; that module no longer exists. Re-keyed 126/127 ->
+    # 143/144 when P1.259 extended the module docstring and imports.)
+    "src/rwa_calc/engine/hierarchy/ratings.py": frozenset({143, 144}),
 }
 
 

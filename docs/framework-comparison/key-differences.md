@@ -742,10 +742,13 @@ a fundamentally different methodology based on the institution's own capital ade
     Art. 139 has only paragraphs (1)–(4). CRR firms apply implicit-support ratings
     directly with no suppression.
 
-    **Implementation status.** Not yet implemented — the schema lacks both an
-    issue-specific vs general-issuer distinction and an implicit-support flag.
-    Firms must pre-adjust `external_cqs` offline or use the Art. 110A
-    `due_diligence_override_rw` pathway as a workaround. See
+    **Implementation status.** Art. 138(1)(g) is implemented (Basel 3.1 pack
+    Feature `sa_implicit_support_ratings_disapplied`, off in the CRR pack) from the
+    `rating_incorporates_government_support` and `is_government_owned_or_sponsored`
+    input flags: barred external (ECAI) assessments leave the Art. 138 selection set;
+    internal ratings are never removed. Art. 139(6) is
+    not yet implemented — firms pre-adjust `external_cqs` offline or use the Art. 110A
+    `due_diligence_override_rw` pathway where it applies. See
     [B31 SA Risk Weights — Art. 138(1)(g), Art. 139(6)](../specifications/basel31/sa-risk-weights.md#ecai-assessment-implicit-government-support-art-1381g-art-1396)
     for the full trigger, worked example, exemption scope, and distinction from
     Art. 121(6).

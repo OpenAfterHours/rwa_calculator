@@ -119,19 +119,37 @@ def _sa_results_with_phase2_cols() -> pl.LazyFrame:
     0215-0217/0220 are defined so that the reduction is attributable: EBA
     ``v09747_m`` states ``{c0215} + {c0216} + {c0217} = {c0220}``. SA_CORP_2
     carried an unattributable 100 (pre 2000 / final 1900, both factor flags
-    False) which broke that identity on every sheet it reached; it is now
-    2000/2000, which for THAT ROW also agrees with ``ead_final x risk_weight``.
+    False) which broke that identity on every sheet it reached (P5.66); it is
+    now 2000/2000.
 
-    That agreement is deliberately NOT a frame-wide invariant, and two rows
-    remain knowingly unproducible — left alone so a later pass does not "fix"
-    them into a red. SA_CORP_1 reduces at 0.95 where Art. 501a is a flat 0.75
-    (``test_c07_infra_factor_benefit`` pins the resulting -60.0). SA_CORP_3 has
-    ``rwa_pre_factor`` 550 against ``ead_final x risk_weight`` 467.5, so it
-    breaches the ``engine/sa/factors_output.py`` identity. Neither is the P5.66
-    defect: an arbitrary-but-FLAGGED ratio is attributable, and the C 07.00
-    projection reads ``rwa_pre_factor`` and ``rwa_final`` as given rather than
-    re-deriving the multiplier. Only the unflagged reduction made a published
-    identity unsatisfiable. See ``test_c07.py::TestSupportingFactors``.
+    Two identities also hold on every row (P5.67), checked against the CRR
+    pack by ``test_c07_sf_fixture_reachability.py``: ``rwa_pre_factor`` is
+    ``ead_final x risk_weight`` (``engine/sa/factors_output.py``), and
+    ``rwa_final`` is ``rwa_pre_factor`` reduced by the factor the row's flags
+    call for — the flat Art. 501a factor, the Art. 501 blend at the row's E*,
+    or none. That is all the guard checks; it does not make every row one the
+    sealed ledger can carry — SA_DEF_1, below, is not. The C 07.00 projection
+    reads ``rwa_pre_factor`` and ``rwa_final`` as given and never re-derives
+    the multiplier, so its own tests cannot see an impossible ratio: until
+    P5.67, SA_CORP_1 reduced at 0.95 and SA_CORP_3 carried a 550 pre-factor
+    against 467.5 = 550 x 0.85 — attributable, and unproducible.
+
+    - SA_CORP_1, infrastructure: CQS 2, so 50% (CRR Art. 122 Table 6); pre 600,
+      final 450 = 600 x the flat Art. 501a factor 0.75.
+    - SA_CORP_3, SME: 100%, the CRR corporate-SME weight (85% is Basel 3.1's);
+      pre 550, final 419.045 = 550 x 0.7619, the Art. 501 factor for an E* at
+      or under the threshold.
+
+    The two factor legs sit on different risk-weight bands — infrastructure
+    alone on 50%, SME beside the unreduced SA_CORP_2 on 100% — and the
+    defaulted SA_DEF_1 alone on 150%, so cols 0216 and 0217 land on different
+    band rows and a third band carries neither (see
+    ``test_c07.py::TestSupportingFactors``). SA_DEF_1 is a defaulted leg under
+    its obligor's class, which the sealed ledger cannot carry (LESSONS C11(c));
+    it carries no factor and is left alone because ``test_cross.py`` and the
+    150% band depend on it. The frame is CRR-shaped: Basel 3.1 sets every
+    factor to 1.0, so the Basel 3.1 tests that reuse it read only absent
+    columns, unrated col 0235 or relative sums.
     """
     return pl.LazyFrame(
         {
@@ -160,13 +178,14 @@ def _sa_results_with_phase2_cols() -> pl.LazyFrame:
             "undrawn_amount": [500.0, 0.0, 100.0, 0.0, 50.0, 0.0, 0.0, 0.0],
             "ead_final": [1200.0, 2000.0, 550.0, 3000.0, 225.0, 300.0, 5000.0, 800.0],
             # SA_CORP_2 carries NO supporting factor, so its RWEA is unreduced.
-            "rwa_final": [1140.0, 2000.0, 467.5, 600.0, 168.75, 225.0, 0.0, 1200.0],
-            "risk_weight": [1.00, 1.00, 0.85, 0.20, 0.75, 0.75, 0.00, 1.50],
+            # SA_CORP_1 600 x 0.75 (Art. 501a); SA_CORP_3 550 x 0.7619 (Art. 501).
+            "rwa_final": [450.0, 2000.0, 419.045, 600.0, 168.75, 225.0, 0.0, 1200.0],
+            "risk_weight": [0.50, 1.00, 1.00, 0.20, 0.75, 0.75, 0.00, 1.50],
             "scra_provision_amount": [10.0, 20.0, 5.0, 0.0, 2.0, 3.0, 0.0, 5.0],
             "gcra_provision_amount": [5.0, 10.0, 2.5, 15.0, 1.0, 1.5, 0.0, 3.0],
             "collateral_adjusted_value": [100.0, 0.0, 50.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             "guaranteed_portion": [0.0, 500.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            "sa_cqs": [3, 0, 0, 2, 0, 0, 1, None],
+            "sa_cqs": [2, 0, 0, 2, 0, 0, 1, None],
             "counterparty_reference": [
                 "CP_A",
                 "CP_B",
@@ -211,7 +230,7 @@ def _sa_results_with_phase2_cols() -> pl.LazyFrame:
                 False,
             ],
             "rwa_pre_factor": [
-                1200.0,
+                600.0,
                 2000.0,
                 550.0,
                 600.0,

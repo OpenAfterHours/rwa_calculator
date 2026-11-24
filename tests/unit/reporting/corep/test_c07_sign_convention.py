@@ -24,8 +24,8 @@ class TestC0700SupportingFactorSignConvention:
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         total = _get_total_row(bundle.c07_00["corporate"])
-        # SME: (1000-700) + (2000-1400) = 900 -> -900; Infra: (5000-3750) = 1250 -> -1250.
-        assert total["0216"][0] == pytest.approx(-900.0)
+        # SME: (1000-761.9) + (2000-1523.8) = 714.3 -> -714.3; Infra: (5000-3750) = 1250 -> -1250.
+        assert total["0216"][0] == pytest.approx(-714.3)
         assert total["0217"][0] == pytest.approx(-1250.0)
         assert total["0216"][0] <= 0.0
         assert total["0217"][0] <= 0.0
@@ -34,8 +34,8 @@ class TestC0700SupportingFactorSignConvention:
         """0220 = 0215 + 0216 + 0217 (SF adjustments already signed per Annex II §1.3).
 
         0215 (pre-SF RWEA) = Σ rwa_pre_factor = 1000+2000+5000+3200 = 11200;
-        0220 (post-SF RWEA) = Σ rwa_final     = 700+1400+3750+3200  = 9050;
-        so 11200 + (-900) + (-1250) = 9050.
+        0220 (post-SF RWEA) = Σ rwa_final     = 761.9+1523.8+3750+3200 = 9235.7;
+        so 11200 + (-714.3) + (-1250) = 9235.7.
         """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
@@ -45,5 +45,5 @@ class TestC0700SupportingFactorSignConvention:
         infra_adj = total["0217"][0]
         post = total["0220"][0]
         assert pre == pytest.approx(11200.0)
-        assert post == pytest.approx(9050.0)
+        assert post == pytest.approx(9235.7)
         assert pre + sme_adj + infra_adj == pytest.approx(post)

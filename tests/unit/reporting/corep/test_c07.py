@@ -217,9 +217,14 @@ def _sa_results_with_supporting_factors() -> pl.LazyFrame:
     classifier sets these flags while keeping exposure_class as "corporate".
 
     Contains:
-    - 2 SME corporate exposures with supporting factor applied
-    - 1 infrastructure corporate exposure with supporting factor applied
+    - 2 SME corporate exposures with supporting factor applied: x 0.7619, the
+      CRR Art. 501 factor for an E* at or under the threshold (were x 0.70,
+      below any Art. 501 blend, until P5.67)
+    - 1 infrastructure corporate exposure with supporting factor applied:
+      x 0.75, the flat CRR Art. 501a factor
     - 1 plain corporate (no factor)
+
+    Reachability against the CRR pack: ``test_c07_sf_fixture_reachability.py``.
     """
     return pl.LazyFrame(
         {
@@ -244,7 +249,7 @@ def _sa_results_with_supporting_factors() -> pl.LazyFrame:
             "drawn_amount": [1000.0, 2000.0, 5000.0, 3000.0],
             "undrawn_amount": [0.0, 0.0, 0.0, 500.0],
             "ead_final": [1000.0, 2000.0, 5000.0, 3200.0],
-            "rwa_final": [700.0, 1400.0, 3750.0, 3200.0],
+            "rwa_final": [761.9, 1523.8, 3750.0, 3200.0],
             "risk_weight": [1.00, 1.00, 1.00, 1.00],
             "rwa_pre_factor": [1000.0, 2000.0, 5000.0, 3200.0],
             "supporting_factor_applied": [True, True, True, False],
@@ -495,8 +500,8 @@ class TestSupportingFactors:
 
         corp = _get_total_row(bundle.c07_00["corporate"])
         # Letter (g) holds four exposures once corporate_sme shares the sheet:
-        # rwa_pre_factor = 1200+2000+550+1200 = 4950
-        assert corp["0215"][0] == pytest.approx(4950.0)
+        # rwa_pre_factor = 600+2000+550+1200 = 4350 (SA_CORP_1 is 1200 x 50%)
+        assert corp["0215"][0] == pytest.approx(4350.0)
 
     def test_c07_sme_factor_benefit(self) -> None:
         """Col 0216 (SME factor benefit) = pre - post, emitted negative per Annex II §1.3."""
@@ -505,9 +510,9 @@ class TestSupportingFactors:
 
         # SA_CORP_3 is the only SME leg, and it now shares the Art. 112(1)(g)
         # sheet with the plain corporates — so col 0216 on the merged sheet is
-        # still its benefit alone: 550 - 467.5 = 82.5, negative deduction.
+        # still its benefit alone: 550 - 550 x 0.7619 = 130.955, negative deduction.
         corp = _get_total_row(bundle.c07_00["corporate"])
-        assert corp["0216"][0] == pytest.approx(-82.5)
+        assert corp["0216"][0] == pytest.approx(-130.955)
 
     def test_c07_infra_factor_benefit(self) -> None:
         """Col 0217 (infra factor benefit) computed, emitted negative per Annex II §1.3."""
@@ -515,8 +520,9 @@ class TestSupportingFactors:
         bundle = gen.generate_from_lazyframe(_sa_results_with_phase2_cols())
 
         corp = _get_total_row(bundle.c07_00["corporate"])
-        # SA_CORP_1 infra_factor_applied=True: pre=1200, post=1140, benefit=60; negative.
-        assert corp["0217"][0] == pytest.approx(-60.0)
+        # SA_CORP_1 infra_factor_applied=True: pre=600, post=600 x 0.75=450 (Art. 501a
+        # flat factor), benefit=150; negative.
+        assert corp["0217"][0] == pytest.approx(-150.0)
 
     def test_c07_supporting_factors_not_in_b31(self) -> None:
         """Supporting factor columns (0215-0217) absent from Basel 3.1 output."""
@@ -571,12 +577,13 @@ class TestSupportingFactors:
         # Negative space: a null and a legitimate zero are different claims, and
         # this sheet has exposure in all four cells.
         assert None not in (pre, sme_adj, infra_adj, post)
-        # Absolute values, not a relative move. rwa_pre_factor 1200+2000+550+1200;
-        # SME benefit 550-467.5; infra benefit 1200-1140; rwa_final 1140+2000+467.5+1200.
-        assert pre == pytest.approx(4950.0)
-        assert sme_adj == pytest.approx(-82.5)
-        assert infra_adj == pytest.approx(-60.0)
-        assert post == pytest.approx(4807.5)
+        # Absolute values, not a relative move. rwa_pre_factor 600+2000+550+1200;
+        # SME benefit 550-419.045 (x 0.7619); infra benefit 600-450 (x 0.75, flat);
+        # rwa_final 450+2000+419.045+1200.
+        assert pre == pytest.approx(4350.0)
+        assert sme_adj == pytest.approx(-130.955)
+        assert infra_adj == pytest.approx(-150.0)
+        assert post == pytest.approx(4069.045)
         assert post == pytest.approx(pre + sme_adj + infra_adj)
 
     def test_c07_rwea_relationship_holds_on_every_populated_row(self) -> None:
@@ -584,8 +591,9 @@ class TestSupportingFactors:
 
         The total row can foot while a breakdown row does not — the risk-weight
         bands split the legs by ``risk_weight``, so the infrastructure leg lands
-        on 0230 (100%) and the SME leg on 0280 (Other), each with a different
-        factor state. A row-wise check is what makes the sheet's mixture bite.
+        on 0200 (50%) and the SME leg on 0230 (100%, beside an unreduced leg),
+        each with a different factor state. A row-wise check is what makes the
+        sheet's mixture bite.
         Nulls are read as zero, matching the rule's ``if_value_missing``.
         """
         gen = LedgerShimCorepGenerator()
@@ -1099,7 +1107,7 @@ class TestC0700SupportingFactorRows:
         assert len(row) == 1
         # SA_SME_1 (EAD 1000) + SA_SME_2 (EAD 2000) = 3000
         assert row["0200"][0] == pytest.approx(3000.0)
-        assert row["0220"][0] == pytest.approx(2100.0)  # 700 + 1400
+        assert row["0220"][0] == pytest.approx(2285.7)  # 761.9 + 1523.8
 
     def test_row_0035_infrastructure_exposures(self) -> None:
         """Row 0035 filters infrastructure exposures with factor applied."""
@@ -1203,8 +1211,8 @@ class TestC0700SupportingFactorRWEA:
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
         # SME adjustment = pre - post for SME rows, reported as a negative deduction
-        # SME_1: 1000 - 700 = 300, SME_2: 2000 - 1400 = 600 -> -(300 + 600)
-        assert total["0216"][0] == pytest.approx(-900.0)
+        # SME_1: 1000 - 761.9 = 238.1, SME_2: 2000 - 1523.8 = 476.2 -> -(238.1 + 476.2)
+        assert total["0216"][0] == pytest.approx(-714.3)
 
     def test_col_0217_infra_adjustment(self) -> None:
         """Col 0217 infra factor adjustment, emitted negative per Annex II §1.3."""
@@ -1222,8 +1230,8 @@ class TestC0700SupportingFactorRWEA:
         bundle = gen.generate_from_lazyframe(_sa_results_with_supporting_factors(), framework="CRR")
         corp = bundle.c07_00["corporate"]
         total = corp.filter(pl.col("row_ref") == "0010")
-        # Total rwa_final: 700+1400+3750+3200 = 9050
-        assert total["0220"][0] == pytest.approx(9050.0)
+        # Total rwa_final: 761.9+1523.8+3750+3200 = 9235.7
+        assert total["0220"][0] == pytest.approx(9235.7)
 
     def test_pre_minus_adjustments_equals_post(self) -> None:
         """RWEA integrity: 0215 + 0216 + 0217 ≈ 0220 under the "(-)" convention."""
@@ -1235,7 +1243,7 @@ class TestC0700SupportingFactorRWEA:
         sme_adj = total["0216"][0]  # negative per Annex II §1.3
         infra_adj = total["0217"][0]  # negative per Annex II §1.3
         post = total["0220"][0]
-        # 11200 + (-900) + (-1250) = 9050
+        # 11200 + (-714.3) + (-1250) = 9235.7
         assert pre + sme_adj + infra_adj == pytest.approx(post)
 
     def test_col_0216_null_without_pipeline_columns(self) -> None:

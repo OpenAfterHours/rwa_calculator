@@ -5493,3 +5493,86 @@ and each gate was observed red against the code as it shipped before the fix.
   damaged bytes themselves stay chance-dependent and are not asserted.
 - **Not covered**: `read_evidence` raises `UnicodeDecodeError`, not its own
   "incomplete or altered" error, on a damaged file (plan item P6.64).
+
+## 2026-11-24 — A facility headroom of exactly zero emitted a near-zero undrawn row, and spill mode emitted a different set of them every run
+
+- **Defect**: an undrawn headroom is a difference of sums — `limit - sum(drawn)`,
+  an MOF sub-line's slice `H - (cum - h)`, the umbrella's residual
+  `H - sum(allocation)` — and `engine/hierarchy/facility_undrawn.py` emitted a
+  row wherever it was `> 0`. Where the inputs make it exactly zero (sub-lines
+  that exactly cover the umbrella; a line drawn to its limit) the binary result
+  is one ulp either side of zero, 9.3e-10 at GBP 7.8m, and its sign is set by the
+  order the grouped sums meet their rows. Measured on the 200K benchmark (Basel
+  3.1, `PermissionMode.IRB`, 2027-01-01): in memory 777,105 rows on both runs,
+  **19 of them dust** (18 `_UNDRAWN_RESIDUAL`, one `_UNDRAWN_<sub>`; EAD 1.2e-11
+  to 3.8e-6); with `spill_edges=True` 777,127 and 777,126 rows, 41 and 40 dust,
+  a different set each run, because the parquet re-read sums in chunks. Sign:
+  overstatement, immaterial — the 19 rows carry 2.2e-6 of RWA in total. The harm
+  is the row set: the same inputs gave different exposure-level output by
+  execution mode and by run, which breaks the spill-parity contract and every
+  row-level diff or reconciliation run over it. Both regimes (the hierarchy stage
+  is regime-free), every class a facility reaches.
+- **Rule**: **Not a regulatory escape**, but what the row must carry is defined.
+  PS1/26 Glossary, "conversion factor" (`ps126app1.pdf`, 0-indexed p. 3): "the
+  currently undrawn amount of the commitment from that facility, the extent of
+  the commitment being determined by the advised limit". A line drawn to its
+  limit, or an umbrella its sub-lines exactly cover, has no currently undrawn
+  amount left to emit.
+- **Origin**: the residual and slice gates arrived with the descending-CCF
+  waterfall, `c2583f84` (2026-04-29, pre-harness, no batch footer); the root
+  gate predates it (`engine/hierarchy.py` by `9931b582`, 2026-01-28). Carried through `d3b67d00` (Phase 4 split) and CM-01's
+  `a43229f4` unchanged.
+- **Escape class**: `path-never-exercised`.
+- **Why every gate missed it**: two gates covered this code and ran, and neither
+  could reach the failing input. Every MOF and headroom unit test since
+  `c2583f84` used round amounts (GBP 10m, 2m, 60m) whose sums are exact in
+  binary, so the gates' dust branch never executed, however exact the asserted
+  row lists were. The spill-parity contract (`tests/integration/test_spill_edges_parity.py`,
+  CI job `Spill-Edge Parity`) asserts bit-identical results, but its bundle holds
+  two standalone facilities and no MOF. A second mechanism made parity alone
+  blind even on the path: a one-chunk book sums in one order in both modes, so
+  both emit the same dust row. Measured: the new dust bundle passes the exact
+  `assert_frame_equal` parity check on the unfixed code. The only instrument
+  that runs both modes at scale, `scripts/profile_memory.py`, measures RSS and
+  wall time and never compares the outputs.
+- **Gate change**: three, all in this change-set.
+  `tests/unit/test_facility_undrawn_commitments.py::TestHeadroomFloatDust`: one
+  cent-denominated case per gate, each chosen because it reproduces the residue
+  (residual, slice, root), plus
+  `test_headroom_rows_do_not_depend_on_the_order_drawings_are_summed_in`, the
+  spill mechanism at unit scale (1,000 exactly-drawn facilities, input order and
+  reversed: on the unfixed code 94 and 85 dust rows, 53 of them different), and
+  two penny guards that pin the tolerance below money. In the CI parity job,
+  `tests/integration/test_spill_edges_parity.py::_build_dust_bundle`, with
+  `test_float_dust_headroom_emits_no_undrawn_row[in_memory|spill]`, which asserts
+  the row set itself, since parity at that scale cannot. In
+  `scripts/defect_catalogue.py`, the mutant `known-headroom-float-dust`, so the
+  defect-injection scorecard keeps measuring it.
+- **Verified red**: route 1, a detached worktree at `1b7642c3` (pre-fix) with
+  only the two test files copied in:
+  `pytest tests/unit/test_facility_undrawn_commitments.py::TestHeadroomFloatDust tests/integration/test_spill_edges_parity.py`
+  -> `6 failed, 6 passed`, e.g.
+  `AssertionError: assert ['P_UNDRAWN_RESIDUAL', 'P_UNDRAWN_S1', 'P_UNDRAWN_S2'] == ['P_UNDRAWN_S1', 'P_UNDRAWN_S2']`
+  and `AssertionError: assert ['F1_UNDRAWN'] == []`. Route 3, the fixed module
+  with the catalogue mutant applied: the same 6 failed. The first draft of that
+  mutant reverted the residual gate alone and turned **nothing** red — the final
+  row filter, now dust-aware, masks it — so it would have scored as an escape;
+  the mutant reverts the shared predicate instead. After the fix, 200K: 777,086
+  rows in all four runs (memory x2, spill x2), identical `exposure_reference`
+  sets, no undrawn row below EAD 1e-3, the 19 dust rows the only ones removed.
+- **Fix**: `_exceeds_headroom_dust` — a headroom, slice or residual is emitted
+  only above `max(1e-6, 1e-11 x the largest amount it is a difference of)` (the
+  facility's limit; for a slice or the residual, the waterfall's running sum
+  too). The pair is `reporting/filing/canonical.py`'s `_SAME_FIGURE_*`, kept for
+  the same reason: summation-order rounding is ~1e-13 of a total, a penny on
+  GBP 50m is 2e-10. Measured dust tops out at 3.2e-15 of the limit. The engine's
+  own absolute zero guards (1e-10 in `engine/ccf.py` and `contracts/validation.py`)
+  would not have caught it: the dust grows with the facility, and the largest on
+  the 200K benchmark was 3.8e-6.
+- **Not covered**: the threshold is one penny on a GBP 1bn line, so real headroom
+  below a penny on a line above GBP 1bn is now dropped. A netting book whose gross
+  drawings far exceed the limit can leave dust above the limit-scaled threshold
+  (the netted gross is not a magnitude the gate sees).
+- **Lesson**: graduated (ledger, 2026-11-24). A `> 0` gate on a difference of
+  sums needs a test whose amounts are inexact in binary; round test amounts
+  cannot reach the branch.

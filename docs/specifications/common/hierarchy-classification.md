@@ -162,7 +162,7 @@ Key rules:
 - **Root/standalone facilities** produce undrawn exposure records
 - **Sub-facilities are excluded** from producing their own undrawn records (avoids double-counting)
 - Negative drawn amounts are clamped to zero before aggregation (negative balances do not increase headroom)
-- Every facility with `undrawn_amount > 0` generates an exposure record, committed or not. A
+- Every facility with `undrawn_amount > 0` (above float dust; see the MOF section) generates an exposure record, committed or not. A
   `committed = False` facility is an **accepted, unconditionally cancellable (UCC) commitment**
   and its row is priced in the UCC bucket `LR` whatever `risk_type` it declares (PS1/26
   Table A1 row (7) 10%; CRR Annex I 4(a) 0%; a declared non-LR type raises `HIE004`). PS1/26
@@ -200,8 +200,18 @@ A **Multi-Option Facility** is any facility with at least one `child_type='facil
 2. Compute parent headroom: `parent_headroom = max(0, parent_limit − total_drawn − total_contingent)` rolled up across the whole descendant tree, each amount converted into the parent's currency.
 3. Sort the eligible sub-facilities (see the edge cases) by descending SA CCF, with deterministic tie-break on `risk_type` then `facility_reference`.
 4. Walk subs in order. Allocate `min(sub_headroom_i, max(0, parent_headroom − cum_{i-1}))` to each sub, where `cum_{i-1}` is the running sum of higher-CCF allocations.
-5. Emit one `facility_undrawn` row per sub with `allocation > 0`. Each row carries the **sub's** `risk_type` and `counterparty_reference`; provenance is captured in `mof_risk_type_source`.
+5. Emit one `facility_undrawn` row per sub with `allocation > 0` (read past float dust — see below). Each row carries the **sub's** `risk_type` and `counterparty_reference`; provenance is captured in `mof_risk_type_source`.
 6. If `parent_headroom > sum(allocations)`, emit one **residual** row at the parent's own `risk_type` and `counterparty_reference` for the leftover headroom.
+
+**"Positive" means above float dust.** Every amount above — a facility's headroom, a sub's slice,
+the residual — is a difference of sums. Where the inputs make it exactly zero (a line drawn to its
+limit; sub-lines that exactly cover the umbrella's headroom), the binary result is one ulp either
+side of zero (9.3e-10 at GBP 7.8m), and *which* side depends on the order the grouped sums meet
+their rows. An amount is therefore emitted only when it exceeds
+`max(1e-6, 1e-11 × the largest amount it is a difference of)` — the facility's limit, and for a
+slice or the residual the waterfall's running sum too. That is one penny on a GBP 1bn line. A bare
+`> 0` made the row set depend on summation order: `spill_edges=True` emitted a different,
+run-to-run varying set of `_UNDRAWN_RESIDUAL` rows on the 200K benchmark (escape log 2026-11-24).
 
 **Worked example** — sub-limits exceed parent limit (waterfall caps):
 

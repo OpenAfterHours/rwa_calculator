@@ -591,6 +591,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **A facility headroom of exactly zero no longer emits a near-zero undrawn row,
+  and the result row set no longer depends on summation order.** An undrawn
+  headroom is a difference of sums (`limit - sum(drawn)`; for a Multiple Option
+  Facility, each sub-line's slice and the umbrella's `_UNDRAWN_RESIDUAL`). Where
+  the inputs make it exactly zero — a line drawn to its limit, sub-lines that
+  exactly cover the umbrella — the binary result is one ulp either side of zero
+  (9.3e-10 at GBP 7.8m), and the hierarchy stage emitted a row whenever that ulp
+  was positive. Its sign depends on the order the grouped sums meet their rows,
+  so `spill_edges=True` produced a different, run-to-run varying row set: on the
+  200K benchmark (Basel 3.1, IRB permission mode) 777,126-777,127 rows against
+  777,105 in memory, and the in-memory run itself carried 19 such rows. A
+  headroom, slice or residual is now emitted only above
+  `max(1e-6, 1e-11 x the facility's limit or running sum)` — one penny on a
+  GBP 1bn line; both modes now produce 777,086 rows. RWA moves by about 2e-6
+  in total. (`engine/hierarchy/facility_undrawn.py`; escape log 2026-11-24.)
 - **COREP books a guarantee's substitution flows before conversion factors when
   the covered part includes an undrawn or issued amount.** C 07.00 / OF 07.00
   cols 0050, 0060, 0090 and 0100 and C 08.01 / C 08.02 / OF 08.01 / OF 08.02

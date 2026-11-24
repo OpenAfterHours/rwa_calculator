@@ -136,6 +136,24 @@ CATALOGUE: tuple[Mutant, ...] = (
             "correctly, so flattening it reproduces the defect on a covered path."
         ),
     ),
+    Mutant(
+        id="known-headroom-float-dust",
+        category="known_defect",
+        target="src/rwa_calc/engine/hierarchy/facility_undrawn.py",
+        old="    return amount > threshold",
+        new="    return amount > 0.0",
+        summary="Facility headroom gated on a bare > 0, so one ulp of float dust emits a row",
+        rationale=(
+            "Escape log 2026-11-24, re-injected at its own site. The predicate is "
+            "the mutation point because all three headroom gates read it and the "
+            "final row filter backs up the other two: reverting the residual gate "
+            "alone is masked and changes no output. Sub-lines that exactly cover "
+            "an umbrella's headroom leave a residual one ulp either side of zero, "
+            "signed by summation order; on the 200K benchmark the bare gate emitted "
+            "19 dust undrawn rows in memory and 40-41 under spill_edges, a different "
+            "set each run. RWA moves by ~1e-6, so only a row-set assertion sees it."
+        ),
+    ),
     # =========================================================================
     # LESSONS traps in mechanical form
     # =========================================================================

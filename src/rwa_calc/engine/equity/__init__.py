@@ -3,22 +3,13 @@
 Provides:
 - EquityCalculator: Main equity calculator implementing EquityCalculatorProtocol
 
-Supports two approaches under CRR:
-- Article 133: Standardised Approach (SA) - Default for SA firms
-- Article 155: IRB Simple Risk Weight Method - For firms with IRB permission
-
-Risk Weight Summary:
-
-Article 133 (SA):
-- Central bank: 0%
-- Listed/Exchange-traded/Government-supported: 100%
-- Unlisted: 250%
-- Speculative: 400%
-
-Article 155 (IRB Simple):
-- Private equity (diversified portfolio): 190%
-- Exchange-traded: 290%
-- Other equity: 370%
+Supports, under CRR, the Article 133 Standardised Approach (the default for SA
+firms) and the Article 155 IRB simple risk weight method (for firms with IRB
+permission); under Basel 3.1, Article 133 only (PS1/26 removes IRB equity), with
+the General Provisions rules 4.1-4.3 transitional weights in 2027-2029. The
+weights themselves are rulepack entries (``equity_sa_risk_weights`` and its
+siblings in ``rulebook/packs``) and the regime-specific chains live in
+``calculator.py``; this docstring states none, so it cannot drift from them.
 
 References:
 - CRR Art. 133: Equity exposures under SA

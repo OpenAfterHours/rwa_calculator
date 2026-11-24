@@ -782,7 +782,8 @@ When classifying equity exposures, the following priority order applies:
 1. **CIU** (Art. 132) — if the exposure is a fund holding
 2. **Central bank / sovereign equity** — 0% (sovereign treatment, not Art. 133)
 3. **Equity** (Art. 133) — 250%/400% by sub-category, including subordinated debt (150%,
-   Art. 133(5)). Art. 133(6) is an exclusion clause, not a risk weight.
+   Art. 133(5)). Art. 133(6) carves exposures out of the Art. 133(3)/(4) ladder; its
+   point (c) significant investments take 250% (see "Order of Resolution" below).
 4. **High-risk** (Art. 128) — 150% (re-introduced in B31, see [SA Risk Weights](sa-risk-weights.md))
 
 Equity exposures take priority over high-risk classification. PE/VC that meets the

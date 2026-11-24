@@ -20,8 +20,8 @@ Scenario B31-L24 (P2.19):
                                             condition, NOT the is_speculative path
 
     After the engine fix, the 400% condition is generalised to any non-listed equity
-    (equity_type not in {listed, exchange_traded, government_supported}) that meets
-    both Art. 133(4) sub-conditions.
+    that meets both Art. 133(4) sub-conditions; since P1.393 that includes
+    government-supported equity, which has no Basel 3.1 carve-out.
 
 Hand-calculation (Basel 3.1, CalculationConfig.basel_3_1(), reporting_date=2030-01-01):
 

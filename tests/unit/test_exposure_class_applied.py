@@ -377,7 +377,9 @@ class TestReconClassComponent:
 
     def test_reads_the_sealed_origin_class_with_no_ladder(self) -> None:
         """Phase 7 S4: single sealed name — reporting_class_origin (= the applied
-        class), contract-guaranteed on aggregator_exit; no fallback rungs."""
+        class, save the Art. 147(4)(c) ``institution`` relabel of a CRR IRB
+        non-named MDB, P1.366), contract-guaranteed on aggregator_exit; no
+        fallback rungs."""
         component = RECONCILABLE_COMPONENTS_BY_NAME["exposure_class"]
         assert component.our_columns == ("reporting_class_origin",)
 

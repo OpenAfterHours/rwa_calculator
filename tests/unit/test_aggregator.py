@@ -1315,7 +1315,10 @@ class TestReportingProjection:
         for name in self.REPORTING_COLUMNS:
             assert name in AGGREGATOR_EXIT_EDGE.columns, name
         assert AGGREGATOR_EXIT_EDGE.columns["reporting_class"].citation == "CRR Art. 235"
-        assert AGGREGATOR_EXIT_EDGE.columns["reporting_class_origin"].citation == "CRR Art. 112"
+        # The origin class is the Art. 112 applied class, relabelled to the
+        # Art. 147(4)(c) institutions class on a CRR IRB non-named MDB (P1.366).
+        origin = AGGREGATOR_EXIT_EDGE.columns["reporting_class_origin"]
+        assert origin.citation == "CRR Art. 112 / Art. 147(4)(c)"
         assert AGGREGATOR_EXIT_EDGE.columns["reporting_leg_role"].citation == "CRR Art. 235"
         benefit = AGGREGATOR_EXIT_EDGE.columns["guarantee_rwa_benefit"]
         assert benefit.citation == "CRR Art. 235"
@@ -1327,8 +1330,19 @@ class TestReportingProjection:
         guarantee_leg_results: pl.LazyFrame,
         crr_config: CalculationConfig,
     ) -> None:
-        """The alias columns equal their sealed sources row-for-row."""
+        """The alias columns equal their sealed sources row-for-row.
+
+        The two class twins are plain aliases on every leg EXCEPT an F-IRB /
+        A-IRB leg of a CRR non-named MDB, which they relabel to the Art. 147(4)(c)
+        institutions class (P1.366, pinned in
+        ``tests/unit/engine/aggregator/test_p1_366_mdb_reporting_class.py``). This
+        book holds no MDB, so the identity is exact here.
+        """
         df = self._aggregate_irb(aggregator, guarantee_leg_results, crr_config)
+        assert "mdb" not in df["exposure_class_applied"].to_list(), (
+            "an MDB leg would take the Art. 147 relabel - the plain-alias identity "
+            "below would no longer hold for it"
+        )
         for alias, source in (
             ("reporting_class", "exposure_class_post_crm"),
             ("reporting_class_origin", "exposure_class_applied"),

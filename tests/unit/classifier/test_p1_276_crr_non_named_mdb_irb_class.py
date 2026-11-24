@@ -27,10 +27,14 @@ Key assertion:
     below are the regression guard for that.
 
 Scope (what this change does and does not touch):
-    - ``exposure_class_irb`` is the ONLY class column that moves. The SA columns
-      (``exposure_class_sa`` / ``exposure_class``) keep MDB, so SA risk weights,
-      ``exposure_class_applied`` and every COREP / Pillar 3 class row are
-      untouched (they read the SA-side class, never ``exposure_class_irb``).
+    - ``exposure_class_irb`` is the ONLY class column the classifier moves. The
+      SA columns (``exposure_class_sa`` / ``exposure_class``) keep MDB, so SA risk
+      weights and ``exposure_class_applied`` are untouched. The REPORTING class
+      is not: the IRB templates are laid out on the Art. 147(2) classes, so the
+      aggregator's projection reads ``exposure_class_irb`` to relabel the
+      ``reporting_class`` / ``reporting_class_origin`` twin of an F-IRB / A-IRB
+      leg to ``institution`` (P1.366 — before it, such a leg opened an ``mdb``
+      C 08 sheet and missed C 09.02 row 0020). SA rows keep ``mdb`` there too.
     - The behavioural consequence is IRB model-permission matching, which keys on
       ``exposure_class_irb`` (``engine/classify/permissions.py``): under CRR a
       non-named MDB now needs an INSTITUTION-class IRB permission, not a
@@ -223,8 +227,10 @@ class TestCRRNonNamedMDBIRBClass:
         """CRR ``mdb`` keeps the MDB class on the SA-side columns.
 
         ``exposure_class_sa`` / ``exposure_class`` drive SA risk weights,
-        ``exposure_class_applied`` and every COREP / Pillar 3 class row. The
-        reroute must not touch them — Art. 112 keeps a dedicated SA MDB class.
+        ``exposure_class_applied`` and the SA templates' class rows. The reroute
+        must not touch them — Art. 112 keeps a dedicated SA MDB class. (The IRB
+        templates' Art. 147 class is applied later, in the aggregator's reporting
+        projection — P1.366.)
         """
         # Arrange / Act
         row = _row(classifier, crr_config, _bundle(), MDB_REF)

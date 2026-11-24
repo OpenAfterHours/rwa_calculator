@@ -284,9 +284,10 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
 
 Cost, and why every run is load-bearing:
     This file is the most expensive test in the suite: sixteen portfolios x two
-    regimes plus ``equity-transitional`` under Basel 3.1 alone (thirty-three runs,
-    seventeen of them Basel 3.1), plus a prior-period run for each of the fourteen
-    IRB ones, is FORTY-SEVEN full pipeline runs, plus two for leg (m)'s probe
+    regimes plus ``equity-transitional`` under Basel 3.1 alone and ``irb-mdb``
+    under CRR alone (thirty-four runs, seventeen of them Basel 3.1), plus a
+    prior-period run for each of the fifteen IRB ones, is FORTY-NINE full pipeline
+    runs, plus two for leg (m)'s probe
     (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not this prose.
     The gateway leg adds one canonical return and one ``validate_return`` per
     Basel 3.1 run (seventeen) and no pipeline run: the pack is loaded once per
@@ -447,6 +448,7 @@ from tests.fixtures.reporting_ccr_portfolio import build_reporting_ccr_bundle
 from tests.fixtures.reporting_crm_substitution_portfolio import (
     build_reporting_crm_substitution_bundle,
 )
+from tests.fixtures.reporting_crr_irb_mdb_portfolio import build_reporting_crr_irb_mdb_bundle
 from tests.fixtures.reporting_equity_transitional_portfolio import (
     build_reporting_equity_transitional_bundle,
 )
@@ -1367,6 +1369,32 @@ RUNS: tuple[GateInput, ...] = (
         "rw-ladder",
         build_reporting_rw_ladder_bundle,
         lambda: rw_ladder_config("BASEL_3_1"),
+    ),
+    # A CRR IRB non-named multilateral development bank — LESSONS B5 (P1.366). The
+    # first registered book holding one: CRR Art. 147(4)(c) puts it in the IRB
+    # INSTITUTIONS class, and while no portfolio here held one the reporting
+    # projection published its Art. 112 SA label ``mdb`` on every IRB template —
+    # a C 08.01-08.05 ``mdb`` sheet no sheet code addresses, C 09.02 row 0020
+    # short of row 0150 (``v6052_m``, ERROR), C 02.00 rows 0250 / 0310 stranding
+    # the MDB RWEA outside rows 0270 / 0330 — with every gate green. Two-leg
+    # (a genuine institution beside the MDBs), with a mandatory A-IRB MDB leg
+    # (row 0330), an IRB-guarantor slice that must stay in its guarantor's class,
+    # and an SA MDB that must stay on C 07.00's ``mdb`` sheet.
+    #
+    # CRR only, IRB-permissioned with a prior frame: under PS1/26 Art. 147(3)(f) +
+    # 147A(1)(a) every MDB is Standardised, so the Basel 3.1 arm has no case and is
+    # asserted as a negative control in
+    # tests/acceptance/reporting/test_p1_366_crr_irb_mdb_institution_rows.py
+    # rather than registered — the same one-regime shape as ``equity-transitional``.
+    # An SA config would silence the classifier Feature that creates the
+    # population (LESSONS B5, third form).
+    GateInput(
+        "crr",
+        "CRR",
+        "irb-mdb",
+        build_reporting_crr_irb_mdb_bundle,
+        lambda: _irb_config("CRR"),
+        lambda: _prior_config("CRR"),
     ),
 )
 

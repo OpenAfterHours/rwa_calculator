@@ -2116,7 +2116,10 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         # --- Canonical reporting projection (Phase 7 S2) ------------------
         # The per-leg substitution ledger, named once at the producer
         # (_add_reporting_projection). reporting_class/_origin and the
-        # approach twins are aliases of the sealed columns above;
+        # approach twins are aliases of the sealed columns above, save one
+        # relabel: on an F-IRB / A-IRB twin of a CRR non-named MDB the class
+        # twin reads the Art. 147(4)(c) institutions class, not the Art. 112
+        # label ``mdb`` the IRB templates have no sheet or row for (P1.366);
         # reporting_leg_role names the physical __G_/__REM guarantee split
         # (the __REM leg is `retained`);
         # reporting_method materialises the STD/FIRB/AIRB/SLOTTING/EQUITY
@@ -2125,11 +2128,15 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "reporting_approach": EdgeColumn(dtype=pl.String, citation="CRR Art. 235"),
         "reporting_approach_origin": EdgeColumn(dtype=pl.String),
         "reporting_class": EdgeColumn(dtype=pl.String, citation="CRR Art. 235"),
-        "reporting_class_origin": EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
+        "reporting_class_origin": EdgeColumn(
+            dtype=pl.String, citation="CRR Art. 112 / Art. 147(4)(c)"
+        ),
         # The applied class with the Art. 112(1)(j) default limb left out: what an
         # exposure in default "would otherwise have been assigned to" (PS1/26 Annex
         # II rows 0300 / 0320). Equal to reporting_class_origin on every row not in
-        # default. Computed by the aggregator (_add_exposure_class_applied).
+        # default, except a CRR IRB non-named MDB, which keeps ``mdb`` here (only
+        # the SA template C 07.00 reads this column). Computed by the aggregator
+        # (_add_exposure_class_applied).
         REPORTING_CLASS_PRE_DEFAULT_COL: EdgeColumn(dtype=pl.String, citation="CRR Art. 112"),
         # The geographical mirror of the class pair (PS1/26 Annex II §3.4
         # ¶86/¶87): the origin twin is the obligor's own cp_country_code, the

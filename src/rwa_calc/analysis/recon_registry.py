@@ -81,7 +81,8 @@ RECONCILABLE_COMPONENTS: tuple[ReconcilableComponent, ...] = (
     ReconcilableComponent(
         # Per-key / break-attribution class. Uses ``reporting_class_origin`` — the
         # sealed ledger's obligor applied class (folds SME-managed-as-retail +
-        # defaulted; = exposure_class_applied) — which is UNIFORM across a guaranteed
+        # defaulted; = exposure_class_applied, save that a CRR IRB non-named MDB
+        # reads the Art. 147(4)(c) ``institution`` class) — which is UNIFORM across a guaranteed
         # exposure's __G_/__REM legs, so a partially-guaranteed exposure's break is
         # attributed deterministically to its borrower class rather than an arbitrary
         # first leg. The POST-guarantee money split (guaranteed slice under the

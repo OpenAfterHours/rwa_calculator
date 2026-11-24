@@ -16,7 +16,11 @@ The sealed aggregator exit carries the Phase 7 canonical ledger columns
 (``_add_exposure_class_applied`` -> ``_add_post_crm_reporting_class`` /
 ``_approach`` -> ``_add_reporting_projection``); this builder applies the same
 identities to whatever raw columns a test supplies — for an unguaranteed row
-the applied and post-CRM classes ARE the origination class. Frames that set
+the applied and post-CRM classes ARE the origination class. The class twins are
+derived through the aggregator's own Art. 147 relabel
+(``_art147_reporting_class``) wherever the frame carries the matching approach
+column, so a CRR IRB non-named MDB reads ``institution`` here exactly as it does
+on the sealed exit (P1.366) rather than the plain ``mdb`` alias. Frames that set
 the substitution columns explicitly keep their values.
 """
 
@@ -25,6 +29,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
+
+from rwa_calc.engine.aggregator.aggregator import _art147_reporting_class
 
 if TYPE_CHECKING:
     from rwa_calc.reporting.corep.generator import COREPGenerator
@@ -57,12 +63,25 @@ def with_reporting_ledger(ours: pl.LazyFrame) -> pl.LazyFrame:
         "reporting_ead": pl.Float64(),
         "reporting_rw": pl.Float64(),
     }
+    #: The approach twin each class twin's Art. 147 relabel is gated on.
+    class_approach = {
+        "reporting_class": first("approach_post_crm", "approach_applied"),
+        "reporting_class_origin": first("approach_applied"),
+    }
     exprs: list[pl.Expr] = []
     for target, sources in derivations:
         if target in cols:
             continue
         src = first(*sources)
-        if src is not None:
+        approach = class_approach.get(target)
+        if src is not None and approach is not None:
+            # Without ``is_guaranteed`` the frame records no substitution, so its
+            # post class is the obligor's own and the origin-basis test applies.
+            post_basis = target == "reporting_class" and "is_guaranteed" in cols
+            exprs.append(
+                _art147_reporting_class(src, approach, post_basis=post_basis).alias(target)
+            )
+        elif src is not None:
             exprs.append(pl.col(src).alias(target))
         else:
             # No source on this synthetic frame: inject a typed null, exactly

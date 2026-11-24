@@ -787,6 +787,7 @@ def _add_exposure_class_applied(lf: pl.LazyFrame) -> pl.LazyFrame:
 # CONDITIONAL on the edge (``inject=False``), unlike ``is_guaranteed``, so every
 # read of it is presence-tolerant.
 _BENEFICIAL_COL = "is_guarantee_beneficial"
+_GUARANTOR_CLASS_COL = "post_crm_exposure_class_guaranteed"
 
 # The guarantor's country of incorporation, joined by ``guarantor_reference``
 # (``engine/crm/guarantees.py::_join_guarantor_counterparty``). Present only once
@@ -795,14 +796,15 @@ _BENEFICIAL_COL = "is_guarantee_beneficial"
 _GUARANTOR_COUNTRY_COL = "guarantor_country_code"
 
 
-def _optional_country(column: str) -> pl.Expr:
+def _optional_string(column: str) -> pl.Expr:
     """``column`` where the frame has it, a typed null String where it does not.
 
     The value-column counterpart of :func:`_beneficial_gate`'s selector: a
     ``require_all=False`` name selector expands to nothing on a frame without the
     column, and the trailing literal keeps ``coalesce`` well-formed in that case.
     Expressing absence this way instead of a ``collect_schema()``-guarded branch
-    keeps the country twins fully lazy and their input contract narrow.
+    keeps the country twins and the Art. 147 class read fully lazy and their input
+    contract narrow.
     """
     return pl.coalesce(cs.by_name(column, require_all=False), pl.lit(None, dtype=pl.String))
 
@@ -810,7 +812,7 @@ def _optional_country(column: str) -> pl.Expr:
 def _optional_amount(column: str) -> pl.Expr:
     """``column`` where the frame has it, a typed null Float64 where it does not.
 
-    The amount-column twin of :func:`_optional_country`, and for the same
+    The amount-column twin of :func:`_optional_string`, and for the same
     reason: ``_add_reporting_projection`` is exercised directly on MINIMAL
     frames (``tests/contracts/test_r1_gross_carrier_edge.py``), so reading a
     declared-but-absent carrier as a bare ``pl.col`` would widen the
@@ -932,17 +934,29 @@ def _add_post_crm_reporting_class(lf: pl.LazyFrame) -> pl.LazyFrame:
     :func:`_beneficial_gate` for the reproduction, the null/absence convention
     and the decline-vs-apply-and-cap election this gate depends on.
     """
-    guarantor_class = pl.col("post_crm_exposure_class_guaranteed")
+    guarantor_class = pl.col(_GUARANTOR_CLASS_COL)
     return lf.with_columns(
-        pl.when(
-            (pl.col("is_guaranteed") == True)  # noqa: E712
-            & _beneficial_gate()
-            & guarantor_class.is_not_null()
-            & (guarantor_class != "")
-        )
+        pl.when(_class_substituted(guarantor_class))
         .then(guarantor_class)
         .otherwise(pl.col("exposure_class_applied"))
         .alias("exposure_class_post_crm")
+    )
+
+
+def _class_substituted(guarantor_class: pl.Expr) -> pl.Expr:
+    """True where a leg's post-substitution class is its GUARANTOR's, not its own.
+
+    The one predicate behind :func:`_add_post_crm_reporting_class`, shared with
+    the post twin of :func:`_art147_reporting_class` so the two cannot disagree
+    about which legs moved: a beneficially guaranteed leg whose guarantor class is
+    resolved. Null where the benefit is unknown, which ``pl.when`` routes to
+    ``otherwise`` — an unknown benefit is not a substitution.
+    """
+    return (
+        (pl.col("is_guaranteed") == True)  # noqa: E712
+        & _beneficial_gate()
+        & guarantor_class.is_not_null()
+        & (guarantor_class != "")
     )
 
 
@@ -1023,9 +1037,24 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
     the raw twins):
 
     - ``reporting_class`` — post-substitution class the RWA is bucketed under
-      (Art. 235: guarantor class on guaranteed legs) = ``exposure_class_post_crm``.
+      (Art. 235: guarantor class on guaranteed legs) = ``exposure_class_post_crm``,
+      save for the Art. 147 relabel below.
     - ``reporting_class_origin`` — obligor applied class, uniform across a
-      guaranteed exposure's legs (Art. 112/123) = ``exposure_class_applied``.
+      guaranteed exposure's legs (Art. 112/123) = ``exposure_class_applied``,
+      save for the Art. 147 relabel below.
+    - THE ART. 147 RELABEL (P1.366). The IRB templates are laid out on the
+      Art. 147(2) classes, not the Art. 112(1) ones (COREP Annex II §3.3.2; C 09.02
+      row 0020 "Institutions — Point (b) of Article 147(2) CRR"), and CRR
+      Art. 147(4)(c) puts "exposures to multilateral development banks which are
+      not assigned a 0 % risk weight under Article 117" in the INSTITUTIONS class.
+      The engine keeps such a leg's ``exposure_class`` at the SA label ``mdb`` on
+      its IRB leg (``engine/classify/approach.py::_align_irb_exposure_class``
+      leaves it unaligned because no IRB parameter differs), so each twin is
+      relabelled ``institution`` here where its class is ``mdb``, its OWN approach
+      twin is F-IRB / A-IRB, the classifier's IRB class is ``institution`` (the
+      non-named limb) and, on the post twin, the leg was not substituted to a
+      guarantor. See :func:`_art147_reporting_class` for why each condition is
+      needed and which legs it must leave alone.
     - ``reporting_approach`` / ``reporting_approach_origin`` — the post- and
       pre-substitution approach twins (``approach_post_crm`` / ``approach_applied``).
     - ``reporting_country`` / ``reporting_country_origin`` — the post- and
@@ -1174,12 +1203,12 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
     # typed null the gate then routes to ``otherwise``. An empty string is
     # treated as unknown for the same reason the class twin does it — a joined
     # counterparty row with a blank country is not a country.
-    guarantor_country = _optional_country(_GUARANTOR_COUNTRY_COL)
+    guarantor_country = _optional_string(_GUARANTOR_COUNTRY_COL)
     # The obligor's own country is read through the same selector, not as a bare
     # column: it is a required aggregator-exit column, but the projection is also
     # exercised directly on minimal frames, and a hard read would make the
     # function's input contract wider than the two twins actually need.
-    obligor_country = _optional_country("cp_country_code")
+    obligor_country = _optional_string("cp_country_code")
     country_post = (
         pl.when(
             (pl.col("is_guaranteed") == True)  # noqa: E712
@@ -1249,8 +1278,12 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
         .otherwise(pl.lit(None, dtype=pl.Float64))
     )
     return lf.with_columns(
-        pl.col("exposure_class_post_crm").alias("reporting_class"),
-        pl.col("exposure_class_applied").alias("reporting_class_origin"),
+        _art147_reporting_class(
+            "exposure_class_post_crm", "approach_post_crm", post_basis=True
+        ).alias("reporting_class"),
+        _art147_reporting_class(
+            "exposure_class_applied", "approach_applied", post_basis=False
+        ).alias("reporting_class_origin"),
         pl.col("approach_post_crm").alias("reporting_approach"),
         pl.col("approach_applied").alias("reporting_approach_origin"),
         country_post.alias("reporting_country"),
@@ -1286,6 +1319,63 @@ def _add_reporting_projection(lf: pl.LazyFrame) -> pl.LazyFrame:
         _optional_amount("ofcp_lgd_cash_deposit").alias("reporting_ofcp_lgd_cash_deposit"),
         _optional_amount("ofcp_lgd_life_insurance").alias("reporting_ofcp_lgd_life_insurance"),
         _optional_amount("ofcp_substitution_amount").alias("reporting_ofcp_substitution"),
+    )
+
+
+@cites("CRR Art. 147(4)")
+def _art147_reporting_class(class_col: str, approach_col: str, *, post_basis: bool) -> pl.Expr:
+    """``class_col``, relabelled to the Art. 147(4)(c) INSTITUTIONS class on an IRB
+    leg of a non-named multilateral development bank — see
+    :func:`_add_reporting_projection`.
+
+    Called once per twin, each with its own class and approach carriers
+    (``exposure_class_applied`` / ``approach_applied`` for the origin twin,
+    ``exposure_class_post_crm`` / ``approach_post_crm`` with ``post_basis`` for
+    the post twin). Every condition is load-bearing:
+
+    - ``class_col == "mdb"``: the Art. 112(1)(d) label is what the IRB templates
+      have no sheet or row for. On the post twin it also keeps a slice
+      substituted to an IRB guarantor of another class (Art. 161 / 236 parameter
+      substitution leaves it on IRB) in that GUARANTOR's class.
+    - ``approach_col`` F-IRB / A-IRB, read on the twin's OWN approach: on SA,
+      ``mdb`` is the correct Art. 112(1)(d) class (C 07.00, C 09.01 row 0040), and
+      a covered slice that moved to an SA guarantor keeps its SA class on the
+      post twin while its origin twin, still the obligor's IRB exposure,
+      relabels. Slotting is absent: an ``mdb`` leg is never specialised lending.
+    - ``exposure_class_irb == "institution"``: the class the classifier derived
+      for a NON-named MDB OBLIGOR under CRR (the
+      ``crr_non_named_mdb_institution_irb_class`` pack Feature). A NAMED
+      (Art. 117(2)) MDB keeps ``mdb`` there, and Art. 147(3)(b) would put it in
+      central governments, never institutions, so it is left as it is. Under
+      Basel 3.1 every MDB is Standardised (PS1/26 Art. 147(3)(f), 147A(1)(a))
+      with IRB class ``mdb``, so the relabel cannot fire there: the predicate
+      reads sealed data, not the regime.
+    - post twin only, the leg is NOT substituted (:func:`_class_substituted`):
+      ``exposure_class_irb`` describes the OBLIGOR, so it may decide the class
+      only while the post class is still the obligor's own. A slice substituted
+      to an IRB-treated MDB GUARANTOR also reads ``mdb`` with an IRB approach,
+      and the obligor's IRB class says nothing about whether that guarantor is
+      named; it keeps the guarantor's class.
+
+    The IRB class and the guarantor class are read absence-tolerantly
+    (:func:`_optional_string`): the projection is also exercised on minimal
+    frames, where a frame sealing no ``exposure_class_irb`` keeps the plain alias.
+    Moves no RWA — the projection runs after the output floor and no calculator
+    reads ``reporting_class*``.
+    """
+    relabel = (
+        (pl.col(class_col) == ExposureClass.MDB.value)
+        & pl.col(approach_col).is_in([ApproachType.FIRB.value, ApproachType.AIRB.value])
+        & (_optional_string("exposure_class_irb") == ExposureClass.INSTITUTION.value)
+    )
+    if post_basis:
+        relabel = (
+            pl.when(_class_substituted(_optional_string(_GUARANTOR_CLASS_COL)))
+            .then(pl.lit(value=False))
+            .otherwise(relabel)
+        )
+    return (
+        pl.when(relabel).then(pl.lit(ExposureClass.INSTITUTION.value)).otherwise(pl.col(class_col))
     )
 
 

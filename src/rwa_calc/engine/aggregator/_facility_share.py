@@ -292,7 +292,7 @@ def candidate_flag() -> pl.Expr:
     """``is_facility_share_candidate`` as a null-free Boolean, absence included.
 
     Read through an absence-tolerant selector rather than a schema branch, for
-    the reason ``aggregator._optional_country`` gives: the aggregator is also
+    the reason ``aggregator._optional_string`` gives: the aggregator is also
     exercised on hand-built frames that never ran the facility-undrawn producer,
     and a bare ``pl.col`` would widen this module's input contract to a column
     most portfolios have no reason to carry. A null reads as False, which is the

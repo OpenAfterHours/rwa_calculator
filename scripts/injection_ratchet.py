@@ -39,10 +39,14 @@ It is expressed here as ``detected / <catalogue count of known_defect>`` — the
 denominator comes from the CATALOGUE, not from the verdicts — so an unreachable
 known-defect mutant counts AGAINST the floor. It has to: an unreachable one
 means the twin site the mutant is applied to is dead, and we cannot demonstrate
-the estate would catch a defect that already got through.
+the estate would catch a defect that already got through. The same holds for one
+carrying another verdict or none: trust fails those too, which keeps the exit
+code at 1 either way, so the floor finding is asserted separately for all three.
 
 References:
 - docs/development/defect-injection.md — the harness, the ladder, the verdicts
+- tests/contracts/test_injection_ratchet_gate.py — every finding kind ``--check``
+  can raise, each shown alone to exit 1, and the clean banked pair that exits 0
 - .claude/LESSONS.md B8 — ratchet the quantity, not a ratio of it
 - .claude/LESSONS.md E1 — a ratchet going red because you fixed something is the
   design working; bank the improvement deliberately, never regenerate to green
@@ -428,16 +432,36 @@ def ratchet(board: Board, banked: dict[str, Any]) -> RatchetResult:
 
 
 def render_summary(boards: dict[str, Board], baseline: dict[str, Any]) -> str:
-    """The published artefact. Three verdicts stay distinct; timeouts are named."""
+    """The published artefact. Three verdicts stay distinct; timeouts are named.
+
+    One renderer per section, listed here in publication order. Nothing here is a
+    gate, so a section cannot fail anything — but a dropped one publishes less
+    without any error, which is why
+    ``tests/contracts/test_injection_ratchet_gate.py`` pins the heading list.
+    """
     floor = float(baseline.get("known_defect_floor", 0.9))
-    lines: list[str] = [
+    unreadable = {ladder: trust_failures(board) for ladder, board in boards.items()}
+    lines = [
+        *_render_preamble(unreadable),
+        *_render_headline(boards),
+        *_render_floor(boards, floor),
+        *_render_escaped(boards),
+        *_render_unreachable(boards),
+        *_render_trust(boards, unreadable),
+        *_render_detections(boards),
+        *_render_ratchet(baseline),
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _render_preamble(unreadable: dict[str, list[str]]) -> list[str]:
+    """Title, provenance, and the not-evidence warning when any scorecard is untrusted."""
+    lines = [
         "## Defect-injection campaign",
         "",
         f"Measured {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')} at `{_git_commit()}`.",
         "",
     ]
-
-    unreadable = {ladder: trust_failures(board) for ladder, board in boards.items()}
     if any(unreadable.values()):
         lines += [
             "> **These numbers are not evidence.** At least one scorecard failed a trust",
@@ -445,7 +469,11 @@ def render_summary(boards: dict[str, Board], baseline: dict[str, Any]) -> str:
             "> See *Trust checks* below. The ratchet fails for this reason alone.",
             "",
         ]
+    return lines
 
+
+def _render_headline(boards: dict[str, Board]) -> list[str]:
+    """The per-ladder verdict counts, with the rate reported and not gated."""
     # Only claim a before/after when both ladders are actually present: the
     # campaign job renders each leg's own board too, and one ladder cannot
     # answer whether the added gates were worth their cost.
@@ -457,7 +485,7 @@ def render_summary(boards: dict[str, Board], baseline: dict[str, Any]) -> str:
         + ", ".join(f"`{ladder}`" for ladder in _ladder_order(boards))
         + " ladder only (no before/after pair)"
     )
-    lines += [
+    lines = [
         heading,
         "",
         "| Ladder | Mutants | Scored | DETECTED | ESCAPED | UNREACHABLE | Detection rate | Mean tier |",
@@ -479,8 +507,12 @@ def render_summary(boards: dict[str, Board], baseline: dict[str, Any]) -> str:
         "the gate is on the absolute id sets (LESSONS B8).",
         "",
     ]
+    return lines
 
-    lines += [f"### Known-defect floor (>= {floor:.0%} of the catalogue's known defects)", ""]
+
+def _render_floor(boards: dict[str, Board], floor: float) -> list[str]:
+    """PASS / FAIL per ladder against the known-defect floor, naming what was missed."""
+    lines = [f"### Known-defect floor (>= {floor:.0%} of the catalogue's known defects)", ""]
     for ladder in _ladder_order(boards):
         result = known_defect_floor(boards[ladder], floor)
         rate = "n/a" if result.rate is None else f"{result.rate:.0%}"
@@ -489,8 +521,12 @@ def render_summary(boards: dict[str, Board], baseline: dict[str, Any]) -> str:
         if result.missing:
             lines.append(f"  - not detected: {', '.join(f'`{m}`' for m in result.missing)}")
     lines.append("")
+    return lines
 
-    lines += ["### ESCAPED — the deliverable", ""]
+
+def _render_escaped(boards: dict[str, Board]) -> list[str]:
+    """Every ESCAPED mutant, per ladder — the load-bearing output of the campaign."""
+    lines = ["### ESCAPED — the deliverable", ""]
     escapes = [
         (ladder, row) for ladder in _ladder_order(boards) for row in boards[ladder].escaped_rows
     ]
@@ -503,8 +539,12 @@ def render_summary(boards: dict[str, Board], baseline: dict[str, Any]) -> str:
     else:
         lines.append("No escapes recorded. Read the trust checks before believing that.")
     lines.append("")
+    return lines
 
-    lines += ["### UNREACHABLE — moved no observable output", ""]
+
+def _render_unreachable(boards: dict[str, Board]) -> list[str]:
+    """Every UNREACHABLE mutant, per ladder, with the harness's own note."""
+    lines = ["### UNREACHABLE — moved no observable output", ""]
     any_unreachable = False
     for ladder in _ladder_order(boards):
         for mutant_id in sorted(boards[ladder].unreachable):
@@ -514,17 +554,24 @@ def render_summary(boards: dict[str, Board], baseline: dict[str, Any]) -> str:
     if not any_unreachable:
         lines.append("None.")
     lines.append("")
+    return lines
 
-    lines += ["### Trust checks", ""]
-    if any(unreadable.values()):
-        for ladder in _ladder_order(boards):
-            for failure in unreadable[ladder]:
-                lines.append(f"- **FAIL** {failure}")
+
+def _render_trust(boards: dict[str, Board], unreadable: dict[str, list[str]]) -> list[str]:
+    """Every trust failure, per ladder, or the all-clear."""
+    lines = ["### Trust checks", ""]
+    failures = [failure for ladder in _ladder_order(boards) for failure in unreadable[ladder]]
+    if failures:
+        lines += [f"- **FAIL** {failure}" for failure in failures]
     else:
         lines.append("- All scorecards complete, controls consistent, no gate timed out.")
     lines.append("")
+    return lines
 
-    lines += ["### Where each detection happened", ""]
+
+def _render_detections(boards: dict[str, Board]) -> list[str]:
+    """How many detections each gate made, per ladder."""
+    lines = ["### Where each detection happened", ""]
     for ladder in _ladder_order(boards):
         board = boards[ladder]
         if not board.caught_by:
@@ -535,8 +582,12 @@ def render_summary(boards: dict[str, Board], baseline: dict[str, Any]) -> str:
         rendered = ", ".join(f"{gate} {count}" for gate, count in sorted(tally.items()))
         lines.append(f"- `{ladder}` ({', '.join(board.gates)}): {rendered}")
     lines.append("")
+    return lines
 
-    lines += [
+
+def _render_ratchet(baseline: dict[str, Any]) -> list[str]:
+    """The baseline's status, and the banking command whenever it is not BANKED."""
+    lines = [
         "### Ratchet",
         "",
         f"Baseline status: **{baseline.get('status', 'MISSING')}**"
@@ -552,7 +603,7 @@ def render_summary(boards: dict[str, Board], baseline: dict[str, Any]) -> str:
             f"```\n{BANK_COMMAND}\n```",
             "",
         ]
-    return "\n".join(lines) + "\n"
+    return lines
 
 
 def _ladder_order(boards: dict[str, Board]) -> list[str]:
@@ -582,11 +633,39 @@ def check(boards: dict[str, Board], baseline: dict[str, Any]) -> int:
 
     Deliberately not fail-fast: the first manual run needs to see the trust
     checks, the floor and the ratchet in one pass, or banking becomes a
-    guess-and-retry loop.
+    guess-and-retry loop. So every check below runs, in this order, and each
+    returns its findings rather than returning early. The list of findings in
+    the body is the one place they are enumerated:
+
+    0. the before/after pair — both ``REQUIRED_LADDERS`` present;
+    1. trust, per ladder (``trust_failures``) — a ladder failing it has its
+       verdict sets skipped by 4, never compared;
+    2. the known-defect floor, per ladder;
+    3. the baseline's status — only ``UNBANKED`` and ``BANKED`` are recognised;
+    4. once ``BANKED``, the two-way set ratchet, per trusted ladder.
+
+    The numbering is ``docs/development/defect-injection.md``'s four groups.
+
+    Every finding kind these can raise, alone and per ladder, and the clean
+    ``BANKED`` pair that returns 0, are pinned by
+    ``tests/contracts/test_injection_ratchet_gate.py``.
     """
-    failures: list[str] = []
     floor = float(baseline.get("known_defect_floor", 0.9))
 
+    _print_check_header(boards)
+    trust = _report_trust(boards)
+    untrusted = {ladder for ladder, failures in trust.items() if failures}
+    findings = [
+        *_missing_ladder_findings(boards),
+        *(failure for failures in trust.values() for failure in failures),
+        *_report_floor(boards, floor),
+        *_report_baseline(boards, baseline, untrusted),
+    ]
+    return _report_verdict(findings)
+
+
+def _print_check_header(boards: dict[str, Board]) -> None:
+    """Which scorecards were read, and their reported (never gated) rate."""
     print("=" * 78)
     print("DEFECT-INJECTION DETECTION-RATE RATCHET")
     print("=" * 78)
@@ -600,27 +679,35 @@ def check(boards: dict[str, Board], baseline: dict[str, Any]) -> int:
             f"unreachable {len(board.unreachable)}  rate {rate} (reported, not gated)"
         )
 
+
+def _missing_ladder_findings(boards: dict[str, Board]) -> list[str]:
+    """Check 0, the before/after pair: a single-ladder run is a finding, not a smaller pass."""
     missing_ladders = [ladder for ladder in REQUIRED_LADDERS if ladder not in boards]
-    if missing_ladders:
-        failures.append(
-            f"no scorecard for ladder(s) {', '.join(missing_ladders)}. The before/after pair "
-            "from one build is the point of running two ladders; a single-ladder run cannot "
-            "answer whether the added gates were worth their cost."
-        )
+    if not missing_ladders:
+        return []
+    return [
+        f"no scorecard for ladder(s) {', '.join(missing_ladders)}. The before/after pair "
+        "from one build is the point of running two ladders; a single-ladder run cannot "
+        "answer whether the added gates were worth their cost."
+    ]
 
+
+def _report_trust(boards: dict[str, Board]) -> dict[str, list[str]]:
+    """Group 1, trust: every ladder's trust failures, keyed by ladder (empty = trusted)."""
     print("\n  TRUST")
-    trust_clean = True
-    untrusted: set[str] = set()
-    for ladder in _ladder_order(boards):
-        for failure in trust_failures(boards[ladder]):
-            trust_clean = False
-            untrusted.add(ladder)
-            failures.append(failure)
-            print(f"    FAIL {failure}")
-    if trust_clean:
+    trust = {ladder: trust_failures(boards[ladder]) for ladder in _ladder_order(boards)}
+    failures = [failure for found in trust.values() for failure in found]
+    for failure in failures:
+        print(f"    FAIL {failure}")
+    if not failures:
         print("    ok — every catalogue mutant scored, controls consistent, no timeouts")
+    return trust
 
+
+def _report_floor(boards: dict[str, Board], floor: float) -> list[str]:
+    """Group 2: the known-defect floor, per ladder, denominator from the catalogue."""
     print(f"\n  KNOWN-DEFECT FLOOR (>= {floor:.0%}, denominator from the catalogue)")
+    failures: list[str] = []
     for ladder in _ladder_order(boards):
         result = known_defect_floor(boards[ladder], floor)
         rate = "n/a" if result.rate is None else f"{result.rate:.0%}"
@@ -634,59 +721,78 @@ def check(boards: dict[str, Board], baseline: dict[str, Any]) -> int:
                 f"the {floor:.0%} floor. Not detected: {', '.join(result.missing)}. These "
                 "defects have already escaped once."
             )
+    return failures
 
+
+def _report_baseline(
+    boards: dict[str, Board], baseline: dict[str, Any], untrusted: set[str]
+) -> list[str]:
+    """Groups 3 and 4: the baseline's status, then the set ratchet once it is BANKED.
+
+    Only the two known statuses are recognised; ANY other value falls through to
+    a finding. An unrecognised status is treated as un-banked, never as banked,
+    so a typo cannot read as a green gate.
+    """
     print("\n  RATCHET")
     status = baseline.get("status")
     if status == STATUS_UNBANKED:
         print(_unbanked_banner(baseline))
-        failures.append(
+        return [
             "no baseline banked — run the campaign and bank it. "
             f"scripts/injection_baseline.json carries status={STATUS_UNBANKED!r}, so there is "
             "no previous detection rate to compare against and nothing is being gated. "
             f"Bank with: {BANK_COMMAND}"
-        )
-    elif status == STATUS_BANKED:
+        ]
+    if status == STATUS_BANKED:
         banked_ladders = baseline.get("ladders", {})
-        for ladder in _ladder_order(boards):
-            # An untrustworthy scorecard's verdict SETS are not comparable to
-            # anything. Comparing them anyway produces a wall of derived
-            # "regressions" that buries the one finding that matters, and — worse
-            # — reports the broken half as "improved, bank it deliberately".
-            if ladder in untrusted:
-                print(
-                    f"    {ladder:<8} SKIPPED — failed its trust checks above, sets not comparable"
-                )
-                continue
-            if ladder not in banked_ladders:
-                failures.append(
-                    f"{ladder}: the baseline is banked but holds no entry for this ladder. "
-                    f"Re-bank both ladders together: {BANK_COMMAND}"
-                )
-                print(f"    {ladder:<8} FAIL not in the banked baseline")
-                continue
-            result = ratchet(boards[ladder], banked_ladders[ladder])
-            for line in result.regressions:
-                failures.append(line)
-                print(f"    FAIL {line}")
-            for line in result.improvements:
-                failures.append(line)
-                print(f"    BANK REQUIRED {line}")
-            if result.passed:
-                print(f"    {ladder:<8} ok — every banked set held exactly")
-    else:
-        failures.append(
-            f"scripts/injection_baseline.json has status={status!r}; expected "
-            f"{STATUS_UNBANKED!r} or {STATUS_BANKED!r}. An unrecognised status is treated as "
-            "un-banked, never as banked, so a typo cannot read as a green gate."
-        )
-        print(f"    FAIL unrecognised baseline status {status!r}")
+        return [
+            finding
+            for ladder in _ladder_order(boards)
+            for finding in _report_ladder_ratchet(ladder, boards[ladder], banked_ladders, untrusted)
+        ]
+    print(f"    FAIL unrecognised baseline status {status!r}")
+    return [
+        f"scripts/injection_baseline.json has status={status!r}; expected "
+        f"{STATUS_UNBANKED!r} or {STATUS_BANKED!r}. An unrecognised status is treated as "
+        "un-banked, never as banked, so a typo cannot read as a green gate."
+    ]
 
+
+def _report_ladder_ratchet(
+    ladder: str, board: Board, banked_ladders: dict[str, Any], untrusted: set[str]
+) -> list[str]:
+    """Group 4 for one ladder: its two-way set ratchet against a BANKED baseline."""
+    # An untrustworthy scorecard's verdict SETS are not comparable to
+    # anything. Comparing them anyway produces a wall of derived
+    # "regressions" that buries the one finding that matters, and — worse
+    # — reports the broken half as "improved, bank it deliberately".
+    if ladder in untrusted:
+        print(f"    {ladder:<8} SKIPPED — failed its trust checks above, sets not comparable")
+        return []
+    if ladder not in banked_ladders:
+        print(f"    {ladder:<8} FAIL not in the banked baseline")
+        return [
+            f"{ladder}: the baseline is banked but holds no entry for this ladder. "
+            f"Re-bank both ladders together: {BANK_COMMAND}"
+        ]
+    result = ratchet(board, banked_ladders[ladder])
+    for line in result.regressions:
+        print(f"    FAIL {line}")
+    for line in result.improvements:
+        print(f"    BANK REQUIRED {line}")
+    if result.passed:
+        print(f"    {ladder:<8} ok — every banked set held exactly")
+    return [*result.regressions, *result.improvements]
+
+
+def _report_verdict(findings: list[str]) -> int:
+    """Print every finding and return the gate's exit code: 1 if any, else 0."""
     print()
     print("=" * 78)
-    if failures:
-        print(f"RATCHET FAILED — {len(failures)} finding(s)")
-        for failure in failures:
-            print(f"  - {failure}")
+    if findings:
+        print(f"RATCHET FAILED — {len(findings)} finding(s)")
+        for finding in findings:
+            print(f"  - {finding}")
         print("=" * 78)
         return 1
     print("RATCHET PASSED")

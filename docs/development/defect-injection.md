@@ -395,6 +395,12 @@ checks, reports all of them, and exits non-zero if any failed — deliberately n
 fail-fast, because the first manual run needs to see everything in one pass or
 banking becomes a guess-and-retry loop.
 
+It also requires **both ladders** (listed first among the findings, and, like
+every other check, not stopping the rest): a run holding only one scorecard is
+itself a finding, because the before/after pair from one build is
+the point of running two, and one ladder cannot answer whether the added gates
+were worth their cost.
+
 **1. Trust.** Is this scorecard readable at all? Each of these makes the headline
 rate fiction in a known direction, so they are checked before anything is
 compared against a baseline:
@@ -436,6 +442,58 @@ Movement in the good direction fails too, as `BANK REQUIRED`. A ratchet going
 red because you fixed something is the design working; bank the improvement
 deliberately (`.claude/LESSONS.md` E1).
 
+### How the gate itself is tested
+
+While the baseline is `UNBANKED`, `--check` can never pass: the status is itself
+a finding, reported alongside whatever else fails. So the nightly cannot reach
+the `BANKED` branch, and cannot see the gate pass. A gate that has never been
+seen to pass cannot be shown to tell a good run from a bad one, so
+`tests/contracts/test_injection_ratchet_gate.py` drives `check()` directly with
+synthetic boards — no campaign, no pipeline run:
+
+- a trust-clean, floor-clean `BANKED` pair whose sets equal the baseline must
+  exit **0**;
+- each of the **18** kinds of finding — the missing ladder, the six trust
+  checks (the reachability one in both directions, so seven kinds), the floor,
+  `UNBANKED`, an unrecognised status, a `BANKED` baseline with no entry for a
+  ladder, and the three regressions and three `BANK REQUIRED` improvements of
+  the set ratchet — is introduced **alone** on top of that clean pair, on each
+  ladder where the check is per ladder, and must exit **1** with exactly that
+  one finding. The unrecognised status is reached two ways, a wrong value and
+  no `status` key at all, because reading an absent status as `BANKED` would
+  turn the gate quiet;
+- the floor is read from the baseline (a missing `known_defect_floor` means
+  90%, and a rate equal to the floor meets it), and a set missing from a banked
+  ladder entry is read as empty, never as whatever the board holds now, so
+  everything the board holds in that set is reported as movement;
+- several groups failing at once must all be reported (not fail-fast), and an
+  untrusted ladder's sets must be skipped while the other ladder is still
+  compared — its missing baseline entry too, which surfaces once the ladder is
+  trusted again; a `BANKED` baseline with no `ladders` key at all is one
+  missing-entry finding per ladder, never a crash;
+- a known defect that is `UNREACHABLE`, carries another verdict, or never ran
+  must fail the **floor** as well as trust, on each ladder. Trust alone would
+  keep the exit code at 1, so this is the case that pins the floor's
+  catalogue denominator against the headline rate's scored pool;
+- `--summary` must publish every section, in order, with its content — every
+  per-ladder section carrying a line for **each** ladder, `legacy` first. Its
+  two alarms must tell good from bad (`.claude/LESSONS.md` B9): the "these
+  numbers are not evidence" banner must be absent on a clean pair and present
+  when either ladder, or both, fails trust, and the trust all-clear must appear
+  exactly when no ladder fails. Its quiet branches (a floor with every known
+  defect detected, nothing unreachable, a ladder that caught nothing) are
+  pinned line for line. A floor that passes while still missing a known defect
+  is not a quiet branch: it names the missed defect, and that is pinned too.
+
+The test asserts no count of checks. A count still passes when one check is
+changed to return nothing; a case per finding kind does not.
+
+`check()` and `render_summary()` are each split into one small function per
+group or section (SonarCloud `python:S3776` had flagged both, at cognitive
+complexity 38 and 36). The group list in `check()` and the section list in
+`render_summary()` are the one place each is enumerated. Any further change to
+either runs under the test above, unchanged.
+
 ### Why the gate is on sets and not on the rate
 
 The headline detection rate is `detected / (detected + escaped)` with
@@ -475,10 +533,12 @@ To render or re-render a board without gating anything:
 
 ```bash
 uv run python scripts/injection_ratchet.py --summary \
-  --scorecard nightly-injection/scorecard-legacy.json \
-  --scorecard nightly-injection/scorecard-full.json \
-  --out nightly-injection/summary.md
+  --ladder legacy --ladder full --write-summary
 ```
+
+Like `--bank`, it reads the scorecards from `nightly-injection/` and, with
+`--write-summary`, writes `nightly-injection/summary.md` (or
+`summary-<ladder>.md` for one ladder); without it the markdown goes to stdout.
 
 `--summary` is a renderer, not a gate. `--check` is the gate.
 

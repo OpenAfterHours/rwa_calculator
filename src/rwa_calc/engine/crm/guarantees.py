@@ -268,31 +268,29 @@ def _prepare_guarantees(
 def _join_guarantor_counterparty(
     exposures: pl.LazyFrame, counterparty_lookup: pl.LazyFrame
 ) -> tuple[pl.LazyFrame, list[str]]:
-    """Join guarantor entity/country/CCP/SCRA; also returns the joined column names.
+    """Join guarantor entity/country/QCCP/SCRA; also returns the joined column names.
 
-    ``guarantor_is_natural_person`` is always joined: the Art. 201 gate
-    (``guarantor_eligibility``) declines a guarantor whose own counterparty row is
-    flagged a natural person, whatever its ``entity_type``. A lookup without the
-    column (a direct caller's) reads as the schema default, False; an unmatched
-    guarantor is null, which the gate reads as not flagged.
+    ``guarantor_is_natural_person`` and ``guarantor_is_qccp`` are always joined: the
+    Art. 201 gate (``guarantor_eligibility``) declines a guarantor whose own
+    counterparty row is flagged a natural person, whatever its ``entity_type``, and
+    books a ``ccp`` guarantor not flagged qualifying as a corporate (Art. 107(2)(b)).
+    A lookup without either column (a direct caller's) reads as the schema default,
+    False; an unmatched guarantor is null, which the gate reads as not flagged.
     """
     cp_names = counterparty_lookup.collect_schema().names()
     counterparty_lookup = ensure_columns(
         counterparty_lookup,
-        {"is_natural_person": COUNTERPARTY_SCHEMA["is_natural_person"]},
+        {name: COUNTERPARTY_SCHEMA[name] for name in ("is_natural_person", "is_qccp")},
         present=cp_names,
     )
     cp_select_cols = [
         pl.col("counterparty_reference"),
         pl.col("entity_type").str.to_lowercase().alias("guarantor_entity_type"),
         pl.col("is_natural_person").alias("guarantor_is_natural_person"),
+        pl.col("is_qccp").alias("guarantor_is_qccp"),
     ]
     if "country_code" in cp_names:
         cp_select_cols.append(pl.col("country_code").alias("guarantor_country_code"))
-    if "is_ccp_client_cleared" in cp_names:
-        cp_select_cols.append(
-            pl.col("is_ccp_client_cleared").alias("guarantor_is_ccp_client_cleared")
-        )
     if "scra_grade" in cp_names:
         cp_select_cols.append(pl.col("scra_grade").alias("guarantor_scra_grade"))
 
@@ -307,7 +305,6 @@ def _join_guarantor_counterparty(
     post_join_names = exposures.collect_schema().names()
     fillers: dict[str, PolarsDataType] = {
         "guarantor_country_code": pl.String,
-        "guarantor_is_ccp_client_cleared": pl.Boolean,
         "guarantor_scra_grade": pl.String,
     }
     missing = [n for n in fillers if n not in post_join_names]

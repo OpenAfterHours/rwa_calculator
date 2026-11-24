@@ -271,7 +271,6 @@ class TestGuarantorInstitutionFramework:
             "guarantor_cqs": [None],
             "guarantor_entity_type": ["institution"],
             "guarantor_country_code": [guarantor_country],
-            "guarantor_is_ccp_client_cleared": [False],
             # P1.95: B31 SCRA-grade dispatch for unrated institution guarantor.
             # Grade A pins the 40% expected outcome (without this, the conservative
             # Grade C fallback returns 150%).

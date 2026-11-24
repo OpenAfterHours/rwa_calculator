@@ -214,7 +214,8 @@ guarantee from anyone else is not recognised.
 | Public sector entities | (1)(e) | Yes | — |
 | Institutions (and financial institutions treated as institutions under Art. 119(5)) | (1)(f) | Yes | — |
 | Other corporates, including parents, subsidiaries and affiliates | (1)(g), (2) | Yes | An ECAI credit assessment; or, for an F-IRB / A-IRB beneficiary, an internal rating |
-| Qualifying central counterparties | (1)(h) | Yes | — |
+| Qualifying central counterparties (`entity_type` `ccp`, `is_qccp` True) | (1)(h) | Yes | — |
+| Non-qualifying central counterparties (`ccp`, `is_qccp` False or not supplied) | treated as a corporate, (1)(g), (2) | Yes, as a corporate | An ECAI credit assessment; or, for an F-IRB / A-IRB beneficiary, an internal rating. Otherwise CRM013 |
 | Natural persons (`is_natural_person` True, or `entity_type` `individual`, `natural_person` or `retail`) | none | **No** | Not recognised; CRM013. The flag decides whatever the `entity_type`: a sole trader booked `corporate` is not a corporate entity, so a rating does not make it eligible |
 
 A guarantee from an ineligible provider is not recognised: the covered part keeps the
@@ -232,78 +233,52 @@ in COREP, and a CRM013 warning names the guarantor and the reason.
     question. The PS1/26 method that admits retail guarantors, the LGD Adjustment Method
     (Art. 183(1)(c)), is not implemented.
 
-### Qualifying CCP (QCCP) Guarantor Override (CRR Art. 306)
+### Central Counterparty (CCP) Guarantors (Art. 107(2), Art. 235)
 
-When the guarantor is a **qualifying central counterparty** (QCCP), the substituted
-risk weight on the guaranteed portion is overridden by the Art. 306 trade-exposure
-weights. This bypasses the normal institution CQS-keyed lookup and applies under
-both CRR and Basel 3.1 (Art. 306 is carried forward unchanged by PRA PS1/26):
+A guarantee from a central counterparty is not a trade exposure, so the CCR
+trade-exposure weights of 2% / 4% (CCR (CRR) Part Art. 306(1), 305(3)) do not apply to
+it. Art. 107(2), the same in CRR and PRA PS1/26, sends only trade exposures and
+default-fund contributions to the CCR treatment and treats every other exposure to a
+CCP *"(a) as exposures to an institution for other types of exposures to a qualifying
+CCP; (b) as exposures to a corporate for other types of exposures to a non-qualifying
+CCP"*. Art. 235(1) gives the guaranteed portion the SA risk weight of an exposure to the
+guarantor, so:
 
-| Trade Type | RW | Trigger | Reference |
-|------------|----|---------|-----------|
-| Proprietary trade exposure (own / clearing-member trades) | **2%** | `guarantor_entity_type == "ccp"` and `guarantor_is_ccp_client_cleared` is `False` / null | CRR Art. 306(1)(a); BCBS CRE54.14 |
-| Client-cleared trade exposure | **4%** | `guarantor_entity_type == "ccp"` and `guarantor_is_ccp_client_cleared = True` | CRR Art. 306(1)(b); BCBS CRE54.15 |
+| Guarantor | Class | Guaranteed-portion RW | Eligible (Art. 201) |
+|-----------|-------|-----------------------|---------------------|
+| Qualifying CCP (`entity_type = "ccp"`, `is_qccp = True`) | Institution (Art. 107(2)(a)) | Institution RW by CQS: CRR Art. 120 / 121; Basel 3.1 ECRA, or SCRA when unrated | Always, (1)(h) |
+| Non-qualifying CCP (`is_qccp` False, null or not supplied) | Corporate (Art. 107(2)(b)) | Corporate RW by CQS: CRR Art. 122 Table 5; Basel 3.1 Table 6 | Only with an ECAI rating, or an internal rating on an IRB exposure. Otherwise not recognised (CRM013) |
 
-The override fires inside the IRB guarantee SA-RW substitution path
-(`_compute_guarantor_rw_sa` in
-[`engine/irb/guarantee.py`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/irb/guarantee.py))
-and the parallel SA path. It takes precedence over the institution
-CQS-driven RW that would otherwise apply to a `guarantor_exposure_class` of
-`institution`, and the guarantee-beneficiality test (guarantor RW < borrower
-IRB RW) is then evaluated against the 2%/4% weight rather than the institution
-CQS weight.
+The CCP's `is_ccp_client_cleared` flag describes a trade, not a guarantor, and has no
+effect on a guarantee. The guaranteed portion is reported in COREP under the
+guarantor's class: institution for a qualifying CCP, corporate for any other.
 
-!!! info "Scope: trade exposures only"
-    Art. 306 covers **trade exposures** (initial margin, mark-to-market, cleared
-    derivative positions). Default-fund contributions to a QCCP follow the
-    separate Art. 308 / CRE54.16 risk-sensitive calculation and are not part
-    of the guarantee substitution path. See the COREP CR-SA template mapping
-    at [Output Reporting Specification — Row 0150 / 0160](../../specifications/output-reporting.md)
-    for how each is tagged.
+!!! warning "Set `is_qccp` on CCP counterparties"
+    An unreported qualification is not assumed: a `ccp` counterparty whose `is_qccp`
+    is not supplied is treated as non-qualifying, so its guarantee is priced as a
+    corporate guarantee, or not recognised at all when the CCP has no rating.
 
-!!! warning "Non-QCCPs do not get the override"
-    If the guarantor is a CCP that is **not** qualifying (i.e. `is_qccp = False`),
-    Art. 306 does not apply: the guarantor falls back to the bilateral institution
-    treatment (CQS-keyed institution RW) for trade exposures, and default-fund
-    contributions attract the punitive 1250% / deduction treatment. The calculator
-    only fires the 2%/4% override when the entity is flagged as a CCP at the input
-    layer; QCCP qualification is a precondition the user data must already reflect.
+#### Worked Example — QCCP-Guaranteed Corporate Exposure
 
-#### Worked Example — QCCP-Guaranteed Bank Exposure
+**Exposure:** SA corporate loan, £1m, borrower CQS 5 (150% RW in both regimes).
 
-**Exposure:**
-
-- Corporate loan, £10m, IRB obligor
-- Pre-CRM IRB RW: 80%
-
-**Guarantee:**
-
-- Qualifying CCP, proprietary trade exposure
-- `guarantor_entity_type = "ccp"`, `guarantor_is_ccp_client_cleared = False`
-- Guaranteed amount: £6m
-
-**Calculation:**
+**Guarantee:** a qualifying CCP with a CQS 2 rating guarantees the whole loan.
 
 ```python
-# Guarantor RW from Art. 306(1)(a) override -- not the institution CQS table
-guarantor_rw = 0.02  # 2% QCCP proprietary
+# Institution weight for CQS 2 (Art. 107(2)(a) + Art. 235(1))
+guarantor_rw_crr = 0.50  # CRR Art. 120 Table 3
+guarantor_rw_b31 = 0.30  # PS1/26 ECRA Table 3
 
-# Beneficiality check: 2% < 80% -> guarantee is beneficial, applied
-RWA_guaranteed   = 6_000_000 * 0.02 = 120_000
-RWA_unguaranteed = 4_000_000 * 0.80 = 3_200_000
-
-RWA = 120_000 + 3_200_000 = 3_320_000
-
-# vs. pre-CRM RWA = 10,000,000 * 0.80 = 8,000,000
-# Benefit: 58.5% reduction
+RWA_crr = 1_000_000 * 0.50 = 500_000
+RWA_b31 = 1_000_000 * 0.30 = 300_000
 ```
 
-If the same guarantee had been a client-cleared trade exposure instead, the
-override would yield 4% on the guaranteed portion (`6_000_000 × 0.04 =
-£240,000`) — still substantially below any institution CQS RW.
+Had the same CCP been non-qualifying, the guarantee would be priced at the CQS 2
+corporate weight. Had it been non-qualifying and unrated, it would not be recognised and
+the loan would stay at £1.5m.
 
 > **See also:** [Institution Exposure Class — Central Counterparties](../exposure-classes/institution.md#central-counterparties-ccps)
-> for the SA direct-exposure side of the same Art. 306 mechanic.
+> for direct exposures to a CCP, where the 2% / 4% trade-exposure weights do apply.
 
 ### Guarantee Requirements
 

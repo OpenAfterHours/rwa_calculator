@@ -390,7 +390,7 @@ def apply_guarantee_substitution(
         return exposures
 
     # Ensure defensive column fallbacks (guarantor_exposure_class,
-    # guarantor_country_code, guarantor_is_ccp_client_cleared). In
+    # guarantor_country_code, guarantor_scra_grade). In
     # production these are set by the CRM processor; this fallback covers
     # tests that construct LazyFrames directly and skip the CRM stage.
     exposures = _ensure_guarantee_substitution_columns(exposures, resolved_pack)
@@ -956,10 +956,9 @@ def _ensure_guarantee_substitution_columns(
     same ``pack`` the caller resolved, so the two paths read one map.
 
     Adds (if absent):
-        guarantor_exposure_class        — derived from guarantor_entity_type
-        guarantor_country_code          — null String
-        guarantor_is_ccp_client_cleared — null Boolean
-        guarantor_scra_grade            — null String (B31 SCRA dispatch fallback)
+        guarantor_exposure_class — derived from guarantor_entity_type
+        guarantor_country_code   — null String
+        guarantor_scra_grade     — null String (B31 SCRA dispatch fallback)
     """
     schema_names = exposures.collect_schema().names()
     to_add: list[pl.Expr] = []
@@ -975,8 +974,6 @@ def _ensure_guarantee_substitution_columns(
         )
     if "guarantor_country_code" not in schema_names:
         to_add.append(pl.lit(None).cast(pl.String).alias("guarantor_country_code"))
-    if "guarantor_is_ccp_client_cleared" not in schema_names:
-        to_add.append(pl.lit(None).cast(pl.Boolean).alias("guarantor_is_ccp_client_cleared"))
     if "guarantor_scra_grade" not in schema_names:
         to_add.append(pl.lit(None).cast(pl.Utf8).alias("guarantor_scra_grade"))
 
@@ -1039,7 +1036,6 @@ def _build_guarantor_rw_expr(
         entity_type_col="guarantor_entity_type",
         cqs_col="guarantor_cqs",
         country_code_col="guarantor_country_code",
-        ccp_client_cleared_col="guarantor_is_ccp_client_cleared",
         scra_grade_col="guarantor_scra_grade",
         is_basel_3_1=is_basel_3_1,
         domestic_cgcb_expr=is_domestic_guarantor,

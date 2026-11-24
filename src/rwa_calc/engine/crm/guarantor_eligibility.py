@@ -3,16 +3,19 @@ Art. 201 protection-provider eligibility and guarantor-approach routing.
 
 Pipeline position:
     apply_guarantees (guarantor joins)
-        -> assign_guarantor_approach (routing + Art. 201 gate)
+        -> assign_guarantor_approach (Art. 107(2) CCP class, routing + Art. 201 gate)
         -> CRMProcessor crm_exit edge
         -> record_ineligible_guarantors (CRM013)
 
 Key responsibilities:
+- Book a CCP guarantor in the class Art. 107(2) gives an exposure to it that is
+  not a trade exposure: institution for a qualifying CCP, corporate for any other
+  (``demote_non_qualifying_ccp_guarantors``)
 - Route each guaranteed leg to IRB parameter substitution, SA risk-weight
   substitution, or no substitution (``guarantor_approach``)
-- Apply the Art. 201 eligible-provider gate (unrated corporates and natural
-  persons), clearing the guarantor class and approach of a rejected leg so it
-  reverts to the borrower's own basis
+- Apply the Art. 201 eligible-provider gate (unrated corporates, non-qualifying
+  CCPs among them, and natural persons), clearing the guarantor class and
+  approach of a rejected leg so it reverts to the borrower's own basis
 - Name every rejected guarantor in one CRM013 warning per leg
 
 Kept out of ``guarantees.py``, following ``min_collateralisation.py``: that module
@@ -21,6 +24,9 @@ the eligibility gate has no dependency on the split and allocation machinery
 there.
 
 References:
+    CRR Art. 107(2) / PS1/26 Art. 107(2): an exposure to a CCP that is not a trade
+        exposure or a default-fund contribution is an exposure to an institution
+        (qualifying CCP) or to a corporate (non-qualifying CCP)
     CRR Art. 201: eligibility of protection providers under all approaches
     CRR Art. 194(5): only an Art. 201 provider is an eligible protection provider
     CRR Art. 108(2): own-LGD (A-IRB) exposures take CRM under Chapter 3 instead
@@ -109,18 +115,25 @@ def assign_guarantor_approach(
       Art. 201; the LGD Adjustment Method that admits retail guarantors,
       Art. 183(1)(c), is not implemented).
 
+    A CCP guarantor is first booked in its Art. 107(2) class
+    (:func:`demote_non_qualifying_ccp_guarantors`): a qualifying CCP stays
+    ``institution`` and is admitted by Art. 201(1)(h); any other CCP becomes
+    ``corporate`` and so meets the corporate limb above — eligible with an ECAI
+    assessment, or an internal rating on an IRB beneficiary, and otherwise
+    declined (P1.396).
+
     A rejected guarantor takes guarantor approach ``""`` — on BOTH the SA fallback
     and the IRB branch, since clearing the class alone would leave parameter
     substitution running — and its ``guarantor_exposure_class`` is cleared. Both
     substitution paths price the covered leg with
     ``engine/sa/guarantor_rw.py::build_guarantor_rw_expr``, which prices nothing
-    for an empty class (its CCP and named-MDB branches, which also read the
-    entity type, require a class too), so the leg is never beneficially
-    substituted and stays on the borrower's own basis: SA risk weight, IRB PD /
-    LGD and the output-floor SA-equivalent alike. The leg is flagged on
-    ``_guarantor_ineligible`` for :func:`record_ineligible_guarantors` (CRM013).
-    The other listed classes (sovereign, RGLA, MDB, international organisation,
-    PSE, institution, CCP) are not gated here, except a row flagged a natural
+    for an empty class (its named-MDB branch, which also reads the entity type,
+    requires a class too), so the leg is never beneficially substituted and stays
+    on the borrower's own basis: SA risk weight, IRB PD / LGD and the output-floor
+    SA-equivalent alike. The leg is flagged on ``_guarantor_ineligible`` for
+    :func:`record_ineligible_guarantors` (CRM013). The other listed classes
+    (sovereign, RGLA, MDB, international organisation, PSE, institution —
+    qualifying CCPs included) are not gated here, except a row flagged a natural
     person (above).
     """
     # irb_permissions is derived non-None in CalculationConfig.__post_init__.
@@ -137,6 +150,7 @@ def assign_guarantor_approach(
     )
     beneficiary_is_irb = beneficiary_approach.is_in(irb_beneficiary_approaches)
 
+    exposures = demote_non_qualifying_ccp_guarantors(exposures)
     is_domestic_cgcb_guarantor = _build_domestic_cgcb_flag(schema_names)
 
     # Art. 201 gate. All inputs are non-null booleans (is_not_null / == on the
@@ -191,8 +205,7 @@ def assign_guarantor_approach(
         # guarantor so ``build_guarantor_rw_expr`` returns null -> non-beneficial
         # -> the covered leg reverts to the borrower's own basis. Mirrors the
         # existing unmapped-guarantor (class "") no-substitution path. This holds
-        # only because every branch of that chain requires a non-empty class —
-        # its CCP branch keys on the entity type and was the one leak (P1.395);
+        # only because every branch of that chain requires a non-empty class;
         # pinned per entity type by the P1.395 unit and pipeline tests.
         pl.when(guarantor_ineligible)
         .then(pl.lit(""))
@@ -202,6 +215,43 @@ def assign_guarantor_approach(
         # the decline, and which limb made it, decided here once.
         guarantor_ineligible.alias("_guarantor_ineligible"),
         declined_as_natural_person.alias("_guarantor_declined_as_natural_person"),
+        (guarantor_ineligible & declined_as_natural_person.not_() & _is_ccp_guarantor()).alias(
+            "_guarantor_declined_as_non_qualifying_ccp"
+        ),
+    )
+
+
+@cites("CRR Art. 107")
+@cites("PS1/26, paragraph 107")
+def demote_non_qualifying_ccp_guarantors(exposures: pl.LazyFrame) -> pl.LazyFrame:
+    """Book a CCP guarantor that is not a qualifying CCP in the corporate class.
+
+    A guarantee is not a trade exposure or a default-fund contribution, so the
+    Section 9 (Art. 306) weights never reach it. CRR Art. 107(2) = PS1/26
+    Art. 107(2): "For all other types of exposures to a central counterparty,
+    institutions shall treat those exposures as follows: (a) as exposures to an
+    institution for other types of exposures to a qualifying CCP; (b) as exposures
+    to a corporate for other types of exposures to a non-qualifying CCP." The
+    run pack's entity map books ``ccp`` as ``institution``, which is limb (a);
+    this moves every other CCP guarantor to ``corporate`` (limb (b)), so the
+    Art. 201 corporate limb, the IRB-permission routing, the Art. 235 covered-part
+    weight and the COREP inflow class all read the class Art. 107(2) gives it.
+
+    Qualifying means ``guarantor_is_qccp`` True. False, an explicit null and an
+    unmatched guarantor are all non-qualifying (an unreported qualification is not
+    shown) — the loader already seals a null or unsupplied ``is_qccp`` to the
+    schema default False, and ``apply_guarantees`` joins the column on every run.
+    """
+    demote = (
+        _is_ccp_guarantor()
+        & (pl.col("guarantor_exposure_class") == ExposureClass.INSTITUTION.value)
+        & pl.col("guarantor_is_qccp").eq_missing(True).not_()
+    )
+    return exposures.with_columns(
+        pl.when(demote)
+        .then(pl.lit(ExposureClass.CORPORATE.value))
+        .otherwise(pl.col("guarantor_exposure_class"))
+        .alias("guarantor_exposure_class"),
     )
 
 
@@ -217,10 +267,13 @@ def record_ineligible_guarantors(
     (23 ms of a 150-row run). Nothing is appended to ``errors`` between the two
     points, so CRM013 keeps its place in the list; the exit seal strips the flag.
     The cause is the limb the gate itself recorded on
-    ``_guarantor_declined_as_natural_person`` — never re-derived here, so the two
-    cannot drift: a natural person (flagged, or booked under a natural-person
-    entity type) is outside the Art. 201 list altogether; otherwise a corporate
-    lacks the rating Art. 201(1)(g)/(2) requires.
+    ``_guarantor_declined_as_natural_person`` /
+    ``_guarantor_declined_as_non_qualifying_ccp`` — never re-derived here, so the
+    two cannot drift: a natural person (flagged, or booked under a natural-person
+    entity type) is outside the Art. 201 list altogether; a CCP that is not
+    qualifying is outside Art. 201(1)(h) and, as the corporate Art. 107(2)(b)
+    makes it, lacks the rating Art. 201(1)(g)/(2) requires; otherwise a corporate
+    lacks that rating.
     """
     dropped = (
         exposures.filter(pl.col("_guarantor_ineligible"))
@@ -230,6 +283,7 @@ def record_ineligible_guarantors(
             "guarantor_entity_type",
             "guarantor_is_natural_person",
             "_guarantor_declined_as_natural_person",
+            "_guarantor_declined_as_non_qualifying_ccp",
         )
         .collect()
     )
@@ -246,6 +300,14 @@ def record_ineligible_guarantors(
                 "eligible provider of unfunded credit protection under Art. 201(1)/(2)"
             )
             reference = "CRR Art. 201(1)"
+        elif row.get("_guarantor_declined_as_non_qualifying_ccp"):
+            cause = (
+                "a central counterparty that is not a qualifying central counterparty is "
+                "not admitted by Art. 201(1)(h); Art. 107(2)(b) treats it as a corporate, "
+                "and without an ECAI credit assessment (or, for an IRB-approach "
+                "beneficiary, an internal rating) it is not eligible under Art. 201(1)(g)/(2)"
+            )
+            reference = "CRR Art. 201(1)(h)"
         else:
             cause = (
                 "a corporate guarantor without an ECAI credit assessment (or, for an "
@@ -263,6 +325,15 @@ def record_ineligible_guarantors(
                 regulatory_reference=reference,
             )
         )
+
+
+def _is_ccp_guarantor() -> pl.Expr:
+    """True on a guarantor booked ``entity_type='ccp'``; never null.
+
+    ``ccp`` is an input-domain value (``data/schemas.py`` VALID_ENTITY_TYPES), the
+    same one ``engine/sa/ccp_exposures.py`` keys the obligor side on.
+    """
+    return pl.col("guarantor_entity_type").eq_missing("ccp")
 
 
 def _build_domestic_cgcb_flag(schema_names: list[str]) -> pl.Expr:

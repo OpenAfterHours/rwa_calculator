@@ -534,51 +534,48 @@ class TestGuarantorSubstitutionReadsGuaranteeCurrency:
 
 
 class TestSACCPGuarantorRiskWeight:
-    """CCP guarantor gets prescribed 2%/4% RW per CRR Art. 306 / CRE54.14-15."""
+    """A CCP guarantor takes the SA weight of a direct exposure to it, not 2% / 4% (P1.396).
 
-    def test_ccp_proprietary_2pct(self, crr_config: CalculationConfig) -> None:
-        """CCP guarantor (proprietary) should get 2% RW."""
+    Art. 235(1) prices the covered part at the SA weight of a (comparable) direct
+    exposure to the provider; a guarantee is not a trade exposure, so Art. 107(2)(a)
+    makes it an exposure to an institution for a qualifying CCP (the class the base
+    map books ``ccp`` in) and (b) a corporate for any other. These pins replace the
+    old Art. 306 2% / 4% override pins, which encoded the defect. The client-cleared
+    flag is a property of a trade, not of a protection provider, and is not read.
+    """
+
+    @pytest.mark.parametrize("client_cleared", [False, True, None])
+    def test_qccp_unrated_takes_the_unrated_institution_weight(
+        self, crr_config: CalculationConfig, client_cleared: bool | None
+    ) -> None:
+        """Unrated institution, CRR Art. 121 (sovereign CQS unknown): 100%."""
         result = _sa_guarantee_result(
-            "ccp", None, crr_config, guarantor_is_ccp_client_cleared=False
+            "ccp", None, crr_config, guarantor_is_ccp_client_cleared=client_cleared
         )
-        assert result["guarantor_rw"][0] == pytest.approx(0.02)
+        assert result["guarantor_rw"][0] == pytest.approx(1.00)
 
-    def test_ccp_client_cleared_4pct(self, crr_config: CalculationConfig) -> None:
-        """CCP guarantor (client-cleared) should get 4% RW."""
-        result = _sa_guarantee_result("ccp", None, crr_config, guarantor_is_ccp_client_cleared=True)
-        assert result["guarantor_rw"][0] == pytest.approx(0.04)
-
-    def test_ccp_null_client_cleared_defaults_to_proprietary(
+    def test_qccp_cqs1_takes_the_institution_cqs1_weight(
         self, crr_config: CalculationConfig
     ) -> None:
-        """CCP guarantor with null is_ccp_client_cleared defaults to 2% (proprietary)."""
-        result = _sa_guarantee_result("ccp", None, crr_config)
-        assert result["guarantor_rw"][0] == pytest.approx(0.02)
-
-    def test_ccp_with_cqs_still_uses_ccp_rw(self, crr_config: CalculationConfig) -> None:
-        """CCP branch overrides CQS-based institution RW even if CQS exists."""
+        """CRR Art. 120 Table 3 CQS 1: 20%."""
         result = _sa_guarantee_result("ccp", 1, crr_config, guarantor_is_ccp_client_cleared=False)
-        assert result["guarantor_rw"][0] == pytest.approx(0.02)
+        assert result["guarantor_rw"][0] == pytest.approx(0.20)
 
 
 class TestIRBCCPGuarantorRiskWeight:
-    """IRB: CCP guarantor SA RW should be 2%/4% per CRR Art. 306 / CRE54.14-15."""
+    """IRB: an SA-routed CCP guarantor's SA RW is the institution weight, not 2% / 4%."""
 
-    def test_ccp_proprietary_2pct(self, crr_config: CalculationConfig) -> None:
-        """CCP guarantor (proprietary) should get 2% SA RW in IRB path."""
+    @pytest.mark.parametrize("client_cleared", [False, True, None])
+    def test_qccp_unrated_takes_the_unrated_institution_weight(
+        self, crr_config: CalculationConfig, client_cleared: bool | None
+    ) -> None:
         result = _irb_guarantee_result(
-            "ccp", None, crr_config, guarantor_is_ccp_client_cleared=False
+            "ccp", None, crr_config, guarantor_is_ccp_client_cleared=client_cleared
         )
-        assert result["guarantor_rw"][0] == pytest.approx(0.02)
+        assert result["guarantor_rw"][0] == pytest.approx(1.00)
 
-    def test_ccp_client_cleared_4pct(self, crr_config: CalculationConfig) -> None:
-        """CCP guarantor (client-cleared) should get 4% SA RW in IRB path."""
-        result = _irb_guarantee_result(
-            "ccp", None, crr_config, guarantor_is_ccp_client_cleared=True
-        )
-        assert result["guarantor_rw"][0] == pytest.approx(0.04)
-
-    def test_ccp_null_defaults_to_proprietary(self, crr_config: CalculationConfig) -> None:
-        """CCP guarantor with null is_ccp_client_cleared defaults to 2% in IRB path."""
-        result = _irb_guarantee_result("ccp", None, crr_config)
-        assert result["guarantor_rw"][0] == pytest.approx(0.02)
+    def test_qccp_cqs1_takes_the_institution_cqs1_weight(
+        self, crr_config: CalculationConfig
+    ) -> None:
+        result = _irb_guarantee_result("ccp", 1, crr_config, guarantor_is_ccp_client_cleared=False)
+        assert result["guarantor_rw"][0] == pytest.approx(0.20)

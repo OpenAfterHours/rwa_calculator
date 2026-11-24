@@ -42,8 +42,9 @@ Controls (each shows the flag, and only the guarantor's flag, is the discriminat
 
 The gate's means are not its outcome: clearing the class stops substitution only
 if the guarantor RW chain then prices nothing. ``TestClearedGuarantorClassPricesNoRiskWeight``
-pins that invariant on ``build_guarantor_rw_expr`` for every entity type (its CCP
-branch, keyed on the entity type, priced a declined ``ccp`` guarantor at 2% / 4%);
+pins that invariant on ``build_guarantor_rw_expr`` for every entity type (its former
+CCP branch, keyed on the entity type, priced a declined ``ccp`` guarantor at 2% / 4%;
+P1.396 removed it);
 ``tests/acceptance/test_p1_395_flagged_natural_person_guarantor_pipeline.py`` pins
 the end-to-end RWEA.
 
@@ -473,21 +474,20 @@ class TestClearedGuarantorClassPricesNoRiskWeight:
     paths both price the covered leg with ``build_guarantor_rw_expr`` and substitute
     when that RW is lower. The chain's CCP branch was keyed on ``entity_type ==
     "ccp"`` alone, so a declined (class-cleared) CCP-booked guarantor still priced
-    2% / 4% and was substituted. Every entity type the class map knows is checked,
-    so a future branch keyed on the entity type alone is caught here too.
+    2% / 4% and was substituted. That branch is gone (P1.396: a guarantee from a CCP
+    takes the institution or corporate weight its Art. 107(2) class gives it); every
+    entity type the class map knows is still checked, so a future branch keyed on the
+    entity type alone is caught here too.
     """
 
     @staticmethod
-    def _price(
-        entity_type: str, exposure_class: str, *, is_basel_3_1: bool, client_cleared: bool
-    ) -> float | None:
+    def _price(entity_type: str, exposure_class: str, *, is_basel_3_1: bool) -> float | None:
         frame = pl.DataFrame(
             {
                 "guarantor_exposure_class": [exposure_class],
                 "guarantor_entity_type": [entity_type],
                 "guarantor_cqs": [1],
                 "guarantor_country_code": ["GB"],
-                "guarantor_is_ccp_client_cleared": [client_cleared],
                 "guarantor_scra_grade": ["A"],
             },
             schema_overrides={"guarantor_cqs": pl.Int8},
@@ -497,7 +497,6 @@ class TestClearedGuarantorClassPricesNoRiskWeight:
             entity_type_col="guarantor_entity_type",
             cqs_col="guarantor_cqs",
             country_code_col="guarantor_country_code",
-            ccp_client_cleared_col="guarantor_is_ccp_client_cleared",
             scra_grade_col="guarantor_scra_grade",
             is_basel_3_1=is_basel_3_1,
             domestic_cgcb_expr=pl.lit(True),
@@ -505,27 +504,19 @@ class TestClearedGuarantorClassPricesNoRiskWeight:
         return frame.select(expr.alias("rw"))["rw"][0]
 
     @pytest.mark.parametrize("is_basel_3_1", [False, True], ids=["crr", "b31"])
-    @pytest.mark.parametrize("client_cleared", [False, True], ids=["proprietary", "client"])
-    def test_unflagged_ccp_keeps_its_qccp_weight(
-        self, is_basel_3_1: bool, client_cleared: bool
-    ) -> None:
-        """Control: with its class in place a CCP guarantor is still priced (2% / 4%)."""
-        rw = self._price(
-            "ccp",
-            ENTITY_TYPE_TO_SA_CLASS["ccp"],
-            is_basel_3_1=is_basel_3_1,
-            client_cleared=client_cleared,
+    def test_unflagged_ccp_is_priced_on_its_class_ladder(self, is_basel_3_1: bool) -> None:
+        """Control: with its class in place a CCP guarantor is priced, as its class prices."""
+        rw = self._price("ccp", ENTITY_TYPE_TO_SA_CLASS["ccp"], is_basel_3_1=is_basel_3_1)
+
+        assert rw is not None
+        assert rw == self._price(
+            "institution", ENTITY_TYPE_TO_SA_CLASS["ccp"], is_basel_3_1=is_basel_3_1
         )
 
-        assert rw == pytest.approx(0.04 if client_cleared else 0.02)
-
     @pytest.mark.parametrize("is_basel_3_1", [False, True], ids=["crr", "b31"])
-    @pytest.mark.parametrize("client_cleared", [False, True], ids=["proprietary", "client"])
     @pytest.mark.parametrize("entity_type", sorted(ENTITY_TYPE_TO_SA_CLASS))
-    def test_cleared_class_prices_nothing(
-        self, entity_type: str, is_basel_3_1: bool, client_cleared: bool
-    ) -> None:
-        rw = self._price(entity_type, "", is_basel_3_1=is_basel_3_1, client_cleared=client_cleared)
+    def test_cleared_class_prices_nothing(self, entity_type: str, is_basel_3_1: bool) -> None:
+        rw = self._price(entity_type, "", is_basel_3_1=is_basel_3_1)
 
         assert rw is None, (
             f"a guarantor booked '{entity_type}' whose class the Art. 201 gate cleared "

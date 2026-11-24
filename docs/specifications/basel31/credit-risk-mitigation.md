@@ -420,7 +420,13 @@ mortgage, R = 0.04 QRRE, decay form for retail-other).
     internal rating does not admit it (P1.395). The decline holds in the outcome for
     every entity type, `ccp` included: the covered leg keeps the borrower's PD, LGD and
     output-floor SA-equivalent, because the guarantor risk-weight chain prices nothing
-    once the gate has cleared the guarantor class.
+    once the gate has cleared the guarantor class. A CCP guarantor is priced as the
+    class Art. 107(2) gives a non-trade exposure to it: a qualifying CCP as an
+    institution (ECRA / SCRA), any other as a corporate, eligible only with an ECAI
+    assessment or, for the Parameter Substitution Method, an internal rating
+    (Art. 201(1)(g) / (2)); never at the Art. 306 2% / 4% trade-exposure weights
+    (P1.396; detail in the
+    [CRR CRM specification](../crr/credit-risk-mitigation.md#eligible-unfunded-protection-providers-art-201)).
     It still recognises them on an A-IRB beneficiary, as under CRR Art. 108(2). Whether
     PS1/26 should decline them there too is an open owner decision: the LGD Adjustment
     Method that admits retail guarantors (Art. 183(1)(c)) is not implemented.

@@ -368,10 +368,6 @@ def _compute_guarantor_rw_sa(
             .replace_strict(entity_type_to_sa_class(resolved_pack), default="")
             .alias("guarantor_exposure_class"),
         )
-    if "guarantor_is_ccp_client_cleared" not in cols:
-        lf = lf.with_columns(
-            pl.lit(None).cast(pl.Boolean).alias("guarantor_is_ccp_client_cleared"),
-        )
     # B31 SCRA dispatch fallback: ensure ``guarantor_scra_grade`` is referenceable
     # by ``build_institution_guarantor_rw_expr``. The CRM processor populates this
     # column from counterparties.scra_grade (engine/crm/guarantees.py); fall back
@@ -420,7 +416,7 @@ def _compute_guarantor_rw_sa(
 
     # The shared expression's unrated PSE/RGLA fallback reads the guarantor
     # country column; ensure it is referenceable for direct (non-pipeline)
-    # invocation, mirroring the ccp / scra fallbacks above. The pipeline
+    # invocation, mirroring the scra fallback above. The pipeline
     # always carries it (joined by engine/crm/guarantees.py).
     if not _has_country:
         lf = lf.with_columns(
@@ -433,7 +429,6 @@ def _compute_guarantor_rw_sa(
             entity_type_col="guarantor_entity_type",
             cqs_col="guarantor_cqs",
             country_code_col="guarantor_country_code",
-            ccp_client_cleared_col="guarantor_is_ccp_client_cleared",
             scra_grade_col="guarantor_scra_grade",
             is_basel_3_1=resolved_pack.feature("sa_revised_risk_weight_tables"),
             domestic_cgcb_expr=_is_domestic_guarantor,

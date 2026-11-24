@@ -1035,7 +1035,8 @@ and names each rejected guarantor in a CRM013 warning.
 | Institutions (and Art. 119(5) financial institutions) | (1)(f) | Yes | Yes |
 | Corporates with an ECAI credit assessment | (1)(g)(i) | Yes | Yes |
 | Corporates with an internal rating only | (1)(g)(ii), (2) | No | Yes (parameter substitution) |
-| Qualifying central counterparties | (1)(h) | Yes | Yes |
+| Qualifying central counterparties (`entity_type` `ccp`, `is_qccp` True) | (1)(h) | Yes | Yes |
+| Non-qualifying central counterparties (`ccp`, `is_qccp` False or not supplied) | as a corporate, (1)(g)(i) / (ii), (2) | With an ECAI assessment only (otherwise CRM013) | With an ECAI assessment or an internal rating |
 | Natural persons (`is_natural_person` True, or `entity_type` `individual` / `natural_person` / `retail`) | none | **No** (CRM013) | **No** (CRM013) |
 
 Art. 201(1)(g)(ii) admits an internally rated corporate for *"institutions calculating
@@ -1056,13 +1057,40 @@ names the flag and the entity type so the record can be corrected.
 
 A declined guarantee is declined in the outcome, not only in its labels. The gate clears
 the guarantor class, and the guarantor risk-weight chain (`build_guarantor_rw_expr`, used
-by both the SA and the IRB substitution paths) prices nothing for an empty class. Its CCP
-branch reads the entity type, so it also requires a class; without that, a flagged
-guarantor booked `ccp` kept its QCCP 2% / 4% weight and was substituted on SA and F-IRB
-legs. The covered leg therefore keeps the borrower's own risk weight, PD and LGD, and its
-output-floor SA-equivalent, for a flagged guarantor of every entity type. This is pinned
-end to end in both regimes by
-`tests/acceptance/test_p1_395_flagged_natural_person_guarantor_pipeline.py`.
+by both the SA and the IRB substitution paths) prices nothing for an empty class: its one
+branch that also reads the entity type (named MDB) requires a class too. The covered leg
+therefore keeps the borrower's own risk weight, PD and LGD, and its output-floor
+SA-equivalent, for a flagged guarantor of every entity type. This is pinned end to end in
+both regimes by `tests/acceptance/test_p1_395_flagged_natural_person_guarantor_pipeline.py`.
+
+**A CCP guarantor is an institution or a corporate, never 2% / 4% (P1.396).** A guarantee
+is not a trade exposure. Art. 107(2), identical in CRR and PS1/26: *"For trade exposures
+and for default fund contributions to a central counterparty, institutions shall apply the
+treatment set out in [Section 9] ... For all other types of exposures to a central
+counterparty, institutions shall treat those exposures as follows: (a) as exposures to an
+institution for other types of exposures to a qualifying CCP; (b) as exposures to a
+corporate for other types of exposures to a non-qualifying CCP."* Art. 235(1) prices the
+covered part at the weight *"of exposures to the protection provider as specified under
+Chapter 2"* (PS1/26: *"of a comparable direct exposure to the protection provider"* under
+the SA). So:
+
+- a qualifying CCP (`is_qccp` True) keeps the institution class the entity map gives
+  `ccp`, is admitted by (1)(h), and its guarantee takes the institution weight: CRR
+  Art. 120 Table 3 / Art. 121, Basel 3.1 ECRA Table 3 or SCRA for an unrated one;
+- any other CCP (`is_qccp` False; the loader seals a null or unsupplied flag to False) is
+  booked `corporate` before the gate runs
+  (`guarantor_eligibility.demote_non_qualifying_ccp_guarantors`). It is then an "other
+  corporate entity": eligible with an ECAI assessment (corporate weight, CRR Table 5 /
+  Basel 3.1 Table 6), or with an internal rating on an IRB beneficiary (parameter
+  substitution under the corporate class), and otherwise declined with a CRM013 that names
+  the non-qualifying CCP. Its guaranteed part flows into the corporate class in COREP.
+
+The CCR (CRR) Part Art. 306(1) / 305(3) 2% / 4% weights apply only to SA-CCR and FCCM trade
+rows facing a qualifying CCP (`engine/sa/ccp_exposures.py`). The guarantor RW chain no
+longer has a CCP branch, and the guarantor's `is_ccp_client_cleared` flag, a property of a
+trade rather than of a protection provider, is not read. Pinned in both regimes by
+`tests/unit/crm/test_p1_396_ccp_guarantor.py` and, end to end with the Basel 3.1
+output-floor SA-equivalent, `tests/acceptance/test_p1_396_ccp_guarantor_pipeline.py`.
 
 **A-IRB (own-LGD) beneficiaries are outside this list.** Art. 108(2): *"For an exposure to
 which an institution applies the IRB Approach by using their own estimates of LGD and

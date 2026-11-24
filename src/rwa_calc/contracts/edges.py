@@ -1497,7 +1497,6 @@ def _crm_added_columns() -> dict[str, EdgeColumn]:
             dtype=pl.String, required=False, inject=False, citation="CRR Art. 235"
         ),
         "guarantor_country_code": EdgeColumn(dtype=pl.String, required=False),
-        "guarantor_is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean, required=False),
         "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False),
         "guarantor_cqs": EdgeColumn(dtype=pl.Int8, required=False, citation="CRR Art. 235"),
         "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False, citation="CRR Art. 161/236"),
@@ -1896,7 +1895,6 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         "guarantor_cqs": EdgeColumn(dtype=pl.Int8, required=False),
         "guarantor_entity_type": EdgeColumn(dtype=pl.String, required=False, inject=False),
         "guarantor_internal_pd": EdgeColumn(dtype=pl.Float64, required=False),
-        "guarantor_is_ccp_client_cleared": EdgeColumn(dtype=pl.Boolean, required=False),
         "guarantor_pd": EdgeColumn(dtype=pl.Float64, required=False),
         "guarantor_rw": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "guarantor_scra_grade": EdgeColumn(dtype=pl.String, required=False),

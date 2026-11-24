@@ -32,8 +32,12 @@ References:
 - CRR Art. 122: corporate risk weights (via
   ``build_corporate_guarantor_rw_expr``)
 - CRR Art. 235 / PRA PS1/26 Art. 235: SA risk-weight substitution method
-  (RWSM) for unfunded credit protection
-- CRR Art. 306, CRE54.14-15: QCCP 2% / 4% risk weights
+  (RWSM) for unfunded credit protection — the covered part takes the SA weight
+  of a (comparable) direct exposure to the protection provider
+- CRR Art. 107(2) / PRA PS1/26 Art. 107(2): a guarantee from a CCP is not a
+  trade exposure, so it is priced as an exposure to an institution (qualifying
+  CCP) or a corporate (non-qualifying — the class the CRM stage books it in),
+  never at the CCR (CRR) Part Art. 306 2% / 4% trade-exposure weights
 - PRA PS1/26 Art. 114-122: Basel 3.1 equivalents (PSE / RGLA tables are
   framework-identical; institution ECRA / SCRA, corporate Table 6 and the
   non-named-MDB treatment differ and are selected via ``is_basel_3_1``)
@@ -49,7 +53,6 @@ from watchfire import cites
 
 from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.sa.central_bank import ecb_rw_expr, is_ecb_expr
-from rwa_calc.rulebook.compile import scalar_value
 from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
@@ -110,10 +113,6 @@ _MDB_UNRATED_RW: Decimal = _CRR_PACK.scalar_param("mdb_unrated_rw").value
 _PSE_UNRATED_DEFAULT_RW: Decimal = _CRR_PACK.scalar_param("pse_unrated_default_rw").value
 _RGLA_DOMESTIC_CURRENCY_RW: Decimal = _CRR_PACK.scalar_param("rgla_domestic_currency_rw").value
 
-# Invariant SA risk weights pre-converted to float (QCCP Art. 306).
-_QCCP_CLIENT_CLEARED_RW = scalar_value(_CRR_PACK.scalar_param("qccp_client_cleared_rw"))
-_QCCP_PROPRIETARY_RW = scalar_value(_CRR_PACK.scalar_param("qccp_proprietary_rw"))
-
 
 @cites("CRR Art. 114")
 @cites("CRR Art. 114(3)")
@@ -131,7 +130,6 @@ def build_guarantor_rw_expr(
     entity_type_col: str,
     cqs_col: str,
     country_code_col: str,
-    ccp_client_cleared_col: str,
     scra_grade_col: str,
     is_basel_3_1: bool,
     domestic_cgcb_expr: pl.Expr | None = None,
@@ -151,7 +149,6 @@ def build_guarantor_rw_expr(
         ECB (Art. 114(3)) -> 0%, whatever its CQS, country or currency
         domestic CGCB sovereign (Art. 114(4)/(7)) -> 0%
         CGCB CQS table (Art. 114 Table 1)
-        CCP (CRR Art. 306, CRE54.14-15)
         International Organisation (Art. 118) -> 0%
         Named MDB (Art. 117(2)) -> 0%
         Non-named MDB (Art. 117(1)) — PS1/26 Table 2B under Basel 3.1;
@@ -174,12 +171,21 @@ def build_guarantor_rw_expr(
     ECB is supranational).
 
     An empty (or null) guarantor class prices nothing: every branch requires a
-    class, including the three that also read the entity type (ECB, CCP, named
-    MDB).
+    class, including the two that also read the entity type (ECB, named MDB).
     That is how a guarantor declined by the Art. 201 gate
     (``engine/crm/guarantor_eligibility.py``), which clears the class, and an
     unmapped guarantor both reach null and so no substitution on the SA and
     IRB paths alike.
+
+    There is no CCP branch. Art. 235(1) prices the covered part at "the risk
+    weight of a comparable direct exposure to the protection provider" under the
+    SA, and a guarantee is not a trade exposure: Art. 107(2)(a) makes it an
+    exposure to an institution for a qualifying CCP, (b) to a corporate for any
+    other. The CRM stage books a ``ccp`` guarantor in that class
+    (``guarantor_eligibility.demote_non_qualifying_ccp_guarantors``), so the
+    institution and corporate branches below price it; the Art. 306 2% / 4%
+    trade-exposure weights apply to SA-CCR / FCCM trade rows only
+    (``engine/sa/ccp_exposures.py``) (P1.396).
 
     The unrated PSE / RGLA fallback is the documented SA-side approximation
     (no guarantor sovereign-CQS join exists in the CRM column production):
@@ -191,20 +197,18 @@ def build_guarantor_rw_expr(
         exposure_class_col: Name of the guarantor SA exposure-class column
             (e.g. ``guarantor_exposure_class``).
         entity_type_col: Name of the guarantor entity-type column — used for
-            the Art. 114(3) ECB (``central_bank_ecb``) branch, the CCP override
-            and the named-MDB (``mdb_named``) carve-out.
+            the Art. 114(3) ECB (``central_bank_ecb``) branch and the named-MDB
+            (``mdb_named``) carve-out.
         cqs_col: Name of the integer guarantor CQS column.
         country_code_col: Name of the guarantor country-code column — drives
             the unrated PSE / RGLA GB-vs-other approximation.
-        ccp_client_cleared_col: Name of the Boolean client-cleared flag
-            column (null -> proprietary 2%).
         scra_grade_col: Name of the guarantor SCRA-grade column threaded
             into ``build_institution_guarantor_rw_expr`` for the B31 unrated
             institution dispatch.
         is_basel_3_1: Select PS1/26 tables (institution ECRA / corporate
             Table 6 / MDB Table 2B) when True, CRR tables when False — for
             MDBs that means the Art. 117(1) institution treatment, since CRR
-            has no MDB table. PSE / RGLA / IO / CCP values are
+            has no MDB table. PSE / RGLA / IO values are
             framework-identical. Threaded by both live call sites from the
             cited ``sa_revised_risk_weight_tables`` pack Feature.
         domestic_cgcb_expr: Caller-supplied Art. 114(4)/(7) domestic-currency
@@ -253,17 +257,6 @@ def build_guarantor_rw_expr(
                 cgcb_unrated,
             )
         )
-        # CCP guarantors: 2% proprietary / 4% client-cleared
-        # (CRR Art. 306, CRE54.14-15) — overrides institution CQS weights.
-        # Keyed on the entity type, so it must also require a guarantor class:
-        # the Art. 201 gate declines a guarantor by clearing its class, and a
-        # cleared class prices nothing (P1.395).
-        .when((pl.col(entity_type_col) == "ccp") & (gec != ""))
-        .then(
-            pl.when(pl.col(ccp_client_cleared_col).fill_null(False))
-            .then(pl.lit(_QCCP_CLIENT_CLEARED_RW))
-            .otherwise(pl.lit(_QCCP_PROPRIETARY_RW))
-        )
         # International Organisation (Art. 118): 0% unconditional.
         .when(gec == "international_organisation")
         .then(pl.lit(float(_IO_ZERO_RW)))
@@ -294,7 +287,8 @@ def build_guarantor_rw_expr(
         # Institution guarantors — RW driven from institution_rw_crr /
         # institution_rw_b31_ecra so the pack remains the single source of
         # truth. When the short-term flag evaluates True (CRR/PS1/26
-        # Art. 120(2)), the short-term Table 4 dicts apply instead.
+        # Art. 120(2)), the short-term Table 4 dicts apply instead. A qualifying
+        # CCP guarantor is priced here (Art. 107(2)(a)).
         .when(gec == "institution")
         .then(
             build_institution_guarantor_rw_expr(
@@ -322,7 +316,8 @@ def build_guarantor_rw_expr(
                 sovereign_derived_unrated,
             )
         )
-        # Corporate guarantors — Art. 122 corporate CQS table.
+        # Corporate guarantors — Art. 122 corporate CQS table (a non-qualifying
+        # CCP guarantor too, Art. 107(2)(b)).
         # Basel 3.1 (PRA PS1/26 Art. 122(2) Table 6): CQS3 = 75% (CRR: 100%);
         # PRA retains CQS5 = 150%. Gated on framework so CRR runs are
         # unchanged.

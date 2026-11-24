@@ -365,6 +365,7 @@ FRAGMENTS: tuple[Fragment, ...] = (
         "crm-haircuts",
         _names(
             "collateral_haircuts",
+            "fcm_non_financial_collateral_haircuts",
             "collateral_haircut_maturity_bands_revised",
             "fx_haircut",
             "zero_haircut_max_sovereign_cqs",
@@ -545,6 +546,7 @@ FRAGMENTS: tuple[Fragment, ...] = (
         "crr-crm-values",
         _names(
             "collateral_haircuts",
+            "fcm_non_financial_collateral_haircuts",
             "fx_haircut",
             "zero_haircut_max_sovereign_cqs",
             "restructuring_exclusion_haircut",

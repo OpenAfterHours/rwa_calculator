@@ -6,6 +6,10 @@ Pipeline position:
 
 Key responsibilities:
 - Apply supervisory haircuts by collateral type, CQS, and maturity
+- Non-financial collateral (receivables, immovable property, other physical)
+  takes its Foundation Collateral Method HC, not an Art. 224 haircut: 0 under
+  CRR (Art. 229 values C itself; Art. 230 Table 5 has no HC), 40% under PS1/26
+  Art. 230(2) (pack ``fcm_non_financial_collateral_haircuts``, D4.75)
 - Framework-conditional logic: CRR (Art. 224) vs Basel 3.1 (CRE22.52-53)
 - FX mismatch haircuts (8%, same under both frameworks); a null collateral
   currency is a mismatch; non-financial collateral takes H_fx under Basel 3.1
@@ -24,6 +28,7 @@ References:
     CRR Art. 224: Supervisory haircuts (3 maturity bands)
     CRR Art. 227: Zero volatility adjustments for qualifying repos/SFTs
     CRR Art. 229(1) / PS1/26 Art. 229(1)(b): property value net of prior claims
+    CRR Art. 229 / PS1/26 Art. 230(2): HC on non-financial collateral (0% / 40%)
     CRR Art. 237: Maturity mismatch — eligibility conditions
     CRR Art. 238: Maturity mismatch — adjustment formula (CVAM)
     CRE22.52-53: Basel 3.1 supervisory haircuts (5 maturity bands, higher equity/long-dated)
@@ -49,10 +54,12 @@ from rwa_calc.engine.crm.eligibility import (
     equity_ineligible_expr,
     normalise_collateral_type_expr,
 )
+from rwa_calc.engine.crm.expressions import fcm_non_financial_haircut_expr
 from rwa_calc.engine.crm.haircut_tables import (
     calculate_adjusted_collateral_value,
     calculate_maturity_mismatch_adjustment,
     lookup_collateral_haircut,
+    lookup_fcm_non_financial_haircut,
     lookup_fx_haircut,
 )
 from rwa_calc.rulebook import RulepackV0
@@ -123,6 +130,9 @@ class HaircutCalculator:
     - Corporate bonds: 1% - 15% (significantly higher for long-dated)
     - Equity (main index): 20%, (other): 30%
     - Gold: 20%
+
+    Non-financial collateral (Art. 230): CRR 0% (Art. 229); Basel 3.1 40%
+    (PS1/26 Art. 230(2)). Not scaled by the liquidation period.
 
     FX mismatch: 8% (10-day base, same under both frameworks).
 
@@ -204,8 +214,9 @@ class HaircutCalculator:
         )
 
         # Calculate collateral-specific haircut based on type. The framework is
-        # selected by the per-call ``haircut_table`` derived from config above.
-        collateral = self._apply_collateral_haircuts(collateral, haircut_table)
+        # selected by the per-call ``haircut_table`` and pack derived from config
+        # above (the non-financial Art. 229/230 HC and the unplaced fall-through).
+        collateral = self._apply_collateral_haircuts(collateral, haircut_table, resolved_pack)
 
         # Scale collateral haircut and FX haircut by liquidation period (Art. 226(2))
         # H_m = H_10 × sqrt(T_m / 10)
@@ -542,6 +553,7 @@ class HaircutCalculator:
         self,
         collateral: pl.LazyFrame,
         haircut_table: pl.DataFrame,
+        resolved_pack: ResolvedRulepack,
     ) -> pl.LazyFrame:
         """Apply collateral-type-specific haircuts via lookup table join.
 
@@ -550,9 +562,16 @@ class HaircutCalculator:
         H_c and H_fx are set to 0%.  The ``_is_zero_haircut`` flag is propagated so
         ``apply_haircuts`` can also zero the FX haircut.
 
+        Non-financial collateral (a raw type in ``NON_FINANCIAL_COLLATERAL_TYPES``)
+        takes the Art. 229/230 HC (``fcm_non_financial_haircut_expr``): 0 under CRR,
+        40% under PS1/26 Art. 230(2). It has no Art. 224 row. Any other row the
+        Art. 224 join cannot place takes ``unplaced_collateral_haircut``.
+
         Args:
             collateral: Collateral data with normalised lookup keys
-            haircut_table: Framework-specific haircut table (CRR or Basel 3.1)
+            haircut_table: Framework-specific Art. 224 haircut table (CRR or Basel 3.1)
+            resolved_pack: The regime pack the non-financial HC and the unplaced
+                fall-through are read from
         """
         # Ensure issuer_type + Art. 197(1)(h) securitisation-eligibility columns
         # exist for bond-type normalization / the securitisation gate below.
@@ -677,7 +696,17 @@ class HaircutCalculator:
         # would otherwise take is irrelevant once the value is zeroed.
         _cln_ineligible = credit_linked_note_ineligible_expr(schema.names())
 
-        # Assign haircut: life insurance 0% → Art. 227 zero → ineligible bond 100% → lookup → 40%
+        # D4.75 — CRR Art. 229 / PS1/26 Art. 230(2): genuine non-financial
+        # collateral takes its Foundation Collateral Method HC, keyed on the RAW
+        # type (never on ``_lookup_type``, which also sends unplaced financial
+        # types to ``other_physical``).
+        _is_non_financial = (
+            pl.col("collateral_type").str.to_lowercase().is_in(NON_FINANCIAL_COLLATERAL_TYPES)
+        )
+        _unplaced = scalar_value(resolved_pack.scalar_param("unplaced_collateral_haircut"))
+
+        # Assign haircut: life insurance 0% → Art. 227 zero → ineligible bond 100%
+        # → non-financial Art. 229/230 HC → Art. 224 lookup → unplaced fall-through
         collateral = collateral.with_columns(
             [
                 _ineligible_bond.alias("_bond_ineligible"),
@@ -690,7 +719,9 @@ class HaircutCalculator:
                 .then(pl.lit(0.0))
                 .when(_ineligible_bond)
                 .then(pl.lit(1.0))
-                .otherwise(pl.col("haircut").fill_null(0.40))
+                .when(_is_non_financial)
+                .then(fcm_non_financial_haircut_expr(resolved_pack))
+                .otherwise(pl.col("haircut").fill_null(_unplaced))
                 .alias("collateral_haircut"),
             ]
         ).drop(
@@ -902,15 +933,19 @@ class HaircutCalculator:
         if collateral_type.lower() == "credit_linked_note":
             collateral_type = "cash"
 
-        # Get collateral haircut scaled for liquidation period (None = ineligible per Art. 197)
-        coll_haircut = lookup_collateral_haircut(
-            collateral_type=collateral_type,
-            cqs=cqs,
-            residual_maturity_years=residual_maturity_years,
-            is_main_index=is_main_index,
-            is_basel_3_1=is_basel_3_1,
-            liquidation_period_days=liquidation_period_days,
-        )
+        # Non-financial collateral takes its Art. 229/230 HC, as apply_haircuts does
+        # (D4.75); any other type its Art. 224 haircut scaled for the liquidation
+        # period (None = ineligible per Art. 197).
+        coll_haircut = lookup_fcm_non_financial_haircut(collateral_type, is_basel_3_1=is_basel_3_1)
+        if coll_haircut is None:
+            coll_haircut = lookup_collateral_haircut(
+                collateral_type=collateral_type,
+                cqs=cqs,
+                residual_maturity_years=residual_maturity_years,
+                is_main_index=is_main_index,
+                is_basel_3_1=is_basel_3_1,
+                liquidation_period_days=liquidation_period_days,
+            )
 
         # Ineligible bonds: zero adjusted value
         if coll_haircut is None:

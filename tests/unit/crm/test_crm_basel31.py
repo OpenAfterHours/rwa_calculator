@@ -214,23 +214,17 @@ class TestBasel31ReceivablesHaircut:
         result = lookup_collateral_haircut("trade_receivables", is_basel_3_1=True)
         assert result == Decimal("0.40")
 
-    def test_b31_receivables_haircut_in_dataframe(self) -> None:
-        """B31 haircut DataFrame has 40% for receivables row."""
-        df = get_haircut_table(is_basel_3_1=True)
-        rec_row = df.filter(pl.col("collateral_type") == "receivables")
-        assert rec_row.shape[0] == 1
-        assert rec_row["haircut"][0] == pytest.approx(0.40)
+    @pytest.mark.parametrize("is_basel_3_1", [False, True])
+    def test_receivables_have_no_art_224_dataframe_row(self, is_basel_3_1: bool) -> None:
+        """The Art. 224 join table holds no receivables row in either regime (D4.75).
 
-    def test_crr_receivables_haircut_in_dataframe(self) -> None:
-        """CRR haircut DataFrame has 0% for receivables row (P1.165).
-
-        Art. 224 has no receivables row; CRR Art. 230 LGD* / 1.25x OC mechanism
-        provides the entire treatment.
+        Receivables have no Art. 224 row. Their HC (CRR 0, P1.165; PS1/26
+        Art. 230(2) 40%) is the pack entry ``fcm_non_financial_collateral_haircuts``,
+        which apply_haircuts reads by raw collateral type and which the dict views
+        above expose.
         """
-        df = get_haircut_table(is_basel_3_1=False)
-        rec_row = df.filter(pl.col("collateral_type") == "receivables")
-        assert rec_row.shape[0] == 1
-        assert rec_row["haircut"][0] == pytest.approx(0.0)
+        df = get_haircut_table(is_basel_3_1=is_basel_3_1)
+        assert df.filter(pl.col("collateral_type") == "receivables").height == 0
 
     def test_b31_single_haircut_receivables_40pct(self) -> None:
         """HaircutCalculator.calculate_single_haircut applies 40% for B31 receivables."""

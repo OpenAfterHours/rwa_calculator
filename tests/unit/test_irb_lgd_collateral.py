@@ -340,8 +340,8 @@ class TestFIRBSubordinatedCollateralisedLGD:
         firb_config: CalculationConfig,
     ) -> None:
         """Subordinated F-IRB fully secured by other physical should have LGD=70%."""
-        # Other physical gets 40% supervisory haircut (CRR Art. 224), so need
-        # market_value * 0.60 / 1.40 >= EAD for full coverage.
+        # CRR Art. 229(3) values other physical collateral at market value (no
+        # HC), so market_value / 1.40 (C**) >= EAD gives full coverage.
         bundle = create_classified_bundle(
             exposures_data={
                 "exposure_reference": ["EXP001"],
@@ -361,7 +361,7 @@ class TestFIRBSubordinatedCollateralisedLGD:
                 "beneficiary_reference": ["EXP001"],
                 "beneficiary_type": ["exposure"],
                 "collateral_type": ["other_physical"],
-                "market_value": [2500000.0],  # After 40% HC: 1.5M; eff_sec=1.5M/1.4=1.07M>1M
+                "market_value": [2500000.0],  # eff_sec = 2.5M/1.4 = 1.79M > 1M
                 "value_after_haircut": [2500000.0],
                 "residual_maturity_years": [10.0],
                 "currency": ["GBP"],

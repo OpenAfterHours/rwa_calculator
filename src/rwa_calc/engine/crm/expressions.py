@@ -202,6 +202,40 @@ def overcollateralisation_ratio_expr(pack: ResolvedRulepack) -> pl.Expr:
     )
 
 
+@cites("CRR Art. 229")
+@cites("PS1/26 Art. 230(2)")
+def fcm_non_financial_haircut_expr(pack: ResolvedRulepack) -> pl.Expr:
+    """Build expression mapping a non-financial collateral_type to its HC.
+
+    The volatility adjustment on collateral recognised under the F-IRB Foundation
+    Collateral Method, from the pack's ``fcm_non_financial_collateral_haircuts``:
+    0 under CRR, which values the collateral C itself (Art. 229(1)-(3): property
+    at market or mortgage-lending value net of prior claims, receivables at the
+    amount receivable, other physical collateral at market value) and reduces it
+    only through the Art. 230 Table 5 C* gate and C** divisor; 40% for every type
+    under PS1/26 Art. 230(2).
+
+    Keyed on the raw ``collateral_type`` (lower-cased) in the three type sets that
+    make up ``NON_FINANCIAL_COLLATERAL_TYPES``, never on the normalised haircut
+    lookup token or the CRM category. The lookup token sends every type the
+    Art. 224 lookup cannot place (``financial_collateral``, ``covered_bonds``, an
+    issuer-less ``bond``, ``ciu``, any unrecognised type) to ``other_physical``;
+    the CRM category sends only the issuer-less ``bond`` there. Those rows keep
+    the conservative ``unplaced_collateral_haircut``. Null for every other row.
+    """
+    hc = lookup_float_map(pack.lookup("fcm_non_financial_collateral_haircuts"))
+    ct = _coll_type_lower()
+    return (
+        pl.when(ct.is_in(RECEIVABLE_COLLATERAL_TYPES))
+        .then(pl.lit(hc["receivables"]))
+        .when(ct.is_in(REAL_ESTATE_COLLATERAL_TYPES))
+        .then(pl.lit(hc["real_estate"]))
+        .when(ct.is_in(OTHER_PHYSICAL_COLLATERAL_TYPES))
+        .then(pl.lit(hc["other_physical"]))
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+    )
+
+
 def min_collateralisation_threshold_expr(pack: ResolvedRulepack) -> pl.Expr:
     """Build expression mapping collateral_type to minimum collateralisation threshold.
 

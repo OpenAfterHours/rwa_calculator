@@ -56,6 +56,7 @@ import pytest
 from tests.fixtures.reporting_funded_protection_portfolio import (
     A199_CARRIER_TO_C08_COLUMN,
     A199_CARRIER_TO_CR7A_COLUMN,
+    A199_COLLATERAL_PHYSICAL,
     A199_LIVE_SIBLING_CARRIER,
     A199_LN_ANCHOR,
     A199_LN_PHYSICAL,
@@ -335,6 +336,29 @@ class TestArticle199ReachesTheIrbCrmColumns:
         total = _total_row(corep.c08_01[_IRB_SHEET[regime_key]])
         column = A199_CARRIER_TO_C08_COLUMN[A199_LIVE_SIBLING_CARRIER]
         assert float(total[column]) > 0.0, f"{regime_key}: col {column} went dark"
+
+    @pytest.mark.parametrize(
+        ("regime_key", "share_of_market_value"),
+        # CRR Annex II C 08.01 col 0200 takes the Art. 199(6)/(8) and Art. 229(3)
+        # value: "Institutions shall value physical collateral other than
+        # immovable property at its market value" (no HC). PS1/26 Annex II
+        # OF 08.01 cols 0190-0210 take the adjusted Ci after the Art. 230(2) 40% HC.
+        [("crr", 1.0), ("b31", 0.60)],
+    )
+    def test_column_0200_reports_the_regime_valuation_basis(
+        self, regime_key: str, share_of_market_value: float
+    ) -> None:
+        """An absolute pin on the other-physical cell. The neighbouring tests are
+        relative (> 0, and equal to the ledger carrier), so a haircut applied on
+        the wrong basis passes them; until D4.75 CRR reported 60% of the market
+        value here."""
+        _results, corep, _p3 = _run_art199(regime_key)
+
+        total = _total_row(corep.c08_01[_IRB_SHEET[regime_key]])
+        column = A199_CARRIER_TO_C08_COLUMN["reporting_crm_lgd_other_physical"]
+        assert float(total[column]) == pytest.approx(
+            A199_COLLATERAL_PHYSICAL * share_of_market_value, rel=1e-9
+        )
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_each_column_sums_the_carrier_it_reports(self, regime_key: str) -> None:

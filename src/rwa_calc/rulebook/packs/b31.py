@@ -1259,8 +1259,9 @@ ENTRIES: dict[str, RuleEntry] = {
     # Basel 3.1 FCCM supervisory haircuts (PRA PS1/26 Art. 224 Tables 1/3 /
     # CRE22.52-53). Overrides the CRR table of the same name. 5 maturity bands
     # (0_1y / 1_3y / 3_5y / 5_10y / 10y_plus); long-dated corporate steps up to
-    # 12%/20%, gold 15%->20%, equity 15%/25%->20%/30%; non-financial Art. 230(2)
-    # HC is 40% for all types. cqs 2 and 3 carry identical values.
+    # 12%/20%, gold 15%->20%, equity 15%/25%->20%/30%. cqs 2 and 3 carry identical
+    # values. The non-financial Art. 230(2) HC is ``fcm_non_financial_collateral_haircuts``
+    # below, not an Art. 224 row (D4.75).
     "collateral_haircuts": DecisionTable(
         name="collateral_haircuts",
         key_names=("collateral_type", "cqs", "maturity_band", "is_main_index"),
@@ -1325,12 +1326,31 @@ ENTRIES: dict[str, RuleEntry] = {
             (("securitisation", 3, "10y_plus", None), Decimal("0.24")),
             (("equity", None, None, True), Decimal("0.20")),
             (("equity", None, None, False), Decimal("0.30")),
-            (("real_estate", None, None, None), Decimal("0.40")),
-            (("receivables", None, None, None), Decimal("0.40")),
-            (("other_physical", None, None, None), Decimal("0.40")),
         ),
         citation=Citation(
             "PS1/26", "224", "Basel 3.1 FCCM supervisory haircuts (5 maturity bands)"
+        ),
+    ),
+    # PS1/26 Art. 230(2): HC for each non-financial Foundation Collateral Method
+    # type ("Receivables 20% 40% / Immovable property 20% 40% / Other physical
+    # collateral 25% 40%", the LGDS and HC columns). Art. 230(1) builds ES "after
+    # the application of: (a) the volatility adjustment applicable for the type of
+    # collateral (HC), as specified in paragraph 2". Overrides the CRR entry of the
+    # same name, which is 0 for every type (CRR Art. 229 values C itself; C*/C**
+    # do the work, both deleted here). Not scaled by the Art. 226 liquidation
+    # period (engine/crm/haircuts.py).
+    "fcm_non_financial_collateral_haircuts": LookupTable(
+        name="fcm_non_financial_collateral_haircuts",
+        entries={
+            "receivables": Decimal("0.40"),
+            "real_estate": Decimal("0.40"),
+            "other_physical": Decimal("0.40"),
+        },
+        key="collateral_category",
+        citation=Citation(
+            "PS1/26",
+            "230",
+            "(2) HC 40% receivables / immovable property / other physical collateral",
         ),
     ),
     # =========================================================================

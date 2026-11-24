@@ -432,9 +432,9 @@ def _non_financial_collateral_lf(
 
     Non-financial collateral is recognised under CRR Art. 230 (Foundation
     Collateral Method) — not the Art. 224 supervisory-haircut comprehensive
-    method — so it carries ``is_eligible_financial_collateral=False`` and the
-    test asserts both the H_c column and the H_fx column are 0.0 regardless of
-    currency mismatch.
+    method — so it carries ``is_eligible_financial_collateral=False``. The tests
+    below assert the H_fx column; the H_c column (CRR 0 by Art. 229, PS1/26
+    Art. 230(2) 40%) is pinned in ``test_art_229_non_financial_valuation.py``.
     """
     data: dict[str, list[object]] = {
         "collateral_reference": ["COLL_NF"],

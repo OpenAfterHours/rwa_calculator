@@ -56,10 +56,13 @@ from rwa_calc.engine.crm.processor import CRMProcessor
 CRR_LGDU_SENIOR: float = 0.45  # CRR Art. 161(1)(a) senior unsecured corporate
 B31_LGDU_SENIOR: float = 0.40  # PS1/26 Art. 161(1)(aa) senior unsecured non-FSE
 # CRR other_physical FCM hand-calc (£10m exposure, £10m leased asset):
-#   Art. 230(2) other-physical FCM haircut 40% -> £6m; OC=1.4× ->
-#   effectively_secured = 6m/1.4 = £4.285714m; unsecured = £5.714286m;
-#   LGD* = (0.40·4.285714m + 0.45·5.714286m)/10m = 0.428571 (LGDS 40%, LGDU 45%).
-CRR_SECURED_LGD_OTHER_PHYSICAL: float = 0.428571
+#   Art. 229(3) values the asset at market value (no HC; Art. 230 Table 5 has no
+#   HC column) -> C = £10m; C** = 1.4× -> effectively_secured = 10m/1.4 =
+#   £7.142857m; unsecured = £2.857143m;
+#   LGD* = (0.40·7.142857m + 0.45·2.857143m)/10m = 0.414286 (LGDS 40%, LGDU 45%).
+# Until D4.75 the PS1/26 Art. 230(2) 40% HC was also applied (C = £6m), giving
+# 0.428571 — the haircut counted twice with the C** divisor.
+CRR_SECURED_LGD_OTHER_PHYSICAL: float = 0.414286
 
 # =============================================================================
 # Fixtures
@@ -208,8 +211,9 @@ class TestLeaseAttestationRecognised:
         """CRR: a lease-attested other-physical asset is recognised — LGD* < LGDU.
 
         The general IRB flag is False: recognition comes SOLELY from the Art. 211
-        lease attestation, proving it is an independent route. LGD* = 0.428571
-        (Art. 230(2) haircut 40%, OC=1.4×, LGDS other_physical = 40%, LGDU = 45%).
+        lease attestation, proving it is an independent route. LGD* = 0.414286
+        (Art. 229(3) market value, no HC; C**=1.4×, LGDS other_physical = 40%,
+        LGDU = 45%).
         """
         bundle = _create_bundle(
             "other_physical",
@@ -220,7 +224,7 @@ class TestLeaseAttestationRecognised:
         result = _run(processor, firb_crr_config, bundle)
 
         lgd = _lgd_post_crm(result)
-        assert lgd == pytest.approx(CRR_SECURED_LGD_OTHER_PHYSICAL, abs=1e-3)
+        assert lgd == pytest.approx(CRR_SECURED_LGD_OTHER_PHYSICAL, abs=1e-6)
         assert lgd < CRR_LGDU_SENIOR
 
     def test_lease_attested_emits_no_warning_crr(

@@ -1241,7 +1241,9 @@ ENTRIES: dict[str, RuleEntry] = {
     # frame by compile.decision_table_df and consumed in engine/crm/haircuts.py;
     # ``None`` key entries are the non-bond / non-equity rows (cqs / band /
     # is_main_index do not apply). cqs 2 and 3 carry identical values (Art. 224
-    # Table 1 groups CQS 2-3).
+    # Table 1 groups CQS 2-3). Non-financial collateral (receivables, immovable
+    # property, other physical) has no Art. 224 row: its Art. 229/230 HC is
+    # ``fcm_non_financial_collateral_haircuts`` below (D4.75).
     "collateral_haircuts": DecisionTable(
         name="collateral_haircuts",
         key_names=("collateral_type", "cqs", "maturity_band", "is_main_index"),
@@ -1285,11 +1287,35 @@ ENTRIES: dict[str, RuleEntry] = {
             (("securitisation", 3, "5y_plus", None), Decimal("0.24")),
             (("equity", None, None, True), Decimal("0.15")),
             (("equity", None, None, False), Decimal("0.25")),
-            (("real_estate", None, None, None), Decimal("0.00")),
-            (("receivables", None, None, None), Decimal("0")),
-            (("other_physical", None, None, None), Decimal("0.40")),
         ),
         citation=Citation("CRR", "224", "FCCM supervisory haircuts Table 1 (3 maturity bands)"),
+    ),
+    # The volatility adjustment (HC) on non-financial collateral recognised under
+    # the F-IRB Foundation Collateral Method, keyed by FCM collateral category and
+    # read for a row whose raw collateral_type is in
+    # data/schemas.py::NON_FINANCIAL_COLLATERAL_TYPES. CRR has none: Art. 229 values
+    # the collateral C itself ("the market value or mortgage lending value ...
+    # reduced ... to take account of any prior claims" (1); "the amount receivable"
+    # (2); "Institutions shall value physical collateral other than immovable
+    # property at its market value" (3)), and Art. 230(2) Table 5 carries only the
+    # LGD*, C* and C** columns. The only reductions are the C* gate and the C**
+    # divisor (``min_collateralisation_thresholds`` / ``overcollateralisation_ratios``).
+    # Until D4.75 other physical collateral took the PS1/26 Art. 230(2) 40% here
+    # as well, before the 1.40 C** divisor, counting the haircut twice.
+    "fcm_non_financial_collateral_haircuts": LookupTable(
+        name="fcm_non_financial_collateral_haircuts",
+        entries={
+            "receivables": Decimal("0"),
+            "real_estate": Decimal("0"),
+            "other_physical": Decimal("0"),
+        },
+        key="collateral_category",
+        citation=Citation(
+            "CRR",
+            "229",
+            "C at market value / MLV net of prior claims / amount receivable; "
+            "Art. 230(2) Table 5 has no HC column",
+        ),
     ),
     # =========================================================================
     # SA EXPOSURE-CLASS CQS RISK-WEIGHT TABLES (CRR Art. 114-117)

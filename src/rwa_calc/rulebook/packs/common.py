@@ -13,7 +13,8 @@ Key responsibilities:
 
 References:
 - CRR Art. 224: FCCM supervisory haircuts (the FX/currency-mismatch
-  haircut, 8% base).
+  haircut, 8% base; the conservative fall-through for collateral with no
+  Table 1 / Table 3 row).
 - CRR Art. 274(2) / BCBS CRE52.1: SA-CCR default supervisory alpha (1.4).
 - CRR Art. 222 / PRA PS1/26 Art. 222: Financial Collateral Simple Method
   floors and carve-outs (retained for SA exposures under Basel 3.1).
@@ -39,6 +40,29 @@ ENTRIES: dict[str, RuleEntry] = {
         name="fx_haircut",
         value=Decimal("0.08"),
         citation=Citation("CRR", "224"),
+    ),
+    # Conservative fall-through for collateral the Art. 224 lookup cannot place:
+    # every type ``engine/crm/eligibility.py::normalise_collateral_type_expr`` sends
+    # to its ``other_physical`` token that is NOT genuine non-financial collateral
+    # (``financial_collateral``, ``covered_bonds``, an issuer-less ``bond``, ``ciu``,
+    # an unrecognised string), a Table 1 key with no row (e.g. an unknown maturity
+    # band), and the SFT exposure-side fall-through for a type the SFT path cannot
+    # identify as a security (engine/sft/fccm.py). NOT a regulatory value: Art. 224
+    # gives these rows no haircut, and none lower than this can be identified for
+    # them. It was the CRR / Basel 3.1 ``other_physical`` row of
+    # ``collateral_haircuts`` until D4.75 separated it from the Art. 229/230 HC of
+    # genuine other physical collateral (``fcm_non_financial_collateral_haircuts``).
+    # Regime-invariant. The lending-side pipeline scales it by the Art. 226
+    # liquidation period like an Art. 224 haircut (engine/crm/haircuts.py).
+    "unplaced_collateral_haircut": ScalarParam(
+        name="unplaced_collateral_haircut",
+        value=Decimal("0.40"),
+        citation=Citation(
+            "CRR",
+            "224",
+            "conservative fall-through for collateral with no Table 1 / Table 3 row; "
+            "not a regulatory value",
+        ),
     ),
     # CDS restructuring-exclusion haircut (CRR Art. 233(2) / PRA PS1/26
     # Art. 233(2)): unfunded protection without restructuring as a credit event

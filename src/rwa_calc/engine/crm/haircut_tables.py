@@ -36,11 +36,14 @@ from decimal import Decimal
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.schemas import COLLATERAL_TYPE_CATEGORY, NON_FINANCIAL_COLLATERAL_TYPES
 from rwa_calc.rulebook.resolve import ResolvedRulepack, resolve
 
-# Supervisory-haircut VALUES live in the rulepack: the ``collateral_haircuts``
-# DecisionTable (packs/crr.py + packs/b31.py) and the common ``fx_haircut``
-# scalar. They are read back here as the canonical module-level dicts/scalar so
+# Supervisory-haircut VALUES live in the rulepack: the Art. 224
+# ``collateral_haircuts`` DecisionTable and the Art. 229/230 HC of non-financial
+# collateral, ``fcm_non_financial_collateral_haircuts`` (packs/crr.py +
+# packs/b31.py), plus the common ``fx_haircut`` and ``unplaced_collateral_haircut``
+# scalars. They are read back here as the canonical module-level dicts/scalars so
 # this stays a thin pack-binding shim with one source of truth (the pack); every
 # function / DataFrame-builder consumer indexes the same names unchanged.
 _CRR_PACK = resolve("crr", date(2026, 1, 1))
@@ -48,13 +51,16 @@ _B31_PACK = resolve("b31", date(2027, 1, 1))
 
 
 def _haircuts_dict_from_pack(pack: ResolvedRulepack) -> dict[str, Decimal]:
-    """Render a ``collateral_haircuts`` DecisionTable to the historical str->Decimal dict.
+    """Render a pack's collateral haircuts to the historical str->Decimal dict.
 
-    Reconstructs the compressed dict key from each row's (collateral_type, cqs,
-    maturity_band, is_main_index) tuple — byte-identical to the former
-    module-level literal. CRR/B31 store cqs 2 and 3 as separate rows carrying
-    identical Art. 224 Table 1 values; both collapse onto the shared ``cqs2_3``
-    key (the non-bond / equity rows key off the collateral type / index flag).
+    Reconstructs the compressed dict key from each ``collateral_haircuts`` row's
+    (collateral_type, cqs, maturity_band, is_main_index) tuple — byte-identical to
+    the former module-level literal. CRR/B31 store cqs 2 and 3 as separate rows
+    carrying identical Art. 224 Table 1 values; both collapse onto the shared
+    ``cqs2_3`` key (the non-bond / equity rows key off the collateral type / index
+    flag). The ``real_estate`` / ``receivables`` / ``other_physical`` keys are the
+    Art. 229/230 HC from ``fcm_non_financial_collateral_haircuts`` (CRR 0, PS1/26
+    Art. 230(2) 40%), which has no Art. 224 row.
     """
     out: dict[str, Decimal] = {}
     for key_tuple, value in pack.decision("collateral_haircuts").rows:
@@ -71,6 +77,8 @@ def _haircuts_dict_from_pack(pack: ResolvedRulepack) -> dict[str, Decimal]:
         else:
             key = f"{collateral_type}_cqs{cqs}_{maturity_band}"
         out[key] = value
+    for category, value in pack.lookup("fcm_non_financial_collateral_haircuts").entries.items():
+        out[str(category)] = value
     return out
 
 
@@ -91,6 +99,12 @@ BASEL31_COLLATERAL_HAIRCUTS: dict[str, Decimal] = _haircuts_dict_from_pack(_B31_
 # 5-day: 5.657%, 10-day: 8%, 20-day: 11.314%. Common across CRR/B31 — read back
 # from the shared ``fx_haircut`` pack scalar (common.py).
 FX_HAIRCUT: Decimal = _CRR_PACK.scalar_param("fx_haircut").value
+
+# Conservative fall-through for collateral with no Art. 224 Table 1 / Table 3 row
+# and no Art. 229/230 HC (an unrecognised type string, the SFT exposure-side
+# fall-through). Common across CRR/B31 — read back from the shared
+# ``unplaced_collateral_haircut`` pack scalar (common.py).
+UNPLACED_COLLATERAL_HAIRCUT: Decimal = _CRR_PACK.scalar_param("unplaced_collateral_haircut").value
 
 
 def scale_haircut_for_liquidation_period(
@@ -214,10 +228,6 @@ _CRR_HAIRCUT_ROW_SPECS: tuple[_HaircutRowSpec, ...] = (
     # Equity
     ("equity", None, None, "equity_main_index", True),
     ("equity", None, None, "equity_other", False),
-    # Other
-    ("real_estate", None, None, "real_estate", None),
-    ("receivables", None, None, "receivables", None),
-    ("other_physical", None, None, "other_physical", None),
 )
 
 _B31_HAIRCUT_ROW_SPECS: tuple[_HaircutRowSpec, ...] = (
@@ -283,10 +293,6 @@ _B31_HAIRCUT_ROW_SPECS: tuple[_HaircutRowSpec, ...] = (
     # Equity
     ("equity", None, None, "equity_main_index", True),
     ("equity", None, None, "equity_other", False),
-    # Other
-    ("real_estate", None, None, "real_estate", None),
-    ("receivables", None, None, "receivables", None),
-    ("other_physical", None, None, "other_physical", None),
 )
 
 
@@ -430,6 +436,15 @@ def lookup_collateral_haircut(
     This is a convenience function for single lookups. For bulk processing,
     use the DataFrame tables with joins.
 
+    It is the Art. 224 volatility-adjustment lookup, and also the SFT
+    exposure-side fall-through (``engine/sft/fccm.py``). A type it cannot place —
+    including other physical collateral, which has no Art. 224 row — returns the
+    conservative ``UNPLACED_COLLATERAL_HAIRCUT``, unscaled. The Art. 229/230 HC
+    that the F-IRB Foundation Collateral Method applies to non-financial
+    collateral (CRR 0, PS1/26 Art. 230(2) 40%) is
+    ``fcm_non_financial_collateral_haircuts``, which
+    ``HaircutCalculator.calculate_single_haircut`` reads for those types instead.
+
     Args:
         collateral_type: Type of collateral
         cqs: Credit quality step of issuer (for debt securities)
@@ -519,8 +534,42 @@ def lookup_collateral_haircut(
     if coll_lower in ("real_estate", "property", "rre", "cre"):
         return Decimal("0.00")
 
-    # Other physical collateral — not subject to Art. 224 scaling
-    return table["other_physical"]
+    # Anything else, other physical collateral included (it has no Art. 224 row):
+    # the conservative fall-through, not subject to Art. 224 scaling here. Kept
+    # for the SFT exposure-side fall-through by owner decision (D4.75); the F-IRB
+    # Art. 229/230 HC of other physical collateral is table["other_physical"].
+    return UNPLACED_COLLATERAL_HAIRCUT
+
+
+@cites("CRR Art. 229")
+@cites("PS1/26 Art. 230(2)")
+def lookup_fcm_non_financial_haircut(
+    collateral_type: str,
+    *,
+    is_basel_3_1: bool = False,
+) -> Decimal | None:
+    """
+    Look up the Art. 229/230 HC of a non-financial collateral type.
+
+    The single-item sibling of
+    ``engine/crm/expressions.py::fcm_non_financial_haircut_expr``: 0 under CRR,
+    which values receivables, immovable property and other physical collateral
+    at the amount receivable / market value (Art. 229(1)-(3)) and reduces them
+    only through the Art. 230 Table 5 C* gate and C** divisor; 40% under PS1/26
+    Art. 230(2). Not scaled by the Art. 226 liquidation period.
+
+    Args:
+        collateral_type: Type of collateral (case-insensitive)
+        is_basel_3_1: Whether to use the PS1/26 values
+
+    Returns:
+        The HC, or None when the type is not in ``NON_FINANCIAL_COLLATERAL_TYPES``
+    """
+    coll_lower = collateral_type.lower()
+    if coll_lower not in NON_FINANCIAL_COLLATERAL_TYPES:
+        return None
+    table = BASEL31_COLLATERAL_HAIRCUTS if is_basel_3_1 else COLLATERAL_HAIRCUTS
+    return table[COLLATERAL_TYPE_CATEGORY[coll_lower]]
 
 
 def lookup_fx_haircut(

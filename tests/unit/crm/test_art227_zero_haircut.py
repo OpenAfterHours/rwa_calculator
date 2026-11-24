@@ -645,18 +645,23 @@ class TestArt227EdgeCases:
         assert result.collateral_haircut > Decimal("0.0")
 
     def test_other_physical_not_eligible(self, crr_calc: HaircutCalculator) -> None:
-        """Art. 227: other_physical collateral is never eligible for zero haircut."""
+        """Art. 227: other_physical collateral is never eligible for zero haircut.
+
+        Run under PS1/26, where the Art. 230(2) HC is 40%, so a surviving haircut
+        shows Art. 227 did not zero it. Under CRR the HC is 0 by Art. 229(3)
+        (D4.75), so the CRR result could not tell the two paths apart.
+        """
         result = crr_calc.calculate_single_haircut(
-            is_basel_3_1=False,
+            is_basel_3_1=True,
             collateral_type="other_physical",
             market_value=Decimal("1000000"),
             collateral_currency="GBP",
             exposure_currency="GBP",
             qualifies_for_zero_haircut=True,
         )
-        # Falls through to standard path → 40% default haircut
-        assert result.collateral_haircut > Decimal("0.0")
-        assert result.adjusted_value < Decimal("1000000")
+        # Falls through to the standard path -> PS1/26 Art. 230(2) 40% HC
+        assert result.collateral_haircut == Decimal("0.40")
+        assert result.adjusted_value == Decimal("600000")
 
     def test_zero_market_value(self, crr_calc: HaircutCalculator) -> None:
         """Art. 227: zero market value → adjusted value is 0 regardless."""

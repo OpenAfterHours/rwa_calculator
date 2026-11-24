@@ -783,7 +783,7 @@ class TestPerTypeMinThreshold:
 
         EAD=1000.
         RE MV=280 → HC=0% → VAH=280, 28% < 30% → FAILS per-type threshold.
-        OP MV=200 → HC=40% → VAH=120, 12% < 30% → FAILS per-type threshold.
+        OP MV=200 → HC=0% (Art. 229(3)) → VAH=200, 20% < 30% → FAILS per-type threshold.
         Combined NF=400, 40% > 30% → would pass OLD global check.
 
         Behavior: both zeroed. Only unsecured LGD applies.
@@ -832,7 +832,7 @@ class TestPerTypeMinThreshold:
 
         EAD=1000.
         RE MV=420 → HC=0% → VAH=420, 42% ≥ 30% ✓, eff=420/1.40=300
-        OP MV=200 → HC=40% → VAH=120, 12% < 30% ✗ → zeroed.
+        OP MV=200 → HC=0% (Art. 229(3)) → VAH=200, 20% < 30% ✗ → zeroed.
 
         Only RE contributes.  Total_secured=300, EU=700.
         lgd_secured = 0.35 (CRR RE senior)
@@ -1022,7 +1022,7 @@ class TestPerTypeMinThreshold:
 
         EAD=1000.
         RE MV=280 → HC=0% → VAH=280, 28% < 30% → FAILS per-type.
-        OP MV=200 → HC=40% → VAH=120, 12% < 30% → FAILS per-type.
+        OP MV=200 → HC=0% (Art. 229(3)) → VAH=200, 20% < 30% → FAILS per-type.
 
         Both zeroed under CRR too.
         lgd_post_crm = lgd_unsecured = 0.45 (CRR)

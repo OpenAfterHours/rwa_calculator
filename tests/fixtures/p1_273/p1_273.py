@@ -11,8 +11,9 @@ and the lessor attests the lease-specific Art. 211 conditions via
 not require the general ``is_eligible_irb_collateral`` flag.
 
 Each scenario is a £10m senior corporate F-IRB lease exposure secured by a £10m
-leased asset (``other_physical``, so a 40% Art. 230(2) FCM haircut applies);
-only the Art. 211 attestation differs:
+leased asset (``other_physical``: no HC under CRR, which values it at market
+value per Art. 229(3); the PS1/26 Art. 230(2) 40% HC under Basel 3.1); only the
+Art. 211 attestation differs:
 
     <regime>_lease_attested    — Art. 211 attested -> leased asset recognised,
                                  secured LGD substitutes and RWA falls.
@@ -21,8 +22,9 @@ only the Art. 211 attestation differs:
                                  unsecured supervisory value (the conservative
                                  pre-P1.273 lessor treatment).
 
-CRR: attested LGD* = 0.428571 (Art. 230(2) haircut 40%, OC=1.4×, LGDS other_physical 40%,
-LGDU 45%); unattested = LGDU 0.45. B31: attested LGD* = 0.31; unattested = LGDU
+CRR: attested LGD* = 0.414286 (Art. 229(3) market value, no HC; C**=1.4× ->
+secured 10m/1.4; LGDS other_physical 40%, LGDU 45%); unattested = LGDU 0.45.
+Until D4.75 the PS1/26 40% HC was also applied under CRR (0.428571). B31: attested LGD* = 0.31; unattested = LGDU
 0.40 (Art. 161(1)(aa) non-FSE).
 
 The bundle is assembled IN MEMORY (mirroring P1.271) — no parquet dependency, so
@@ -32,8 +34,9 @@ generation step.
 References:
     - CRR Art. 199(7): lease exposures treated as collateralised per Art. 211.
     - CRR Art. 211: requirements for treating lease exposures as collateralised.
-    - CRR Art. 230 / Art. 230(2): F-IRB Foundation Collateral Method — OC ratios
-      and the non-financial-collateral FCM haircut (other-physical 40%).
+    - CRR Art. 229(3) / Art. 230: F-IRB other physical collateral at market
+      value; Table 5 C** divisor 1.40 and LGD* 40%.
+    - PS1/26 Art. 230(2): the non-financial-collateral HC (other-physical 40%).
     - CRR Art. 161(1)(a) / PS1/26 Art. 161(1)(aa): senior unsecured LGDU.
     - IMPLEMENTATION_PLAN.md: P1.273.
 """
@@ -64,7 +67,7 @@ LEASE_TERM_YEARS: float = 7.0
 PD: float = 0.02
 
 # Expected F-IRB LGD outcomes (post-floor lgd_floored).
-CRR_ATTESTED_LGD: float = 0.428571  # Art. 230(2) haircut 40%, OC=1.4×, LGDS 40% / LGDU 45%
+CRR_ATTESTED_LGD: float = 0.414286  # Art. 229(3) no HC, C**=1.4×, LGDS 40% / LGDU 45%
 CRR_UNATTESTED_LGD: float = 0.45  # FCM gate zeroes ES -> LGDU (Art. 161(1)(a))
 B31_ATTESTED_LGD: float = 0.31  # B31 FCM continuous formula, LGDU 40%
 B31_UNATTESTED_LGD: float = 0.40  # FCM gate zeroes ES -> LGDU (Art. 161(1)(aa))

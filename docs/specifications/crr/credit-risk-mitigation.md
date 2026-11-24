@@ -178,6 +178,39 @@ independent Art. 194(4) check).
 
 Non-financial collateral does not use the supervisory volatility haircut framework (Art. 224). Instead, it is recognised through the **Foundation Collateral Method** (Art. 230-231) using LGDS values within the LGD* formula. See [F-IRB LGDS Values](#f-irb-lgds-values-art-230--art-161) below for the per-framework values.
 
+**No volatility adjustment (HC) under CRR.** Art. 229 values the collateral `C` itself:
+property at *"the market value or mortgage lending value reduced ... to take account of
+any prior claims"* (229(1)), receivables at *"the amount receivable"* (229(2)), and
+*"Institutions shall value physical collateral other than immovable property at its
+market value"* (229(3)). Art. 230(2) Table 5 has only LGD\*, C\* and C\*\* columns. The
+only reductions are the C\* gate and the C\*\* divisor (see
+[Overcollateralisation Ratios](#overcollateralisation-ratios)). PS1/26 Art. 230(2) is
+different: it sets **HC = 40%** for receivables, immovable property and other physical
+collateral, applied before the Hfx and maturity adjustments, and deletes C\*/C\*\*.
+
+| Collateral type | CRR HC | Basel 3.1 HC | Reference |
+|-----------------|--------|--------------|-----------|
+| Receivables | 0% | 40% | CRR Art. 229(2) / PS1/26 Art. 230(2) |
+| Immovable property | 0% | 40% | CRR Art. 229(1) / PS1/26 Art. 230(2) |
+| Other physical collateral | 0% | 40% | CRR Art. 229(3) / PS1/26 Art. 230(2) |
+
+The values are the pack entry `fcm_non_financial_collateral_haircuts`, read by
+`engine/crm/expressions.py::fcm_non_financial_haircut_expr` for a row whose raw
+`collateral_type` is in `NON_FINANCIAL_COLLATERAL_TYPES`, and not scaled by the Art. 226
+liquidation period. Until D4.75 the CRR pack gave other physical collateral the PS1/26
+40% as well. It was applied before the 1.40 C\*\* divisor, so the haircut was counted
+twice. It also cut `C` for the 30% C\* test, so a pledge covering 30–50% of the
+exposure fell back to LGDU with a spurious `CRM022`, and it understated C 08.01
+col 0200, which Annex II says holds the Art. 229(3) value.
+
+**Collateral the Art. 224 lookup cannot place** is a different population, with a
+different value. `financial_collateral`, `covered_bonds`, a `bond` with no `issuer_type`,
+`ciu` units and unrecognised strings share the `other_physical` lookup token but are not
+Art. 229/230 collateral. They keep the conservative 40% fall-through
+(`unplaced_collateral_haircut`), scaled like an Art. 224 haircut. This is not a
+regulatory value. It is also the SFT exposure-side fall-through for a type the SFT path
+cannot identify as a security (see [SFT](sft/index.md)).
+
 ### FX Mismatch Haircut (CRR Art. 224 Table 4 / Art. 233(3))
 
 When *financial* collateral or *unfunded* credit protection is denominated in a currency different from the exposure: **8%** base haircut (10-day liquidation), scaled by Art. 226(2) for other liquidation periods and by Art. 226(1) for non-daily revaluation.
@@ -293,7 +326,10 @@ Where:
 - `EU` = unsecured portion: `EU = E(1+HE) - ES`
 - `LGDU` = unsecured LGD (CRR: 45% uniform; B31: 40% non-FSE / 45% FSE per Art. 161(1))
 - `LGDS` = secured LGD per framework (see F-IRB LGDS table above)
-- `HC` = collateral haircut, `HE` = exposure haircut, `HFX` = FX mismatch haircut
+- `HC` = collateral haircut, `HE` = exposure haircut, `HFX` = FX mismatch haircut. For
+  non-financial collateral `HC` is 0 under CRR (Art. 229; the C\*\* divisor below then
+  reduces `C`) and 40% under PS1/26 Art. 230(2) — see
+  [Non-Financial Collateral](#non-financial-collateral).
 
 Scope of the H_FX term in the formula above:
 
@@ -400,8 +436,9 @@ the leased asset as a `COLLATERAL_SCHEMA` row pledged to the lease exposure:
 | `is_lease_collateral_attested` | `True` — the Art. 211 attestation (see below) |
 
 The row then flows through the Foundation Collateral Method exactly like any pledged
-non-financial collateral: the Art. 230(2) FCM haircut for the leased-asset type,
-the 1.4× overcollateralisation ratio, the 30% C\* minimum, and the LGD\* blend of the
+non-financial collateral: the leased asset at market value (CRR Art. 229(3), no HC;
+the PS1/26 Art. 230(2) 40% HC under Basel 3.1), the 1.4× overcollateralisation ratio,
+the 30% C\* minimum, and the LGD\* blend of the
 LGDS ([F-IRB LGDS Values](#f-irb-lgds-values-art-230--art-161)) over the secured
 portion with LGDU over the residual.
 
@@ -452,7 +489,7 @@ supervisory value (Art. 161(1)(a) 45% CRR / Art. 161(1)(aa) 40% B31 non-FSE), an
 
 ### Overcollateralisation Ratios
 
-The code implements overcollateralisation ratios (1.25x receivables, 1.4x RE/physical) and 30% minimum thresholds for RE and other physical collateral. These ratios divide the haircut-adjusted collateral value before it enters the LGD* waterfall, effectively reducing the recognised secured portion.
+The code implements overcollateralisation ratios (1.25x receivables, 1.4x RE/physical) and 30% minimum thresholds for RE and other physical collateral. These ratios divide the collateral value C (the Art. 229 value, with no HC under CRR) before it enters the LGD* waterfall, effectively reducing the recognised secured portion.
 
 | Category | OC Ratio | Min Threshold |
 |----------|----------|---------------|
@@ -462,7 +499,7 @@ The code implements overcollateralisation ratios (1.25x receivables, 1.4x RE/phy
 | Other physical | 1.40 | 30% of EAD |
 | Life insurance | 1.00 | 0% |
 
-Regulatory basis: These ratios appear in CRR Art. 230(2) (conditions for non-financial collateral recognition) and are preserved under PRA PS1/26. They are not the same as the supervisory volatility haircuts in Art. 224.
+Regulatory basis: These ratios appear in CRR Art. 230(2) Table 5 (conditions for non-financial collateral recognition). PRA PS1/26 Art. 230 deletes them and applies the 40% HC instead (pack Features `firb_overcollateralisation_divisor_applies` / `firb_min_collateralisation_threshold_applies`, disabled in `packs/b31.py`). They are not the same as the supervisory volatility haircuts in Art. 224, and CRR applies no such haircut on top of them.
 
 ### Prior Claims on Immovable Property (CRR Art. 229(1))
 
@@ -1681,6 +1718,8 @@ waterfall sequencing.
 | FX mismatch — financial collateral | 8% | Art. 224 Table 4 |
 | FX mismatch — unfunded protection (guarantees / CDS) | 8% | Art. 233(3) |
 | FX mismatch — funded non-financial collateral (Art. 230) | 0% | Arts. 229–230 (silent on H_fx) |
+| HC — receivables, immovable property, other physical (F-IRB FCM) | 0% | Art. 229; Art. 230(2) Table 5 has no HC column |
+| Collateral with no Table 1 / 3 row (`financial_collateral`, `covered_bonds`, issuer-less `bond`, `ciu`, unrecognised) | 40% fall-through | Conservative; not a regulatory value |
 | CDS restructuring exclusion | 40% reduction | Art. 233(2) / Art. 216(1) |
 
 ## Acceptance Tests

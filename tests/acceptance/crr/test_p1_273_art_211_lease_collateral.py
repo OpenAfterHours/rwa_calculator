@@ -5,8 +5,8 @@ Scenario: £10m senior corporate F-IRB lease exposure secured by a £10m leased
 asset (``other_physical``). Everything is held constant except the lessor's
 Art. 211 attestation (``is_lease_collateral_attested``):
 
-    crr_lease_attested    — attested   -> leased asset recognised, LGD* = 0.428571
-                            (Art. 230(2) haircut 40%, OC=1.4×, LGDS 40%, LGDU 45%),
+    crr_lease_attested    — attested   -> leased asset recognised, LGD* = 0.414286
+                            (Art. 229(3) no HC, C**=1.4×, LGDS 40%, LGDU 45%),
                             RWA falls.
     crr_lease_unattested  — null       -> the FCM gate zeroes effectively_secured,
                             LGD reverts to LGDU = 0.45 (Art. 161(1)(a)) — the
@@ -63,7 +63,7 @@ class TestP1273CrrLeaseCollateral:
     """CRR: an Art. 211-attested leased asset reduces F-IRB LGD via the FCM."""
 
     def test_attested_lease_recognised(self) -> None:
-        """Control: attested lease -> LGD* = 0.428571 (leased asset recognised)."""
+        """Control: attested lease -> LGD* = 0.414286 (leased asset recognised)."""
         assert _lgd("crr_lease_attested") == pytest.approx(
             SCENARIOS["crr_lease_attested"].expected_lgd, abs=1e-3
         )

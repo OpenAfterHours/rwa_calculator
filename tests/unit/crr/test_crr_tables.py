@@ -237,9 +237,16 @@ class TestCollateralHaircuts:
         """
         assert COLLATERAL_HAIRCUTS["receivables"] == Decimal("0")
 
-    def test_other_physical_forty_percent(self) -> None:
-        """Other physical collateral has 40% haircut."""
-        assert COLLATERAL_HAIRCUTS["other_physical"] == Decimal("0.40")
+    def test_other_physical_no_haircut(self) -> None:
+        """CRR Art. 229(3) values other physical collateral at market value — Hc=0.
+
+        "Institutions shall value physical collateral other than immovable
+        property at its market value." Art. 230(2) Table 5 has no HC column: the
+        whole CRR treatment is the 30% C* gate and the 1.40 C** divisor (LGDS 40%
+        senior). This test pinned 40% — the PS1/26 Art. 230(2) value — until
+        D4.75; that 40% was applied before the C** divisor and so counted twice.
+        """
+        assert COLLATERAL_HAIRCUTS["other_physical"] == Decimal("0")
 
     def test_fx_haircut(self) -> None:
         """FX mismatch haircut is 8%."""

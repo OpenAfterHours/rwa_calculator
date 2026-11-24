@@ -213,7 +213,11 @@ class TestArt1593NotTriggered:
         """Non-defaulted has excess, defaulted has shortfall — opposite of 159(3) trigger.
 
         This is the reverse scenario: non-defaulted over-provisioned, defaulted
-        under-provisioned. Art. 159(3) does NOT apply in this direction.
+        under-provisioned. The two-branch split does NOT apply in this
+        direction, so PS1/26 Art. 159(3) "in all other cases" reports ONE net
+        figure: (B + D) - (A + C) = (40k + 20k) - (10k + 30k) = +20,000 ->
+        (d) excess, no shortfall. P1.210 re-pinned this from shortfall 10,000
+        AND excess 30,000 (each pool reported gross, never netted).
         """
         irb = pl.LazyFrame(
             {
@@ -231,8 +235,8 @@ class TestArt1593NotTriggered:
         result = compute_el_portfolio_summary(irb)
         assert result is not None
         assert result.art_159_3_applies is False
-        assert float(result.total_el_shortfall) == pytest.approx(10_000.0)
-        assert float(result.total_el_excess) == pytest.approx(30_000.0)
+        assert float(result.total_el_shortfall) == pytest.approx(0.0, abs=1e-6)
+        assert float(result.total_el_excess) == pytest.approx(20_000.0)
 
 
 class TestArt1593BackwardCompatibility:

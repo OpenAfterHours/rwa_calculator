@@ -217,67 +217,58 @@ class TestCRRGroupG_PortfolioELSummary:
             "el_summary should be populated when IRB results have EL columns"
         )
 
-    def test_el_shortfall_positive(self, irb_pipeline_results) -> None:
-        """Portfolio EL shortfall should equal the pool-aggregate netted value (P1.221).
+    def test_el_shortfall_nets_to_zero(self, irb_pipeline_results) -> None:
+        """Portfolio EL shortfall is zero: the book nets to an excess (Art. 159(3)(d)).
 
         Derivation (from ``irb_pipeline_results.irb_results``, grouped by
         ``is_defaulted``, summing ``expected_loss`` (A/C) and
-        ``provision_allocated`` (B/D, ava/other_own_funds_reductions are
-        zero across the whole IRB fixture book) — CRR Art. 159(3)):
+        ``provision_allocated`` (ava/other_own_funds_reductions are zero across
+        the whole IRB fixture book). The one defaulted row carries specific CRA
+        only, so 'D' is its whole provision; the book's 25,000 GCRA sits on
+        non-defaulted rows and is in 'B' either way):
 
-            Non-defaulted (79 rows): A = 807,797.0316109825
-                                      B = 1,669,071.4285714286
-                nd_shortfall = max(0, A-B) = 0
-                nd_excess    = max(0, B-A) = 861,274.3969604461
-            Defaulted (1 row, LOAN_PROV_G2/G3 are both non-defaulted so this
-            pool is unrelated fixture data): C = 12,500.0, D = 11,250.0
-                d_shortfall = max(0, C-D) = 1,250.0
-                d_excess    = max(0, D-C) = 0
+            Non-defaulted (80 rows): A = 807,797.0316109825
+                                     B = 1,669,071.4285714286
+            Defaulted (1 row, LOAN_DF_RTL_001 — LOAN_PROV_G2/G3 are both
+            non-defaulted): C = 12,500.0, D = 11,250.0
 
-            art_159_3_applies = (nd_shortfall>0) and (d_excess>0)
-                              = (0>0) and (0>0) = False -> combined branch:
-            total_el_shortfall = nd_shortfall + d_shortfall = 0 + 1,250.0
-                               = 1,250.0
+            'A' > 'B' is false, so Art. 159(3) is NOT the two-branch case ->
+            "in all other cases" one net figure:
+            (B + D) - (A + C) = 1,680,321.4285714286 - 820,297.0316109825
+                              = +860,024.3969604461 -> (d) excess, no shortfall.
 
-        The pre-fix per-row-then-sum path instead reports 729,016.50 (it
-        never nets the many over-provisioned non-defaulted rows against
-        G2's 15,000 per-row shortfall within the same pool).
+        P1.210 re-pinned this from 1,250.00, which was the defaulted pool's gross
+        'C' - 'D' reported beside a separate non-defaulted excess (no net).
         """
         el = irb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        assert float(el.total_el_shortfall) == pytest.approx(1_250.0, rel=1e-6), (
-            "Portfolio el_shortfall should be the pool-aggregate netted value "
-            f"1,250.00 (defaulted pool only; non-defaulted pool nets to excess), "
-            f"got {el.total_el_shortfall:,.2f}"
+        assert el.art_159_3_applies is False
+        assert float(el.total_el_shortfall) == pytest.approx(0.0, abs=1e-6), (
+            "Portfolio el_shortfall should be 0: (B + D) - (A + C) is positive, so "
+            f"Art. 159(3)(d) reports an excess only, got {el.total_el_shortfall:,.2f}"
         )
 
     def test_el_excess_positive(self, irb_pipeline_results) -> None:
-        """Portfolio EL excess should equal the pool-aggregate netted value (P1.221).
+        """Portfolio EL excess is the Art. 159(3)(d) net (B + D) - (A + C).
 
-        Derivation (same aggregate ingredients as ``test_el_shortfall_positive``):
+        Derivation (same aggregate ingredients as ``test_el_shortfall_nets_to_zero``):
 
-            Non-defaulted: nd_excess = max(0, B-A)
-                          = 1,669,071.4285714286 - 807,797.0316109825
-                          = 861,274.3969604461
-            Defaulted:      d_excess = max(0, D-C) = 0
+            (B + D) - (A + C) = (1,669,071.4285714286 + 11,250.0)
+                              - (807,797.0316109825 + 12,500.0)
+                              = 860,024.3969604461
 
-            art_159_3_applies = False -> combined branch:
-            total_el_excess = nd_excess + d_excess = 861,274.3969604461
-
-        The book does NOT net to pure shortfall — the non-defaulted pool
-        (dominated by many over-provisioned exposures, not just G3) nets to
-        a large excess even after G2's shortfall is absorbed by its own
-        pool. The pre-fix per-row-then-sum path instead reports
-        1,576,721.43 (each row's excess is floored and summed independently,
-        so G2's 15,000 shortfall never reduces the pool's summed excess).
+        The non-defaulted surplus covers the defaulted pool's 1,250 gap: only
+        defaulted SPECIFIC adjustments are ring-fenced, and only in the case
+        'A' > 'B' and 'D' > 'C'. P1.210 re-pinned this from 861,274.3969604461
+        ('B' - 'A' alone, reported beside a separate 1,250 shortfall).
         """
         el = irb_pipeline_results.el_summary
         if el is None:
             pytest.skip("el_summary not available")
-        assert float(el.total_el_excess) == pytest.approx(861_274.3969604461, rel=1e-6), (
-            "Portfolio el_excess should be the pool-aggregate netted value "
-            f"861,274.40 (non-defaulted pool: B-A), got {el.total_el_excess:,.2f}"
+        assert float(el.total_el_excess) == pytest.approx(860_024.3969604461, rel=1e-6), (
+            "Portfolio el_excess should be the Art. 159(3)(d) net "
+            f"860,024.40 ((B + D) - (A + C)), got {el.total_el_excess:,.2f}"
         )
 
     def test_t2_credit_cap_is_point_six_pct(self, irb_pipeline_results) -> None:

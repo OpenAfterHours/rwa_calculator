@@ -58,7 +58,8 @@ This is the drawn-first deduction approach per Art. 111(1)(a)–(b):
    Art. 62(c) (Tier 2)
 
 The engine deducts `provision_specific_allocated` (rows typed `scra`, any case, or untyped) and
-keeps the specific + general total in `provision_allocated` for the Art. 159 comparison. The
+keeps the specific + general total in `provision_allocated`. The Art. 159 comparison reads both:
+the specific part on a defaulted exposure is 'D', the rest is 'B' (P1.210). The
 Art. 127(1) default test ("the amount of specific credit risk adjustments ... is less than 20% of
 the outstanding amount") reads the specific amount as well (P1.208). That test runs on every row,
 IRB included, so it also sets the SA-equivalent risk weight a defaulted IRB exposure contributes to
@@ -206,9 +207,20 @@ The Art. 159 comparison uses four labelled amounts (A, B, C, D):
 | Label | Definition | Source |
 |-------|-----------|--------|
 | **A** | EL amounts for **non-defaulted** exposures | PD x LGD x EAD (Art. 158), increased by any Art. 158(6A) PMA |
-| **B** | Provisions for **non-defaulted** exposures | General CRAs + specific CRAs + AVA (Art. 34) + other own funds reductions |
+| **B** | Every other Pool B amount | **All** general CRAs (on defaulted exposures too) + specific CRAs for non-defaulted exposures + **all** AVA (Art. 34) + **all** other own funds reductions |
 | **C** | EL amounts for **defaulted** exposures | BEEL for A-IRB (Art. 158(5)); PD x LGD for F-IRB; increased by any Art. 158(6A) PMA |
 | **D** | Specific CRAs for **defaulted** exposures | Specific credit risk adjustments |
+
+!!! success "Engine composition (P1.210)"
+    `engine/aggregator/_el_summary.py` builds the pools from the IRB and slotting branch
+    frames: `D = Σ provision_specific_allocated` over defaulted rows, and
+    `B = Σ (provision_allocated + ava_amount + other_own_funds_reductions) − D` over all rows.
+    A general CRA allocated to a defaulted obligor (e.g. a counterparty-level `GCRA` row
+    spread pro-rata across its exposures), and the AVA and other own funds reductions on a
+    defaulted exposure, are therefore 'B'. A frame without the specific carrier, or a null on a
+    row, counts the whole provision as specific (an untyped provision on a defaulted exposure
+    stays in 'D'); a label other than `scra` / `gcra` (DQ006) is not specific and lands in 'B'.
+    Outside the split branch the engine reports the single net `(B + D) − (A + C)`.
 
 !!! info "GCRA vs SCRA classification"
     The general/specific CRA split that determines which amounts go into Pool B (general +

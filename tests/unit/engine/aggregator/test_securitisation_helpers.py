@@ -3,7 +3,9 @@
 Covers ``apply_residual_multiplier``, ``generate_securitisation_summary``,
 and ``generate_securitisation_audit`` -- the three helpers wired into
 OutputAggregator.aggregate() to produce the on-balance-sheet view, the
-per-pool summary, and the per-exposure reconciliation report.
+per-pool summary, and the per-exposure reconciliation report -- plus the
+residual view's hand-off to the expected-loss summary (P1.210: the
+Art. 159(1) 'D' carrier is scaled with the provision it is part of).
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
+from rwa_calc.engine.aggregator._el_summary import compute_el_portfolio_summary
 from rwa_calc.engine.aggregator._securitisation import (
     MONEY_COLS,
     apply_residual_multiplier,
@@ -73,8 +76,70 @@ class TestApplyResidualMultiplier:
         assert out["ead_final"][0] == pytest.approx(1000.0)
 
     def test_money_cols_constant_includes_critical_columns(self) -> None:
-        for col in ("ead_final", "rwa_final", "expected_loss", "sa_rwa"):
+        # ``provision_specific_allocated`` is the Art. 159(1) 'D' carrier: it
+        # must scale with ``provision_allocated``, which it is a part of.
+        for col in (
+            "ead_final",
+            "rwa_final",
+            "expected_loss",
+            "sa_rwa",
+            "provision_allocated",
+            "provision_specific_allocated",
+        ):
             assert col in MONEY_COLS
+
+
+class TestResidualMultiplierKeepsTheArt159Split:
+    """The residual view feeds the EL summary a 'D' scaled with its provision.
+
+    The aggregator passes ``apply_residual_multiplier(irb_results)`` to
+    ``compute_el_portfolio_summary``, which takes 'D' as the defaulted
+    ``provision_specific_allocated`` and 'B' as the rest of Pool B. If the
+    specific carrier were not scaled, an unscaled 'D' would be taken out of a
+    scaled provision.
+
+    References:
+        PS1/26 Art. 159(1)/(3); CRR Art. 244(1) / 245(1).
+    """
+
+    def test_securitised_defaulted_row_splits_on_the_residual(self) -> None:
+        """Shortfall 16,000 and excess 8,000 on the on-balance-sheet residual.
+
+        Non-defaulted row (residual 1.0): EL 100,000 = A; provisions 80,000,
+            all specific -> 'B' 80,000.
+        Defaulted row (residual 0.4): EL 50,000 -> C = 20,000; provisions
+            80,000 of which 70,000 specific -> 'D' = 0.4 x 70,000 = 28,000 and
+            general 0.4 x 10,000 = 4,000 to 'B'.
+        B = 84,000 < A and D > C -> Art. 159(3)(a)/(b): 16,000 / 8,000.
+        An unscaled carrier gives 58,000 / 50,000 (B = 80,000 + 32,000 - 70,000).
+        """
+        # Arrange
+        rows = pl.LazyFrame(
+            {
+                "exposure_reference": ["ND", "D"],
+                "approach_applied": ["AIRB", "AIRB"],
+                "rwa_final": [5_000_000.0, 5_000_000.0],
+                "ead_final": [1_000_000.0, 1_000_000.0],
+                "expected_loss": [100_000.0, 50_000.0],
+                "provision_allocated": [80_000.0, 80_000.0],
+                "provision_specific_allocated": [80_000.0, 70_000.0],
+                "ava_amount": [0.0, 0.0],
+                "other_own_funds_reductions": [0.0, 0.0],
+                "el_shortfall": [20_000.0, 0.0],
+                "el_excess": [0.0, 30_000.0],
+                "is_defaulted": [False, True],
+                "securitisation_residual_pct": [1.0, 0.4],
+            }
+        )
+
+        # Act
+        summary = compute_el_portfolio_summary(apply_residual_multiplier(rows))
+
+        # Assert
+        assert summary is not None
+        assert summary.art_159_3_applies is True
+        assert float(summary.total_el_shortfall) == pytest.approx(16_000.0)
+        assert float(summary.total_el_excess) == pytest.approx(8_000.0)
 
 
 class TestGenerateSecuritisationSummary:

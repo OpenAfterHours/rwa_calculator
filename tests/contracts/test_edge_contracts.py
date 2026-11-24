@@ -30,10 +30,12 @@ from rwa_calc.contracts.edges import (
     CRM_EXIT_CCR_EDGE,
     CRM_EXIT_EDGE,
     FLOOR_IMPACT_EDGE,
+    IRB_BRANCH_EDGE,
     RAW_TABLE_EDGES,
     RE_SPLIT_EXIT_CCR_EDGE,
     RE_SPLIT_EXIT_EDGE,
     REPORTING_SURFACE,
+    SLOTTING_BRANCH_EDGE,
     SUMMARY_BY_APPROACH_EDGE,
     SUMMARY_BY_CLASS_EDGE,
     SUMMARY_BY_CLASS_METHOD_EDGE,
@@ -587,6 +589,34 @@ class TestResealWith:
         # the mutation without a trace — reseal_with rejects it up front instead.
         with pytest.raises(EdgeContractViolation, match="not_declared"):
             reseal_with(sealed, undeclared_mutation, edge)
+
+
+class TestArt159SplitCarrierEdges:
+    """The specific-CRA carrier survives every edge the EL summary reads past.
+
+    ``compute_el_portfolio_summary`` splits Pool B into 'B' and 'D' (PS1/26
+    Art. 159(1)) by reading ``provision_specific_allocated`` off the sealed IRB
+    and slotting branch frames. ``conform`` strips an undeclared column with no
+    error, and the summary then counts the whole provision as specific — a
+    defaulted general credit risk adjustment lands back in 'D' and every test
+    that does not hold a defaulted GCRA on that branch stays green.
+    """
+
+    @pytest.mark.parametrize(
+        "edge",
+        [CRM_EXIT_EDGE, RE_SPLIT_EXIT_EDGE, IRB_BRANCH_EDGE, SLOTTING_BRANCH_EDGE],
+        ids=lambda edge: edge.name,
+    )
+    def test_specific_provision_carrier_declared_on_edge(self, edge: EdgeContract) -> None:
+        # Arrange / Act
+        declared = edge.columns.get("provision_specific_allocated")
+
+        # Assert
+        assert declared is not None, (
+            f"provision_specific_allocated is not declared on {edge.name}: conform() "
+            "strips it there and the Art. 159(1) 'B' / 'D' split silently collapses"
+        )
+        assert declared.dtype == pl.Float64
 
 
 class TestReportingSurface:

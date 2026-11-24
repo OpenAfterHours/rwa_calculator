@@ -1,5 +1,5 @@
 """
-Portfolio-level EL summary with T2 credit cap and Art. 159(3) two-branch rule.
+Portfolio-level EL summary with T2 credit cap and the Art. 159 comparison.
 
 Internal module — not part of the public API.
 
@@ -8,13 +8,25 @@ Slotting is an IRB sub-approach (Art. 153(5) is in the IRB chapter, Part Three,
 Title II, Chapter 3), so slotting RWA and EL feed into the T2 credit cap
 (Art. 62(d)) and EL shortfall/excess treatment (Art. 158-159).
 
-Art. 159(3) two-branch rule:
-    When non-defaulted EL exceeds non-defaulted provisions (A > B) AND
-    defaulted provisions exceed defaulted EL (D > C) simultaneously,
-    the shortfall and excess must be computed separately for each pool.
-    The defaulted excess must NOT offset the non-defaulted shortfall.
-    This prevents cross-subsidisation between the defaulted and non-defaulted
-    books, which would otherwise understate CET1 deductions.
+Art. 159(1) pools (PS1/26 wording; UK CRR Art. 159 states the same ring-fence):
+    'A' = expected loss on non-defaulted exposures;
+    'B' = (i) ALL general credit risk adjustments, (ii) specific credit risk
+          adjustments on non-defaulted exposures, (iii) ALL additional value
+          adjustments, (iv) ALL other own funds reductions;
+    'C' = expected loss on defaulted exposures;
+    'D' = specific credit risk adjustments on defaulted exposures ONLY.
+    A general credit risk adjustment, an AVA or an other own funds reduction
+    sitting on a defaulted exposure is therefore 'B', not 'D'. The split reads
+    ``provision_specific_allocated`` (the specific-CRA carrier P1.208 added to
+    ``engine/crm/provisions.py``); a frame without it, or a null on a row,
+    counts the row's whole ``provision_allocated`` as specific.
+
+Art. 159(3):
+    Where 'A' > 'B' AND 'D' > 'C', report 'B' - 'A' (shortfall) and 'D' - 'C'
+    (excess) separately: specific adjustments on defaulted exposures must not
+    cover expected loss on other exposures. In ALL OTHER CASES report one net
+    figure, ('B' + 'D') - ('A' + 'C') — a shortfall if negative, an excess if
+    positive, never both.
 
 Art. 159 expected loss:
     Under Basel 3.1 the EL netted against Pool B is the amount AFTER the PS1/26
@@ -30,8 +42,8 @@ References:
 - CRR Art. 158(6), Table B: Expected loss rates for slotting exposures
 - CRR Art. 158-159: EL shortfall/excess treatment
 - PS1/26 Art. 158(6A), 159(1): 'A' and 'C' include the post-model EL increase
-- CRR Art. 159(1): Pool B composition (provisions + AVA + other own funds reductions)
-- CRR Art. 159(3): Two-branch no-cross-offset rule
+- PS1/26 Art. 159(1): 'B' / 'D' composition (UK CRR Art. 159)
+- PS1/26 Art. 159(3): two-branch rule and the all-other-cases net
 - CRR Art. 34, Art. 105: Additional value adjustments (AVAs)
 """
 
@@ -43,6 +55,8 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.contracts.bundles import ELPortfolioSummary
+from rwa_calc.data.column_spec import ensure_columns
+from rwa_calc.data.schemas import CRM_OUTPUT_SCHEMA
 from rwa_calc.engine.aggregator._schemas import T2_CREDIT_CAP_RATE
 from rwa_calc.engine.aggregator._utils import resolve_rwa_col
 from rwa_calc.engine.irb.adjustments import art_159_expected_loss
@@ -93,7 +107,13 @@ def _aggregate_by_default_status(
 
     Returns two dicts (non_defaulted, defaulted) each with keys:
     el_shortfall, el_excess, irb_rwa, art_159_el, art_159_el_count,
-    provisions_allocated, ava_amount, other_own_funds_reductions.
+    provisions_allocated, specific_provisions, ava_amount,
+    other_own_funds_reductions.
+
+    ``specific_provisions`` is the specific-CRA part of ``provisions_allocated``
+    (``provision_specific_allocated``, which the caller guarantees as a column);
+    on a row where it is null the whole ``provision_allocated`` counts as
+    specific.
 
     ``art_159_el`` is the pool's Art. 159(1) EL ('A' or 'C'): the sum of each
     leg's ``art_159_expected_loss``, i.e. after any PS1/26 Art. 158(6A)
@@ -127,7 +147,9 @@ def _aggregate_by_default_status(
         # injected (padded) with no real EL data, so netting must not recompute.
         agg_exprs.append(art_159_el.count().alias("art_159_el_count"))
     if has_provisions:
+        specific = pl.coalesce("provision_specific_allocated", "provision_allocated")
         agg_exprs.append(pl.col("provision_allocated").sum().alias("provisions_allocated"))
+        agg_exprs.append(specific.sum().alias("specific_provisions"))
     if has_ava:
         agg_exprs.append(pl.col("ava_amount").sum().alias("ava_amount"))
     if has_other_ofr:
@@ -153,6 +175,7 @@ def _aggregate_by_default_status(
                 "art_159_el": 0.0,
                 "art_159_el_count": 0.0,
                 "provisions_allocated": 0.0,
+                "specific_provisions": 0.0,
                 "ava_amount": 0.0,
                 "other_own_funds_reductions": 0.0,
             }
@@ -164,6 +187,7 @@ def _aggregate_by_default_status(
             "art_159_el": float(row.get("art_159_el", 0.0) or 0.0),
             "art_159_el_count": float(row.get("art_159_el_count", 0.0) or 0.0),
             "provisions_allocated": float(row.get("provisions_allocated", 0.0) or 0.0),
+            "specific_provisions": float(row.get("specific_provisions", 0.0) or 0.0),
             "ava_amount": float(row.get("ava_amount", 0.0) or 0.0),
             "other_own_funds_reductions": float(row.get("other_own_funds_reductions", 0.0) or 0.0),
         }
@@ -180,12 +204,11 @@ def compute_el_portfolio_summary(
     slotting_results: pl.LazyFrame | None = None,
 ) -> ELPortfolioSummary | None:
     """
-    Compute portfolio-level EL summary with T2 credit cap and Art. 159(3) rule.
+    Compute portfolio-level EL summary with T2 credit cap and the Art. 159 comparison.
 
-    Splits all IRB and slotting exposures by default status and nets aggregate
-    expected loss against aggregate Pool B within each pool — CRR Art. 159(3)
-    compares the pool totals, not the per-row-then-summed shortfall/excess —
-    before applying the two-branch no-cross-offset rule and computing the T2
+    Splits all IRB and slotting exposures by default status and compares the
+    AGGREGATE pool totals — Art. 159(3) compares 'A' with 'B' and 'C' with 'D',
+    not the per-row-then-summed shortfall/excess — before computing the T2
     credit cap per CRR Art. 62(d).
 
     The expected loss netted is the Art. 159(1) EL ('A' + 'C'): under Basel 3.1
@@ -197,13 +220,20 @@ def compute_el_portfolio_summary(
     credit and, through them, OF-ADJ (PS1/26 Art. 92(2A)) — the per-row
     ``el_shortfall`` / ``el_excess`` carriers are only its fallback (P1.209).
 
-    Art. 159(3) two-branch rule:
-        When non-defaulted EL > non-defaulted provisions (A > B) AND
-        defaulted provisions > defaulted EL (D > C) simultaneously, the
-        effective shortfall = non-defaulted shortfall (only) and the
-        effective excess = defaulted excess (only). The two pools cannot
-        cross-offset. When only one condition holds or neither, the standard
-        combined approach applies.
+    Pool composition (PS1/26 Art. 159(1); UK CRR Art. 159):
+        'D' = specific credit risk adjustments on defaulted exposures only.
+        'B' = every other Pool B amount: all general credit risk adjustments
+        (on defaulted exposures too), specific ones on non-defaulted
+        exposures, and every AVA and other own funds reduction.
+
+    Art. 159(3):
+        Where 'A' > 'B' AND 'D' > 'C', the effective shortfall is 'A' - 'B'
+        and the effective excess is 'D' - 'C' — the defaulted specific
+        adjustments cannot cover non-defaulted expected loss. In all other
+        cases the effective figure is the single net ('B' + 'D') - ('A' + 'C'):
+        a shortfall when negative, an excess when positive. The four
+        ``non_defaulted_*`` / ``defaulted_*`` fields keep each pool's own
+        comparison, so they stay gross.
 
     Slotting exposures contribute EL via Art. 158(6) Table B rates and their
     RWA is included in the T2 credit cap denominator (Art. 62(d) references
@@ -226,45 +256,21 @@ def compute_el_portfolio_summary(
     has_ava = "ava_amount" in cols
     has_other_ofr = "other_own_funds_reductions" in cols
 
+    # The sealed IRB / slotting branches always carry the specific-CRA carrier;
+    # a hand-built frame may not, and then gets a typed null (no split known:
+    # the whole provision counts as specific, i.e. ring-fenced in 'D').
+    combined = ensure_columns(
+        combined,
+        {"provision_specific_allocated": CRM_OUTPUT_SCHEMA["provision_specific_allocated"]},
+        present=cols,
+    )
+
     # Split aggregation by default status for Art. 159(3)
     non_def, def_pool = _aggregate_by_default_status(
         combined, rwa_col, has_el, has_provisions, has_ava, has_other_ofr
     )
 
-    # Pool-level shortfall/excess.
-    # Art. 159(3) nets expected loss against Pool B on the AGGREGATE pool
-    # totals: nd_shortfall = max(0, ΣEL - Σpool_b), EL being the Art. 159(1)
-    # post-158(6A) amount. Summing the per-row
-    # max(0, EL_i - pool_b_i) columns instead would never let one exposure's
-    # excess offset a sibling's shortfall inside the same default-status pool.
-    # Recompute only when the frame carries real EL data; when expected_loss is
-    # absent — or present only as an injected-null column with no values — fall
-    # back to the pre-computed per-row shortfall/excess sums (audit columns).
-    has_el_data = has_el and (non_def["art_159_el_count"] + def_pool["art_159_el_count"]) > 0
-    if has_el_data:
-        nd_pool_b = (
-            non_def["provisions_allocated"]
-            + non_def["ava_amount"]
-            + non_def["other_own_funds_reductions"]
-        )
-        d_pool_b = (
-            def_pool["provisions_allocated"]
-            + def_pool["ava_amount"]
-            + def_pool["other_own_funds_reductions"]
-        )
-        nd_shortfall = max(0.0, non_def["art_159_el"] - nd_pool_b)
-        nd_excess = max(0.0, nd_pool_b - non_def["art_159_el"])
-        d_shortfall = max(0.0, def_pool["art_159_el"] - d_pool_b)
-        d_excess = max(0.0, d_pool_b - def_pool["art_159_el"])
-    else:
-        nd_shortfall = non_def["el_shortfall"]
-        nd_excess = non_def["el_excess"]
-        d_shortfall = def_pool["el_shortfall"]
-        d_excess = def_pool["el_excess"]
-
     # Combined totals (always needed for reporting)
-    raw_total_shortfall = nd_shortfall + d_shortfall
-    raw_total_excess = nd_excess + d_excess
     total_irb_rwa = non_def["irb_rwa"] + def_pool["irb_rwa"]
     total_expected_loss = non_def["art_159_el"] + def_pool["art_159_el"]
     total_provisions = non_def["provisions_allocated"] + def_pool["provisions_allocated"]
@@ -272,24 +278,44 @@ def compute_el_portfolio_summary(
     total_other_ofr = non_def["other_own_funds_reductions"] + def_pool["other_own_funds_reductions"]
     total_pool_b = total_provisions + total_ava + total_other_ofr
 
-    # Art. 159(3) two-branch condition:
-    # A > B (non-defaulted EL > non-defaulted provisions) AND
-    # D > C (defaulted provisions > defaulted EL)
-    # Equivalently: non-defaulted has shortfall AND defaulted has excess
+    # Pool-level shortfall/excess on the AGGREGATE pool totals, EL being the
+    # Art. 159(1) post-158(6A) amount (P1.209): summing the
+    # per-row max(0, EL_i - pool_b_i) columns would never let one exposure's
+    # excess offset a sibling's shortfall inside the same pool. Recompute only
+    # when the frame carries real EL data; when expected_loss is absent — or
+    # present only as an injected-null column with no values — fall back to the
+    # pre-computed per-row shortfall/excess sums (audit columns), which cannot
+    # be re-split by provision type.
+    has_el_data = has_el and (non_def["art_159_el_count"] + def_pool["art_159_el_count"]) > 0
+    if has_el_data:
+        # Art. 159(1): 'D' is the defaulted SPECIFIC adjustments; the rest of
+        # Pool B — defaulted general adjustments, AVAs and other own funds
+        # reductions included — is 'B'.
+        pool_d = def_pool["specific_provisions"]
+        pool_b = total_pool_b - pool_d
+        nd_shortfall = max(0.0, non_def["art_159_el"] - pool_b)
+        nd_excess = max(0.0, pool_b - non_def["art_159_el"])
+        d_shortfall = max(0.0, def_pool["art_159_el"] - pool_d)
+        d_excess = max(0.0, pool_d - def_pool["art_159_el"])
+    else:
+        nd_shortfall = non_def["el_shortfall"]
+        nd_excess = non_def["el_excess"]
+        d_shortfall = def_pool["el_shortfall"]
+        d_excess = def_pool["el_excess"]
+
+    # Art. 159(3) two-branch condition: 'A' > 'B' (non-defaulted shortfall)
+    # AND 'D' > 'C' (defaulted excess).
     art_159_3_applies = nd_shortfall > 0.0 and d_excess > 0.0
 
     if art_159_3_applies:
-        # Two-branch: pools cannot cross-offset
-        # Effective shortfall = non-defaulted shortfall only
-        # Effective excess = defaulted excess only
-        # (Non-defaulted excess and defaulted shortfall still net within their pools,
-        #  but the cross-pool netting is prohibited)
+        # Art. 159(3)(a)/(b): 'B' - 'A' and 'D' - 'C', no cross-offset.
         effective_shortfall = nd_shortfall
         effective_excess = d_excess
     else:
-        # Standard combined approach — single pool
-        effective_shortfall = raw_total_shortfall
-        effective_excess = raw_total_excess
+        # Art. 159(3)(c)/(d): one net figure ('B' + 'D') - ('A' + 'C').
+        net = (nd_excess - nd_shortfall) + (d_excess - d_shortfall)
+        effective_shortfall = max(0.0, -net)
+        effective_excess = max(0.0, net)
 
     # T2 credit cap: 0.6% of total IRB+slotting RWA (CRR Art. 62(d))
     # This MUST use un-floored IRB RWA ("calculated under Chapter 3 of Title II

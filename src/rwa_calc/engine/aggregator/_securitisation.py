@@ -47,6 +47,9 @@ logger = logging.getLogger(__name__)
 # - ``expected_loss`` + EL components: IRB EL summary inputs.
 # - ``provision_allocated`` / ``provision_deducted``: provisions allocated to
 #   this row (residual share only flows on-balance-sheet).
+# - ``provision_specific_allocated``: the specific-CRA part of
+#   ``provision_allocated``, scaled with it so the EL summary's Art. 159(1)
+#   'B' / 'D' split stays a split of the same residual amount.
 # - ``reporting_ead`` / ``reporting_rwa`` / ``reporting_rw``: post-CRM
 #   reporting view (guarantee substitution).
 MONEY_COLS: tuple[str, ...] = (
@@ -61,6 +64,7 @@ MONEY_COLS: tuple[str, ...] = (
     "el_shortfall",
     "el_excess",
     "provision_allocated",
+    "provision_specific_allocated",
     "provision_deducted",
     "ava_amount",
     "other_own_funds_reductions",

@@ -2,8 +2,8 @@
 P1.127: CRR Art. 159 Pool B EL shortfall — AVA + other_OFR no double-count.
 
 Regression-guard acceptance test: verifies that AVA and other_own_funds_reductions
-enter Pool B exactly once at the per-exposure level, are never double-counted by
-a portfolio-level recompute, and are never silently dropped from per-exposure Pool B.
+enter Pool B exactly once, are never double-counted, are never silently dropped, and
+— on the defaulted loan too — sit in 'B', not 'D' (PS1/26 Art. 159(1)).
 
 Pipeline position:
     Loader -> HierarchyResolver -> Classifier -> CRMProcessor -> IRBCalculator
@@ -19,13 +19,24 @@ Two AIRB exposures under counterparty CP-P1127-A:
         pool_b = prov(120,000) + AVA(25,000) + other_OFR(5,000) = 150,000
         shortfall = 300,000
 
-Art. 159(3) two-branch rule: non-defaulted pool has excess, defaulted pool has shortfall.
-No cross-offset: total_el_shortfall = 300,000 (defaulted pool only).
+Art. 159(1) pools (PS1/26 wording; UK CRR Art. 159 is the same ring-fence):
+    'A' = 3,375; 'C' = 450,000
+    'B' = nd SCRA 30,000 + ALL AVA 65,000 + ALL other_OFR 15,000 = 110,000
+    'D' = defaulted SCRA only = 120,000
+
+Art. 159(3): the two-branch split needs 'A' > 'B' AND 'D' > 'C'; here 'A' <= 'B',
+so "in all other cases" (c) applies — ONE net figure:
+    (B + D) - (A + C) = 230,000 - 453,375 = -223,375 -> total_el_shortfall = 223,375.
+
+P1.210 re-pinned this from 300,000. That figure was the defaulted pool's gross
+shortfall (EL_D - pool_b_D) reported beside a separate 76,625 non-defaulted excess,
+and its pool_b_D counted the defaulted loan's AVA and other_OFR in 'D'. The old
+Guard 2 asserted the rule's answer (223,375) was a bug; it now guards the old figure.
 
 Regulatory References:
     - CRR Art. 158(5): defaulted EL = BEEL × EAD
-    - CRR Art. 159(1): Pool B = SCRA + GCRA + AVA + other own funds reductions
-    - CRR Art. 159(3): two-branch no-cross-offset rule
+    - PS1/26 Art. 159(1): 'B' / 'D' composition (UK CRR Art. 159)
+    - PS1/26 Art. 159(3)(c): the all-other-cases net
     - CRR Art. 34 / Art. 105: Additional value adjustments (AVA)
 """
 
@@ -54,14 +65,15 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_127"
 # ---------------------------------------------------------------------------
 
 from tests.fixtures.p1_127.p1_127 import (  # noqa: E402
+    EXPECTED_ART159_B,
+    EXPECTED_ART159_D,
     EXPECTED_EL_D,
     EXPECTED_EL_ND,
     EXPECTED_POOL_B_D,
     EXPECTED_POOL_B_ND,
-    EXPECTED_SHORTFALL_D,
-    EXPECTED_SHORTFALL_ND,
     EXPECTED_TOTAL_AVA,
     EXPECTED_TOTAL_EL,
+    EXPECTED_TOTAL_EXCESS,
     EXPECTED_TOTAL_OTHER_OFR,
     EXPECTED_TOTAL_POOL_B,
     EXPECTED_TOTAL_PROV,
@@ -70,16 +82,21 @@ from tests.fixtures.p1_127.p1_127 import (  # noqa: E402
 from tests.fixtures.raw_bundle import make_raw_bundle  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# Double-count sentinel values
+# Regression sentinel values
 # ---------------------------------------------------------------------------
 
-# If the aggregator regresses to portfolio-level recompute (EL − pool_b):
-#     453,375 − 230,000 = 223,375  ← must NOT appear as total_el_shortfall
-_BUGGY_SHORTFALL_PORTFOLIO_RECOMPUTE = Decimal("223375.00")
+# The pre-P1.210 answer: the defaulted pool's gross shortfall EL_D - pool_b_D
+# = 450,000 - 150,000, reported beside a separate non-defaulted excess (no
+# Art. 159(3)(c) net) with the defaulted AVA / other_OFR counted in 'D'.
+_BUGGY_SHORTFALL_UNNETTED = Decimal("300000.00")
 
-# If AVA is silently dropped from per-exposure pool_b for the defaulted exposure:
-#     pool_b_D would become 125,000 → shortfall_D = 325,000
-_BUGGY_SHORTFALL_AVA_DROPPED = Decimal("325000.00")
+# Pool composition fixed but the all-other-cases net still missing:
+#     C - D = 450,000 - 120,000 = 330,000 (gross defaulted shortfall)
+_BUGGY_SHORTFALL_COMPOSITION_WITHOUT_NET = Decimal("330000.00")
+
+# If the defaulted loan's AVA (25,000) is silently dropped from Pool B:
+#     (B - 25,000 + D) - (A + C) = 205,000 - 453,375 = -248,375
+_BUGGY_SHORTFALL_AVA_DROPPED = Decimal("248375.00")
 
 # Reporting date
 _REPORTING_DATE = date(2026, 1, 1)
@@ -170,50 +187,54 @@ class TestP1127Art159PoolBAVARegressionGuard:
 
     Three test methods pin distinct aspects of the per-exposure Pool B accumulation:
 
-    1. test_total_el_shortfall_is_per_exposure_sum
-       Confirms total_el_shortfall = 300,000 (the sum of per-exposure shortfalls,
-       not a portfolio-level recompute of EL - pool_b).
+    1. test_total_el_shortfall_is_the_art_159_3_c_net
+       Confirms total_el_shortfall = 223,375, the single Art. 159(3)(c) net
+       (B + D) - (A + C), and no excess beside it.
 
     2. test_total_pool_b_memo_totals
        Confirms all five portfolio-level memo totals — EL, provisions_allocated,
        ava_amount, other_own_funds_reductions, pool_b — match EXPECTED_* constants.
 
     3. test_double_count_guards
-       Three sentinel assertions:
-         (a) total_el_shortfall == 300,000     ← correct per-exposure-sum path
-         (b) total_el_shortfall != 223,375     ← rules out portfolio-level recompute
-         (c) total_el_shortfall != 325,000     ← rules out AVA-dropped-from-pool-b bug
+       Four sentinel assertions:
+         (a) total_el_shortfall == 223,375     ← the Art. 159(3)(c) net
+         (b) total_el_shortfall != 300,000     ← rules out the pre-P1.210 unnetted figure
+         (c) total_el_shortfall != 330,000     ← rules out composition-fixed-but-unnetted
+         (d) total_el_shortfall != 248,375     ← rules out the AVA-dropped-from-Pool-B bug
 
     Regulatory References:
         - CRR Art. 158(5): defaulted EL = BEEL × EAD
-        - CRR Art. 159(1): Pool B = SCRA + AVA + other own funds reductions
-        - CRR Art. 159(3): two-branch no-cross-offset rule
+        - PS1/26 Art. 159(1): 'B' / 'D' composition
+        - PS1/26 Art. 159(3)(c): the all-other-cases net
     """
 
-    def test_total_el_shortfall_is_per_exposure_sum(
+    def test_total_el_shortfall_is_the_art_159_3_c_net(
         self,
         p1_127_el_summary: ELPortfolioSummary,
     ) -> None:
         """
-        P1.127: total_el_shortfall must be the sum of per-exposure shortfalls.
+        P1.127: total_el_shortfall is the single Art. 159(3)(c) net, with no excess.
 
-        Arrange: LN-P1127-ND (shortfall=0) + LN-P1127-D (shortfall=300,000).
-        Act:     full CRR AIRB pipeline with Art. 159(3) two-branch rule.
-        Assert:  total_el_shortfall == 300,000.00
-
-        Under Art. 159(3) the defaulted pool shortfall is not offset by the
-        non-defaulted pool excess, so only the defaulted 300,000 appears here.
+        Arrange: 'A' = 3,375, 'B' = 110,000 (AVA / other_OFR of BOTH loans),
+                 'C' = 450,000, 'D' = 120,000 (defaulted SCRA only).
+        Act:     full CRR AIRB pipeline.
+        Assert:  'A' <= 'B', so no two-branch split; total_el_shortfall ==
+                 (A + C) - (B + D) = 223,375.00 and total_el_excess == 0.
         """
         # Arrange
         summary = p1_127_el_summary
         expected = Decimal(str(EXPECTED_TOTAL_SHORTFALL))
 
         # Assert
+        assert summary.art_159_3_applies is False
         assert summary.total_el_shortfall == pytest.approx(expected, abs=Decimal("0.01")), (
-            f"P1.127: total_el_shortfall should be {expected:,.2f} (per-exposure sum of "
-            f"shortfall_ND={EXPECTED_SHORTFALL_ND:,.0f} + shortfall_D={EXPECTED_SHORTFALL_D:,.0f}). "
+            f"P1.127: total_el_shortfall should be {expected:,.2f} = (A + C) - (B + D) with "
+            f"B={EXPECTED_ART159_B:,.0f}, D={EXPECTED_ART159_D:,.0f} (PS1/26 Art. 159(3)(c)). "
             f"Got {summary.total_el_shortfall:,.2f}."
         )
+        assert summary.total_el_excess == pytest.approx(
+            Decimal(str(EXPECTED_TOTAL_EXCESS)), abs=Decimal("0.01")
+        ), "P1.127: one net figure under Art. 159(3)(c) — no excess beside the shortfall"
 
     def test_total_pool_b_memo_totals(
         self,
@@ -286,50 +307,56 @@ class TestP1127Art159PoolBAVARegressionGuard:
         p1_127_el_summary: ELPortfolioSummary,
     ) -> None:
         """
-        P1.127: three sentinel assertions guard against two known double-count regressions.
+        P1.127: the correct net, and sentinels for three known wrong answers.
 
-        Arrange: same as test_total_el_shortfall_is_per_exposure_sum.
+        Arrange: same as test_total_el_shortfall_is_the_art_159_3_c_net.
         Act:     full CRR AIRB pipeline.
-        Assert (three sub-assertions — one double-count concept each):
+        Assert (one concept each):
 
           Guard 1 — CORRECT value:
-              total_el_shortfall == 300,000.00
-              (per-exposure-sum path; Art. 159(3) correctly applied)
+              total_el_shortfall == 223,375.00 (PS1/26 Art. 159(3)(c) net)
 
-          Guard 2 — BUGGY portfolio-level recompute:
-              total_el_shortfall != 223,375.00
-              (would appear if aggregator computed EL_total − pool_b_total
-               = 453,375 − 230,000 instead of summing per-exposure shortfalls)
+          Guard 2 — pre-P1.210 unnetted figure:
+              total_el_shortfall != 300,000.00
+              (the defaulted pool's gross shortfall with its AVA / other_OFR in
+               'D', reported beside a separate non-defaulted excess)
 
-          Guard 3 — BUGGY AVA dropped from defaulted pool_b:
-              total_el_shortfall != 325,000.00
-              (would appear if AVA=25,000 were missing from pool_b_D,
-               making pool_b_D = 125,000 and shortfall_D = 325,000)
+          Guard 3 — pools fixed, net missing:
+              total_el_shortfall != 330,000.00 ('C' - 'D' reported gross)
+
+          Guard 4 — AVA dropped from Pool B:
+              total_el_shortfall != 248,375.00
+              (the defaulted loan's AVA = 25,000 missing from 'B')
         """
         # Arrange
         summary = p1_127_el_summary
         shortfall = summary.total_el_shortfall
 
-        # Guard 1 — correct per-exposure-sum value
-        assert shortfall == pytest.approx(Decimal("300000.00"), abs=Decimal("0.01")), (
-            f"P1.127 Guard 1: total_el_shortfall must be 300,000.00 "
-            f"(Art. 159(3) defaulted-pool shortfall only). Got {shortfall:,.2f}."
+        # Guard 1 — the Art. 159(3)(c) net
+        assert shortfall == pytest.approx(Decimal("223375.00"), abs=Decimal("0.01")), (
+            f"P1.127 Guard 1: total_el_shortfall must be 223,375.00 "
+            f"((A + C) - (B + D), PS1/26 Art. 159(3)(c)). Got {shortfall:,.2f}."
         )
 
-        # Guard 2 — portfolio-level recompute bug (453,375 − 230,000 = 223,375)
+        # Guard 2 — the pre-P1.210 unnetted figure
+        assert shortfall != pytest.approx(_BUGGY_SHORTFALL_UNNETTED, abs=Decimal("0.01")), (
+            f"P1.127 Guard 2 REGRESSION: total_el_shortfall == {_BUGGY_SHORTFALL_UNNETTED} "
+            f"is the defaulted pool's gross shortfall: the Art. 159(3)(c) net is missing "
+            f"and the defaulted AVA / other_OFR were counted in 'D'. Got {shortfall:,.2f}."
+        )
+
+        # Guard 3 — composition fixed, all-other-cases net missing
         assert shortfall != pytest.approx(
-            _BUGGY_SHORTFALL_PORTFOLIO_RECOMPUTE, abs=Decimal("0.01")
+            _BUGGY_SHORTFALL_COMPOSITION_WITHOUT_NET, abs=Decimal("0.01")
         ), (
-            f"P1.127 Guard 2 REGRESSION: total_el_shortfall == {_BUGGY_SHORTFALL_PORTFOLIO_RECOMPUTE} "
-            f"indicates the aggregator is computing EL_total − pool_b_total "
-            f"(portfolio-level recompute) instead of summing per-exposure shortfalls. "
-            f"Got {shortfall:,.2f}."
+            f"P1.127 Guard 3 REGRESSION: total_el_shortfall == "
+            f"{_BUGGY_SHORTFALL_COMPOSITION_WITHOUT_NET} is 'C' - 'D' reported gross — "
+            f"the Art. 159(3)(c) net is missing. Got {shortfall:,.2f}."
         )
 
-        # Guard 3 — AVA dropped from defaulted pool_b bug (pool_b_D = 125,000 → shortfall = 325,000)
+        # Guard 4 — AVA dropped from Pool B
         assert shortfall != pytest.approx(_BUGGY_SHORTFALL_AVA_DROPPED, abs=Decimal("0.01")), (
-            f"P1.127 Guard 3 REGRESSION: total_el_shortfall == {_BUGGY_SHORTFALL_AVA_DROPPED} "
-            f"indicates AVA was dropped from the defaulted exposure's Pool B "
-            f"(expected pool_b_D=150,000 with AVA, got 125,000 without AVA). "
+            f"P1.127 Guard 4 REGRESSION: total_el_shortfall == {_BUGGY_SHORTFALL_AVA_DROPPED} "
+            f"indicates the defaulted loan's AVA (25,000) was dropped from Pool B. "
             f"Got {shortfall:,.2f}."
         )

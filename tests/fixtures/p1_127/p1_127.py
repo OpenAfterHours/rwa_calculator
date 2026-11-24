@@ -31,12 +31,18 @@ Expected per-exposure outputs (hand-calc, for assertions in the acceptance test)
         pool_b_D   = provisions(120,000) + AVA(25,000) + other_OFR(5,000) = 150,000
         shortfall_D = max(0, 450,000 - 150,000) = 300,000  (excess = 0)
 
-Expected aggregated outputs (two-branch Art. 159(3) rule):
-    Non-defaulted pool: EL=3,375, pool_b=80,000   → excess  (pool_b > EL)
-    Defaulted pool:     EL=450,000, pool_b=150,000 → shortfall (EL > pool_b)
-    Art. 159(3): both conditions hold simultaneously (A<B AND D>C), so:
-        total_el_shortfall              = 300,000   (defaulted pool only)
-        total_el_excess_for_t2_cap      = 76,625    (non-defaulted pool only)
+Expected aggregated outputs (PS1/26 Art. 159(1)/(3); UK CRR Art. 159):
+    'A' = non-defaulted EL = 3,375
+    'B' = all GCRA + non-defaulted SCRA + ALL AVA + ALL other own funds
+          reductions = 30,000 + 40,000 + 10,000 + 25,000 + 5,000 = 110,000
+          (the defaulted loan's AVA and other_OFR are 'B', never 'D')
+    'C' = defaulted EL = 450,000
+    'D' = defaulted SCRA only = 120,000
+    A > B is false, so this is NOT the two-branch case (that needs A > B AND
+    D > C). Art. 159(3)(c), "in all other cases": (B + D) - (A + C)
+    = 230,000 - 453,375 = -223,375, ONE net figure:
+        total_el_shortfall              = 223,375   (net, Art. 159(3)(c))
+        total_el_excess                 = 0
         total_expected_loss             = 453,375
         total_provisions_allocated      = 150,000
         total_ava_amount                = 65,000    (40,000 + 25,000)
@@ -45,8 +51,10 @@ Expected aggregated outputs (two-branch Art. 159(3) rule):
 
 References:
     - CRR Art. 158(5): defaulted EL = best-estimate expected loss (BEEL × EAD)
-    - CRR Art. 159(1): Pool B = SCRA + GCRA + AVA + other own funds reductions
-    - CRR Art. 159(3): two-branch no-cross-offset rule
+    - PS1/26 Art. 159(1): 'B' / 'D' composition (UK CRR Art. 159)
+    - PS1/26 Art. 159(3)(c): the all-other-cases net (P1.210 re-pinned this
+      scenario from 300,000 — the defaulted pool's gross shortfall, reported
+      beside a separate non-defaulted excess — to the rule's net 223,375)
     - CRR Art. 34 / Art. 105: Additional value adjustments (AVA)
     - src/rwa_calc/engine/irb/adjustments.py: compute_el_shortfall_excess
     - src/rwa_calc/engine/aggregator/_el_summary.py: compute_el_portfolio_summary
@@ -132,15 +140,22 @@ EXPECTED_POOL_B_D: float = PROV_D + AVA_D + OTHER_OFR_D  # 150_000.0
 EXPECTED_SHORTFALL_D: float = EXPECTED_EL_D - EXPECTED_POOL_B_D  # 300_000.0
 EXPECTED_EXCESS_D: float = 0.0  # EL > pool_b
 
-# Expected portfolio-level aggregates (two-branch Art. 159(3) rule)
+# Expected portfolio-level aggregates (PS1/26 Art. 159(1)/(3))
 EXPECTED_TOTAL_EL: float = EXPECTED_EL_ND + EXPECTED_EL_D  # 453_375.0
 EXPECTED_TOTAL_PROV: float = PROV_ND + PROV_D  # 150_000.0
 EXPECTED_TOTAL_AVA: float = AVA_ND + AVA_D  # 65_000.0
 EXPECTED_TOTAL_OTHER_OFR: float = OTHER_OFR_ND + OTHER_OFR_D  # 15_000.0
 EXPECTED_TOTAL_POOL_B: float = EXPECTED_POOL_B_ND + EXPECTED_POOL_B_D  # 230_000.0
-# Art. 159(3): non-defaulted has excess, defaulted has shortfall — no cross-offset
-EXPECTED_TOTAL_SHORTFALL: float = EXPECTED_SHORTFALL_D  # 300_000.0
-EXPECTED_TOTAL_EXCESS_T2: float = EXPECTED_EXCESS_ND  # 76_625.0
+# Art. 159(1): 'B' holds every AVA / other_OFR (the defaulted loan's too) and
+# all SCRA on non-defaulted exposures; 'D' holds the defaulted SCRA only.
+EXPECTED_ART159_B: float = PROV_ND + EXPECTED_TOTAL_AVA + EXPECTED_TOTAL_OTHER_OFR  # 110_000.0
+EXPECTED_ART159_D: float = PROV_D  # 120_000.0
+# Art. 159(3)(c): A <= B, so not the two-branch case -> one net figure
+# (B + D) - (A + C) = 230,000 - 453,375 = -223,375 -> shortfall, no excess.
+EXPECTED_TOTAL_SHORTFALL: float = EXPECTED_TOTAL_EL - (
+    EXPECTED_ART159_B + EXPECTED_ART159_D
+)  # 223_375.0
+EXPECTED_TOTAL_EXCESS: float = 0.0
 
 
 # ---------------------------------------------------------------------------

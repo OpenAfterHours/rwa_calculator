@@ -295,7 +295,15 @@ class TestPoolBPortfolioSummary:
         assert float(summary.total_el_shortfall) == pytest.approx(4_000.0)
 
     def test_two_branch_with_ava(self) -> None:
-        """Art. 159(3) two-branch rule works correctly with AVA present."""
+        """Art. 159(3) two-branch rule with AVA: every AVA is 'B', never 'D'.
+
+        PS1/26 Art. 159(1) 'B'(iii) holds ALL additional value adjustments;
+        'D' is the defaulted SPECIFIC credit risk adjustments only. So
+        'A' = 50,000, 'B' = 20,000 + 10,000 + 5,000 (the defaulted row's AVA)
+        = 35,000, 'C' = 10,000, 'D' = 30,000. 'A' > 'B' and 'D' > 'C' ->
+        shortfall 'A' - 'B' = 15,000, excess 'D' - 'C' = 20,000. P1.210
+        re-pinned this from 20,000 / 25,000 (the defaulted AVA counted in 'D').
+        """
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["ND_001", "D_001"],
@@ -315,9 +323,9 @@ class TestPoolBPortfolioSummary:
         summary = compute_el_portfolio_summary(lf)
         assert summary is not None
         assert summary.art_159_3_applies is True
-        # Two-branch: shortfall from ND only, excess from D only
-        assert float(summary.total_el_shortfall) == pytest.approx(20_000.0)
-        assert float(summary.total_el_excess) == pytest.approx(25_000.0)
+        # Two-branch: shortfall 'A' - 'B', excess 'D' - 'C'
+        assert float(summary.total_el_shortfall) == pytest.approx(15_000.0)
+        assert float(summary.total_el_excess) == pytest.approx(20_000.0)
         # AVA totals
         assert float(summary.total_ava_amount) == pytest.approx(15_000.0)
         assert float(summary.total_pool_b) == pytest.approx(65_000.0)

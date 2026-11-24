@@ -12,8 +12,9 @@ Key responsibilities:
   (CRR Art. 111(1) / PS1/26 Art. 111(1)(a)-(b)); general credit risk
   adjustments go to Tier 2 under Art. 110(1) / 62(c) and never reduce the SA
   exposure value
-- IRB/Slotting pass-through (the total feeds EL shortfall/excess, because
-  PS1/26 Art. 159(1) 'B' includes general credit risk adjustments)
+- IRB/Slotting pass-through: both amounts feed the EL shortfall/excess
+  comparison — the specific part on a defaulted exposure is PS1/26
+  Art. 159(1) 'D', the rest (general credit risk adjustments included) 'B'
 
 References:
     CRR Art. 110(1): SA general CRA treated under Art. 62(c) (Tier 2)
@@ -68,8 +69,9 @@ def resolve_provisions(
     Two amounts are allocated per exposure, on the same levels and basis:
 
     - ``provision_allocated`` — every provision row (specific AND general).
-      The IRB / slotting expected-loss comparison reads it: PS1/26 Art. 159(1)
-      'B' sums (i) general and (ii) specific credit risk adjustments.
+      The IRB / slotting expected-loss comparison reads it beside the
+      specific amount: PS1/26 Art. 159(1) 'D' is the specific credit risk
+      adjustments on defaulted exposures, 'B' everything else.
     - ``provision_specific_allocated`` — specific credit risk adjustments
       only: a row whose ``provision_type`` is ``scra`` (any case) or NULL.
       NULL stays specific because it is what the loader injects when a book

@@ -63,7 +63,8 @@ credit risk adjustments".
 Two amounts are therefore allocated to each exposure, on the same levels and pro-rata basis:
 
 - `provision_allocated` — every provision row, specific and general. The IRB / slotting
-  EL comparison reads it (Art. 159 Pool B includes general CRA).
+  EL comparison reads it together with the specific amount below: the specific part on a
+  defaulted exposure is Art. 159 'D', everything else is 'B' (P1.210).
 - `provision_specific_allocated` — rows whose `provision_type` is `scra` (any case) or null.
   A null type is what the loader injects when a book omits the optional column; it is treated as
   specific, as untyped provisions always were. A `gcra` row is excluded, and so is a row with any
@@ -155,17 +156,44 @@ Under Basel 3.1, total EL amounts must be increased to reflect any post-model ad
 ### EL vs Provisions Comparison (Art. 159)
 
 The comparison pool 'B' (provisions side) includes:
-- General credit risk adjustments (CRA)
+- General credit risk adjustments (CRA) — **all** of them, including a general CRA
+  allocated to a defaulted exposure
 - Specific CRA for non-defaulted exposures
-- Additional value adjustments (AVAs per Art. 34)
-- Other own funds reductions
+- Additional value adjustments (AVAs per Art. 34) — on defaulted exposures too
+- Other own funds reductions — on defaulted exposures too
 
-!!! success "Pool B Complete (P1.83)"
-    All four Art. 159(1) Pool B components are now included in the EL comparison:
-    `pool_b = provision_allocated + ava_amount + other_own_funds_reductions`.
-    When `ava_amount` or `other_own_funds_reductions` columns are absent, they
-    default to 0.0 (backward compatible). The `ELPortfolioSummary` reports
-    `total_ava_amount`, `total_other_own_funds_reductions`, and `total_pool_b`.
+'D' is the specific CRA on defaulted exposures and nothing else. UK CRR Art. 159 restricts
+only that amount: "Specific credit risk adjustments on exposures in default shall not be used
+to cover expected loss amounts on other exposures." The PS1/26 restatement of Art. 159(1)
+lists the same composition, and COREP C 04.00 reports GCRA (r0120), SCRA (r0130) and
+AVA/other reductions (r0131) only under the non-defaulted row 0100, and only SCRA (r0150)
+under the defaulted row 0145.
+
+!!! success "Pool B / D composition (P1.83, P1.210)"
+    The portfolio summary (`engine/aggregator/_el_summary.py`) builds the pools from the
+    IRB and slotting branch frames:
+
+    ```
+    D = sum(provision_specific_allocated)                       over defaulted rows
+    B = sum(provision_allocated + ava_amount + other_own_funds_reductions) - D
+        over all rows
+    ```
+
+    `provision_specific_allocated` is the specific-CRA carrier `resolve_provisions` writes
+    (`provision_type` `scra`, any case, or null). A frame without the carrier, or a null on a
+    row, counts the row's whole `provision_allocated` as specific — an untyped provision on a
+    defaulted exposure stays ring-fenced in 'D'. A label other than `scra` / `gcra` (reported
+    as DQ006) is not specific, so on a defaulted exposure it lands in 'B'. When `ava_amount`
+    or `other_own_funds_reductions` columns are absent, they default to 0.0. The
+    `ELPortfolioSummary` reports `total_ava_amount`, `total_other_own_funds_reductions`, and
+    `total_pool_b` ('B' + 'D'). Before P1.210 the defaulted rows' general CRA, AVA and other
+    reductions were counted in 'D'.
+
+    The carrier has to reach the summary on three routes, and each is pinned by its own
+    test: it is declared on the sealed IRB and slotting branch edges (`IRB_BRANCH_EDGE`,
+    `SLOTTING_BRANCH_EDGE` in `contracts/edges.py`, which otherwise drop it with no error),
+    and it is listed in the aggregator's `MONEY_COLS`, so on a securitised exposure the
+    residual scaling scales 'D' together with the `provision_allocated` it is part of.
 
 ### Art. 159(3) — Two-Branch Comparison Rule
 
@@ -174,7 +202,7 @@ Art. 159 partitions the EL-vs-provisions comparison into four labelled amounts:
 | Label | Definition | Source |
 |-------|-----------|--------|
 | **A** | EL amounts for **non-defaulted** exposures | Art. 158(5), (6), (10) (PD × LGD × EAD) |
-| **B** | Provisions for **non-defaulted** exposures | General CRAs (Art. 110) + specific CRAs for non-defaulted exposures + AVAs (Art. 34) + other own funds reductions |
+| **B** | Every other Pool B amount | **All** general CRAs (Art. 110), including those on defaulted exposures + specific CRAs for non-defaulted exposures + **all** AVAs (Art. 34) + **all** other own funds reductions |
 | **C** | EL amounts for **defaulted** exposures | Art. 158(5), (6), (10) (BEEL for A-IRB; 1 × LGD × EAD for F-IRB) |
 | **D** | Specific CRAs for **defaulted** exposures | Art. 110 |
 
@@ -221,12 +249,17 @@ The **negative amount** (shortfall) is deducted in full from CET1 under
 Art. 36(1)(d). The **positive amount** (excess) is added to T2 under
 Art. 62(d), subject to the cap defined below.
 
-!!! success "Implemented (P1.81)"
+!!! success "Implemented (P1.81, P1.210)"
     Art. 159(3) two-branch rule is implemented. When the split branch holds,
     `effective_shortfall = non_defaulted_shortfall = A − B` and
     `effective_excess = defaulted_excess = D − C` — no cross-pool netting.
-    The `art_159_3_applies` flag on `ELPortfolioSummary` indicates when the
-    split branch is triggered.
+    In every other case the engine reports **one** net figure,
+    `(B + D) − (A + C)`: a shortfall when negative, an excess when positive,
+    never both (P1.210 — before it, the case A ≤ B, D ≤ C reported the gross
+    `C − D` shortfall beside a separate `B − A` excess). The
+    `art_159_3_applies` flag on `ELPortfolioSummary` indicates when the split
+    branch is triggered; the four `non_defaulted_*` / `defaulted_*` fields keep
+    each pool's own gross comparison.
 
 ### Art. 62(d) — T2 Cap on EL Excess
 
@@ -328,9 +361,9 @@ The aggregator computes a portfolio-level `ELPortfolioSummary` with:
 | `total_provisions_allocated` | `sum(provision_allocated)` across all IRB exposures | CRR Art. 159(1)(a-b) |
 | `total_ava_amount` | `sum(ava_amount)` across all IRB exposures | CRR Art. 159(1)(c), Art. 34 |
 | `total_other_own_funds_reductions` | `sum(other_own_funds_reductions)` across all IRB exposures | CRR Art. 159(1)(d) |
-| `total_pool_b` | `provisions + AVA + other_own_funds_reductions` | CRR Art. 159(1) |
-| `total_el_shortfall` | `sum(el_shortfall)` after Art. 159(3) rule | CRR Art. 159 |
-| `total_el_excess` | `sum(el_excess)` after Art. 159(3) rule | CRR Art. 62(d) |
+| `total_pool_b` | `provisions + AVA + other_own_funds_reductions` ('B' + 'D') | CRR Art. 159(1) |
+| `total_el_shortfall` | `A − B` when A > B and D > C; otherwise `max(0, (A + C) − (B + D))` | CRR Art. 159 |
+| `total_el_excess` | `D − C` when A > B and D > C; otherwise `max(0, (B + D) − (A + C))` | CRR Art. 62(d) |
 | `t2_credit_cap` | `total_irb_rwa × 0.006` (un-floored IRB credit-risk RWA — CRR has no output floor) | CRR Art. 62(d) |
 | `t2_credit` | `min(total_el_excess, t2_credit_cap)` — see [Art. 62(d) — T2 Cap on EL Excess](#art-62d-t2-cap-on-el-excess) for the formula and worked examples | CRR Art. 62(d) |
 | `cet1_deduction` | `total_el_shortfall` (full amount) | Art. 36(1)(d) |
@@ -368,7 +401,7 @@ Additional spec scenarios validated through the above:
 
 - **SA OBS provision deduction**: Provision reduces nominal before CCF application (validated within G1 pipeline — drawn-first mechanics apply to OBS)
 - **Multi-level beneficiary resolution**: Direct, facility, and counterparty-level provisions resolved in priority order with pro-rata distribution (validated through G1 pipeline and unit tests)
-- **Art. 159(3) two-branch rule**: Non-defaulted shortfall and defaulted excess computed separately when conditions hold (validated through G2/G3 and dedicated unit tests)
+- **Art. 159(3) two-branch rule**: Non-defaulted shortfall and defaulted excess computed separately when conditions hold, one net figure otherwise (validated through G2/G3, P1.127, the P1.210 both-regimes pipeline test and dedicated unit tests)
 
 ## Acceptance Tests
 

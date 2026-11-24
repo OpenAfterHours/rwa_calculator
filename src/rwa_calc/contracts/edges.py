@@ -1466,7 +1466,8 @@ def _crm_added_columns() -> dict[str, EdgeColumn]:
         # Provisions. ``provision_allocated`` is every provision row (the IRB
         # EL comparison needs general CRA, Art. 159(1) 'B'(i));
         # ``provision_specific_allocated`` is specific CRA only — what the SA
-        # deduction nets (Art. 111(1)) and the Art. 127(1) default test reads.
+        # deduction nets (Art. 111(1)) and the Art. 127(1) default test reads,
+        # and on a defaulted IRB / slotting row the Art. 159(1) 'D' amount.
         "provision_allocated": EdgeColumn(dtype=pl.Float64),
         "provision_specific_allocated": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111(1)"),
         "provision_deducted": EdgeColumn(dtype=pl.Float64, citation="CRR Art. 111(1)"),
@@ -2040,6 +2041,10 @@ IRB_BRANCH_EDGE: EdgeContract = EdgeContract(
         "pd_floored": EdgeColumn(dtype=pl.Float64),
         "post_model_adjustment_el": EdgeColumn(dtype=pl.Float64),
         "post_model_adjustment_rwa": EdgeColumn(dtype=pl.Float64),
+        # The specific-CRA part of ``provision_allocated``: the expected-loss
+        # summary reads the branch frame to put defaulted SPECIFIC CRA in 'D'
+        # and the defaulted GENERAL CRA in 'B' (PS1/26 Art. 159(1)).
+        "provision_specific_allocated": EdgeColumn(dtype=pl.Float64, citation=_CITE_CRR_159),
         "rwa": EdgeColumn(dtype=pl.Float64),
         "rwa_pre_adjustments": EdgeColumn(dtype=pl.Float64),
         "scaling_factor": EdgeColumn(dtype=pl.Float64),
@@ -2105,6 +2110,8 @@ SLOTTING_BRANCH_EDGE: EdgeContract = EdgeContract(
         "slotting_short_maturity_rw_applied": EdgeColumn(
             dtype=pl.Boolean, citation="PS1/26 Art. 153(5)(c)-(d)"
         ),
+        # See IRB_BRANCH_EDGE: the Art. 159(1) 'B' / 'D' split of provisions.
+        "provision_specific_allocated": EdgeColumn(dtype=pl.Float64, citation=_CITE_CRR_159),
         "remaining_maturity_years": EdgeColumn(dtype=pl.Float64),
         "rwa": EdgeColumn(dtype=pl.Float64),
         "slotting_el_rate": EdgeColumn(dtype=pl.Float64),

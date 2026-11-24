@@ -3049,8 +3049,11 @@ class TestB31SubordinatedDebt:
     Under Basel 3.1, all subordinated debt (institution + corporate) receives
     150% RW regardless of CQS. This overrides the CQS-based lookup.
 
-    Under CRR, subordinated debt uses the same CQS-based table as senior
-    debt (with different LGD under IRB only).
+    Under CRR there is no SA subordinated-debt weight (Art. 128 was omitted
+    from UK CRR). What CRR does have is Art. 139(2): a subordinated row ranks
+    junior, so a rating that is not its own (every long-term rating the engine
+    attaches is counterparty-wide) is used only where it gives the HIGHER
+    weight, and the row is otherwise treated as unrated (P1.260).
 
     Why this matters:
         The flat 150% creates a significant capital surcharge for subordinated
@@ -3101,7 +3104,15 @@ class TestB31SubordinatedDebt:
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """Subordinated debt uses normal CQS table under CRR (no override)."""
+        """No 150% under CRR; Art. 139(2) treats the junior CQS 1 row as unrated -> 100%.
+
+        This test used to pin 20% on the premise that CRR treats subordinated
+        debt "same as senior for SA". It does not: the CQS 1 rating is the
+        issuer's (long-term ratings attach counterparty-wide), it gives 20%
+        against the Art. 122(2) unrated 100%, and a junior exposure may use
+        an issuer rating only where it gives the higher weight (CRR
+        Art. 139(2)(a)) — so the row is treated as unrated (P1.260).
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
@@ -3111,8 +3122,8 @@ class TestB31SubordinatedDebt:
             config=crr_config,
         )
 
-        # CRR: subordinated treated same as senior for SA → CQS 1 = 20%
-        assert float(result["risk_weight"]) == pytest.approx(0.20)
+        # CRR: no Art. 133(5) 150%; Art. 139(2) unrated corporate = 100%.
+        assert float(result["risk_weight"]) == pytest.approx(1.00)
 
     def test_senior_debt_unaffected_b31(
         self,
@@ -3253,15 +3264,18 @@ class TestB31SubordinatedDebt:
     ) -> None:
         """CRR has no SA subordinated carve-out — the defaulted row is untouched.
 
-        Leak guard. CRR keeps subordinated debt on the ordinary CQS ladder
-        (see ``test_subordinated_not_applied_under_crr``), so this row must
-        still resolve through Art. 127: provisions 300k >= 20% x 1m → 100%.
+        Leak guard. CRR has no Art. 133(5) 150%, so this row must still
+        resolve through Art. 127: provisions 100k < 20% x 1m → 150%.
 
         The tripwire is the second assertion. If the B31 carve-out were ever
         implemented by adding ``seniority`` to the shared ``is_defaulted``
         mask, this row would skip the Art. 127 override altogether and fall
-        back to the chain's CQS-1 corporate weight of 20% — a catastrophic
-        under-weighting of a defaulted exposure.
+        back to the chain's weight — 100%, the Art. 139(2) unrated corporate
+        weight a junior CQS 1 row takes (P1.260).
+
+        P1.260 moved this test's provision from 300k (Art. 127 100%) to 100k:
+        at 300k the Art. 127 result and the chain's post-P1.260 weight are both
+        100%, so the tripwire could no longer tell them apart.
         """
         result = calculate_single_sa_exposure(
             sa_calculator,
@@ -3270,13 +3284,13 @@ class TestB31SubordinatedDebt:
             cqs=1,
             seniority="subordinated",
             is_defaulted=True,
-            provision_allocated=Decimal("300000"),
+            provision_allocated=Decimal("100000"),
             provision_deducted=Decimal("0"),
             config=crr_config,
         )
 
-        assert float(result["risk_weight"]) == pytest.approx(1.00)
-        assert float(result["risk_weight"]) != pytest.approx(0.20)
+        assert float(result["risk_weight"]) == pytest.approx(1.50)
+        assert float(result["risk_weight"]) != pytest.approx(1.00)
 
 
 def _sl_row(

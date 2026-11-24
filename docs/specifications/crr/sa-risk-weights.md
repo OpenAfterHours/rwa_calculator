@@ -786,6 +786,100 @@ most favourable applicable grade across the three.
 | 6 | 150% |
 | Unrated | 100% |
 
+## Subordinated Exposures and Issuer Ratings (CRR Art. 139(2))
+
+UK CRR has no SA subordinated-debt weight (Art. 128 was omitted by SI 2021/1078). What
+reaches a subordinated exposure is Art. 139(2), which governs a credit assessment that is
+not directly applicable to the item — an issuer rating, or the rating of another issue:
+
+!!! quote "CRR Art. 139(2)"
+    "... that credit assessment shall be used in either of the following cases: (a) it
+    produces a higher risk weight than would otherwise be the case and the exposure in
+    question ranks pari passu or junior in all respects to the specific issuing program or
+    facility or to senior unsecured exposures of that issuer, as relevant; (b) it produces a
+    lower risk weight and the exposure in question ranks pari passu or senior in all respects
+    to the specific issuing programme or facility or to senior unsecured exposures of that
+    issuer, as relevant. In all other cases, the exposure shall be treated as unrated."
+
+A subordinated exposure ranks junior, so limb (b) never applies to it: it keeps the rating
+only where that gives the higher weight, and its weight is the higher of the rated and the
+unrated weight. `engine/sa/issuer_rating_seniority.py::apply_issuer_rating_seniority_test`
+nulls `cqs` (treats the row as unrated) where all of these hold:
+
+| Condition | Column / rule |
+|-----------|---------------|
+| The exposure ranks junior | `seniority == "subordinated"` |
+| Institution, corporate (incl. SME) or specialised-lending class | `exposure_class` |
+| Weighted from a credit assessment at all | not an own-funds line (settlement risk, CCP default fund) and not a QCCP trade exposure |
+| The rating is not the item's own | not `has_own_short_term_ecai` — every long-term rating attaches counterparty-wide, so only an exposure-scoped short-term issue rating is directly applicable (Art. 139(1)) |
+| The rating gives the lower weight | rated weight is strictly below the unrated weight (both below) |
+
+**Rated weight.** The branch the override ladder takes with the rating: the Art. 123 retail
+75% for an SME managed as retail (that branch never reads the rating), otherwise Art. 131
+Table 7 for a short-term assessment, Art. 120(2) Table 4 for a short-dated institution, Art.
+120(1) Table 3, or the Art. 122(1) corporate table.
+
+**Unrated weight** — "the risk weight ... than would otherwise be the case" — is the weight
+the engine assigns the row once `cqs` is null, in two halves:
+
+1. *The ladder:* Art. 122(2) for a corporate (the higher of 100% and the sovereign's
+   weight), Art. 121(3) / Table 5 for an institution (the sovereign-derived weight, not the
+   table's 100%), the retail 75% for an SME managed as retail, and the corporate table's
+   unrated row for specialised lending.
+2. *Art. 140(2):* a row treated as unrated, with no short-term assessment of its own, is an
+   unrated exposure to its obligor. Where the obligor carries a 150%-weighted short-term
+   rated facility it takes 150% (Art. 140(2)(a), unsecured, any maturity); where it carries a
+   50%-weighted one, an unsecured short-term exposure takes at least 100% (Art. 140(2)(b)).
+
+The ladder reads the same unrated expressions (`crr_unrated_corporate_rw_expr`,
+`crr_unrated_institution_rw_expr`, `crr_sme_managed_as_retail_expr`), and the Art. 140(2)
+override and the comparison read the same `art_140_2_target_rw_expr`
+(`engine/sa/obligor_st_contamination.py`). The comparison and the weight the row then
+receives therefore cannot drift apart — which is what makes the test raise a weight or leave
+it alone, never lower it. Leaving the Art. 140(2) half out was measured to under-fire: for an
+obligor with a 150% short-term facility a subordinated CQS 2 corporate went to 150% while a
+CQS 3 one kept 100%.
+
+| Example (subordinated) | Before | After |
+|------------------------|--------|-------|
+| Corporate CQS 2, sovereign CQS 1 | 50% | 100% (unrated) |
+| Corporate CQS 3, sovereign CQS 6 | 100% | 150% (Art. 122(2) sovereign floor) |
+| Corporate CQS 5 | 150% | 150% (limb (a): rating kept) |
+| Institution CQS 1, sovereign CQS 2 | 20% | 50% (Table 5) |
+| Institution CQS 2, sovereign CQS 1 | 50% | 50% (rating above the 20% unrated weight) |
+| Institution CQS 2, sovereign CQS 1, obligor has a 150% short-term facility | 50% | 150% (Art. 140(2)(a)) |
+| Corporate CQS 3, obligor has a 150% short-term facility | 100% | 150% (Art. 140(2)(a)) |
+| Institution CQS 2, original maturity 0.2y, obligor has a 50% short-term facility | 20% | 100% (Art. 140(2)(b)) |
+| Senior corporate CQS 2 | 50% | 50% (not junior) |
+
+The `rating_is_issue_specific` flag is not read: the engine cannot attach a long-term rating
+to an item, so it is never directly applicable to a subordinated one, whatever the defaulted
+flag says. The flag keeps its single job, the PS1/26 Art. 139(2B) specialised-lending
+disapplication.
+
+!!! info "Basel 3.1"
+    PS1/26 Art. 139(2) survives with the same two limbs. On the Basel 3.1 ladder it moves
+    nothing for these classes: Art. 133(5) assigns 150% to a subordinated institution,
+    corporate or specialised-lending exposure whatever its rating, so the rated and unrated
+    weights are equal. The test therefore runs on the CRR ladder only (it reads the
+    `sa_revised_risk_weight_overrides` Feature).
+
+Where the rated and unrated weights are equal the row keeps its `cqs`; because the unrated
+weight already carries Art. 140(2), its weight is the higher of the two either way.
+
+!!! warning "Residuals"
+    - Subordinated central-government, PSE, RGLA and MDB exposures are not tested (both
+      regimes).
+    - Real-estate classes (`residential_mortgage`, `commercial_mortgage`) read the
+      counterparty's corporate `cqs` for the part above the LTV threshold and are outside the
+      test's class scope: a subordinated CQS 2 commercial mortgage at LTV 0.8 takes 50% in
+      all (that part at the rated corporate 50%), where Art. 139(2) gives 68.75% (that part
+      at the unrated 100%). The corporate-class twin (a subordinated corporate, SME or
+      institution row with `property_type = "commercial"` meeting Art. 126) IS handled: its
+      `cqs` is nulled, so the Art. 126 residual takes the unrated weight (68.75% in the same
+      example).
+    - Covered bonds are outside Art. 139(2) by Art. 139(3).
+
 ## Short-Term Assessments (CRR Art. 131, Table 7)
 
 Where an exposure has a specific short-term ECAI assessment, Art. 131 provides a dedicated

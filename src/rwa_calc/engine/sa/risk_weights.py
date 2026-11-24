@@ -97,8 +97,6 @@ from rwa_calc.engine.sa.crr_real_estate import (
     crr_residential_re_rw_expr,
 )
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
-    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
-    CRR_CORPORATE_SME_RW,
     CRR_DEFAULTED_PROVISION_THRESHOLD,
     CRR_DEFAULTED_RW_HIGH_PROVISION,
     CRR_DEFAULTED_RW_LOW_PROVISION,
@@ -107,7 +105,6 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     INSTITUTION_RISK_WEIGHTS_CRR,
     INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR,
-    INSTITUTION_SHORT_TERM_UNRATED_RW_CRR,
     IO_ZERO_RW,
     MDB_NAMED_ZERO_RW,
     MDB_UNRATED_RW,
@@ -122,10 +119,17 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     get_combined_cqs_risk_weights,
 )
 from rwa_calc.engine.sa.guarantor_rw import build_institution_guarantor_rw_expr
+from rwa_calc.engine.sa.issuer_rating_seniority import (
+    apply_issuer_rating_seniority_test,
+    crr_sme_managed_as_retail_expr,
+    crr_unrated_corporate_rw_expr,
+    crr_unrated_institution_rw_expr,
+)
 from rwa_calc.engine.sa.jurisdiction import (
     pse_jurisdiction_not_permitted_expr,
     pse_short_term_eligible_expr,
 )
+from rwa_calc.engine.sa.obligor_st_contamination import art_140_2_target_rw_expr
 from rwa_calc.engine.sa.payroll_loan import (
     PAYROLL_MATURITY_OVER_CAP_COL,
     payroll_loan_35pct_expr,
@@ -133,10 +137,7 @@ from rwa_calc.engine.sa.payroll_loan import (
 )
 from rwa_calc.engine.sa.re_class import is_commercial_re_class, is_residential_re_class
 from rwa_calc.engine.sa.rgla import is_rgla_sovereign_expr, rgla_sovereign_rw_expr
-from rwa_calc.engine.sa.sovereign_derived import (
-    crr_art_121_4_trade_finance_expr,
-    sovereign_derived_rw_expr,
-)
+from rwa_calc.engine.sa.sovereign_derived import sovereign_derived_rw_expr
 from rwa_calc.engine.sa.sovereign_floor import apply_sovereign_floor_for_institutions
 from rwa_calc.engine.sa.subordinated_debt import is_b31_subordinated_debt
 from rwa_calc.rulebook import RulepackV0
@@ -249,10 +250,6 @@ _SA_SHARED_RW: dict[str, float] = {
     "other_default": scalar_value(_CRR_PACK.scalar_param("other_items_default_rw")),
     # Regulatory retail — 75% flat (Art. 123 / CRE20.65)
     "retail": scalar_value(_CRR_PACK.scalar_param("retail_risk_weight")),
-    # Art. 114(1) residual for a central government carrying no ECAI assessment
-    # — the floor value the Art. 121(6) institution floor reads when the
-    # sovereign is unrated (identical under CRR and PS1/26).
-    "cgcb_unrated": float(CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS[CQS.UNRATED]),
 }
 
 # CCR Art. 92(3)(ca) own-funds -> RWA factor (12.5), pins failed-trade RW (P8.43).
@@ -271,7 +268,6 @@ _SA_CRR_RW: dict[str, float] = {
     "inst_st_low": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS1]),
     "inst_st_mid": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS4]),
     "inst_st_high": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS6]),
-    "inst_unrated_st": float(INSTITUTION_SHORT_TERM_UNRATED_RW_CRR),
     # Art. 121(4) scope: Art. 162(3)(b) trade finance, residual <= 1y (inclusive).
     "inst_trade_finance_max_residual": scalar_value(
         _CRR_PACK.scalar_param("sa_unrated_institution_trade_finance_max_residual_maturity_years")
@@ -286,8 +282,8 @@ _SA_CRR_RW: dict[str, float] = {
     "defaulted_threshold": float(CRR_DEFAULTED_PROVISION_THRESHOLD),
     "defaulted_high": float(CRR_DEFAULTED_RW_HIGH_PROVISION),
     "defaulted_low": float(CRR_DEFAULTED_RW_LOW_PROVISION),
-    # Corporate / retail / equity tail (Art. 122 / 123 / 133(2))
-    "corporate_sme": float(CRR_CORPORATE_SME_RW),
+    # Retail / equity tail (Art. 123 / 133(2)); the Art. 122(2) unrated corporate
+    # weight is crr_unrated_corporate_rw_expr (engine/sa/issuer_rating_seniority.py).
     "non_reg_retail": float(CRR_NON_REGULATORY_RETAIL_RW),
     "equity": _CRR_EQ_RW[EquityType.LISTED],
 }
@@ -439,10 +435,12 @@ def _apply_obligor_st_contamination_override(exposures: pl.LazyFrame) -> pl.Lazy
     (a) 150% broadcast (Table 7 CQS 4+) onto ALL the obligor's unrated unsecured
     claims (short- OR long-term); (b) 100% floor (max(RW, 100%)) on its unrated
     unsecured SHORT-TERM claims when a 50%-attracting (Table 7 CQS 2) assessment
-    exists. The 150% hard override dominates the floor (checked first).
+    exists. The limbs' predicates and weights are ``art_140_2_target_rw_expr``
+    (``engine/sa/obligor_st_contamination.py``), which the CRR Art. 139(2)
+    seniority test also reads, so its "treated as unrated" weight is the weight
+    this override then assigns.
 
-    A target is UNSECURED (``~is_guaranteed`` — a guaranteed leg keeps its
-    guarantor RW), lacks its OWN short-term assessment (``~has_own_short_term_ecai``
+    A target lacks its OWN short-term assessment (``~has_own_short_term_ecai``
     — the directly-rated leg is the SOURCE, never a target), and is either
     genuinely unrated (``cqs`` null) OR was handed a short-term cqs by the
     Art. 120(3)(c) spillover (``has_short_term_ecai``). Including the spilled arm
@@ -454,19 +452,9 @@ def _apply_obligor_st_contamination_override(exposures: pl.LazyFrame) -> pl.Lazy
     is_target = pl.col("has_own_short_term_ecai").not_() & (
         pl.col("cqs").is_null() | pl.col("has_short_term_ecai")
     )
-    is_unsecured = pl.col("is_guaranteed").not_()
-    # Reuse the SA short-term window (original maturity <= 3m, <= 6m for
-    # self-liquidating trade LCs) used by the institution ST branches. No
-    # fill_null: a null maturity yields a null gate the when-chain treats as
-    # "not short-term".
-    original_mty = pl.col("original_maturity_years")
-    is_st = (original_mty <= 0.25) | (pl.col("is_short_term_trade_lc") & (original_mty <= 0.5))
-
     return exposures.with_columns(
-        pl.when(pl.col("obligor_st_150_contamination") & is_target & is_unsecured)
-        .then(pl.lit(1.50))
-        .when(pl.col("obligor_st_50_floor") & is_target & is_unsecured & is_st)
-        .then(pl.max_horizontal(pl.col("risk_weight"), pl.lit(1.00)))
+        pl.when(is_target)
+        .then(art_140_2_target_rw_expr(pl.col("risk_weight")))
         .otherwise(pl.col("risk_weight"))
         .alias("risk_weight")
     )
@@ -812,10 +800,11 @@ def _crr_append_institution_maturity_branches(
     Table 7 applies regardless of the residual-maturity gate that drives the
     Table 4 path. Mirrors the Basel 3.1 Table 4A pattern.
 
-    The unrated limbs close the chain, short-dated before long-dated, so the
-    Art. 121(3) flat 20% takes precedence over the Art. 121(1) Table 5
-    sovereign-derived lookup that follows it. ``reporting_date`` dates the
-    residual maturity that scopes Art. 121(4) trade finance.
+    The unrated limb closes the chain: ``crr_unrated_institution_rw_expr``
+    applies the Art. 121(3) flat 20% ahead of the Art. 121(1) Table 5
+    sovereign-derived lookup, and holds Art. 121(4) trade finance on the 100%
+    residual. ``reporting_date`` dates the residual maturity that scopes
+    Art. 121(4) trade finance.
     """
     is_institution = uc.str.contains("INSTITUTION", literal=True)
     is_rated = pl.col("cqs").is_not_null() & (pl.col("cqs") > 0)
@@ -852,36 +841,13 @@ def _crr_append_institution_maturity_branches(
             .then(pl.lit(_SA_CRR_RW["inst_st_mid"]))
             .otherwise(pl.lit(_SA_CRR_RW["inst_st_high"]))
         )
-        # Art. 121(3): unrated institution with ORIGINAL effective maturity <= 3m.
-        # Overrides the Table 5 sovereign-derived fallback. (No sovereign floor
-        # follows under CRR: Art. 121(6) is PS1/26-only, pack Feature-gated.)
-        .when(is_institution & is_unrated & (original_mty <= 0.25))
-        .then(pl.lit(_SA_CRR_RW["inst_unrated_st"]))
-        # Art. 121(1) Table 5: an unrated institution takes the risk weight of
-        # the CQS to which the central government of its jurisdiction of
-        # incorporation is assigned — 1/2/3/4/5/6 -> 20/50/100/100/100/150%.
-        # Long-dated only: it sits BEHIND the Art. 121(3) branch above, which
-        # is why it carries no maturity gate of its own. Art. 121(2) (central
-        # government unrated -> 100%) is the ``unrated_default`` that
-        # ``sovereign_derived_rw_expr`` applies when cp_sovereign_cqs is null.
-        #
-        # Art. 121(4) trade finance — Art. 162(3)(b), RESIDUAL maturity up to
-        # one year — is EXCLUDED; a trade LC with longer to run takes Table 5.
-        # Excluded rows land on the base-join 100% (UNRATED): a DELIBERATE
-        # INTERIM, as neither Art. 121(4) rate is implemented (P1.338). See
-        # ``crr_art_121_4_trade_finance_expr`` for why it is not conservative
-        # on every reading; pinned by ``TestP1316Art1214TradeFinanceScope``.
-        .when(
-            is_institution
-            & is_unrated
-            & ~crr_art_121_4_trade_finance_expr(
-                reporting_date, _SA_CRR_RW["inst_trade_finance_max_residual"]
-            )
-        )
+        # Art. 121(3) / 121(1) Table 5 / 121(2) / 121(4): the unrated weight,
+        # short-dated first. Shared with the Art. 139(2) seniority test so the two
+        # cannot drift; see engine/sa/issuer_rating_seniority.py.
+        .when(is_institution & is_unrated)
         .then(
-            sovereign_derived_rw_expr(
-                INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED,
-                float(INSTITUTION_RISK_WEIGHTS_CRR[CQS.UNRATED]),
+            crr_unrated_institution_rw_expr(
+                reporting_date, _SA_CRR_RW["inst_trade_finance_max_residual"]
             )
         )
     )
@@ -1029,6 +995,12 @@ def _prepare_risk_weight_lookup(
             .otherwise(pl.col("cqs"))
             .alias("cqs")
         )
+
+    # CRR Art. 139(2): a subordinated row keeps a borrowed (issuer-level)
+    # rating only where it gives the higher weight; see issuer_rating_seniority.py.
+    exposures = apply_issuer_rating_seniority_test(
+        exposures, upper, resolved_pack, config.reporting_date
+    )
 
     exposures = exposures.with_columns(
         [
@@ -1339,37 +1311,18 @@ def _apply_crr_risk_weight_overrides(
     # SME / retail branches.
     chain = (
         # SME managed as retail: 75% (CRR Art. 123, aggregated <= EUR 1m).
-        chain.when(
-            uc.str.contains("SME", literal=True)
-            & (pl.col("cp_is_managed_as_retail") == True)  # noqa: E712
-            & (pl.col("qualifies_as_retail") == True)  # noqa: E712
-        )
+        # Shared with the Art. 139(2) seniority test.
+        chain.when(crr_sme_managed_as_retail_expr(uc))
         .then(pl.lit(_SA_SHARED_RW["retail"]))
-        # Art. 122(2): an unrated corporate takes "a 100 % risk weight or the
-        # risk weight of exposures to the central government of the jurisdiction
-        # in which the corporate is incorporated, whichever is the HIGHER".
-        # Only a CQS6 sovereign (150%) binds — the Art. 114 ladder is
-        # 0/20/50/100/100/150 and an unrated sovereign is 100%, so the 100% floor
-        # dominates everywhere else.
-        #
-        # Covers SME and non-SME alike: CRR Art. 122 draws no SME distinction
-        # (the former SME arm here was just Art. 122(2) restated), and CRR SME
-        # relief is the Art. 501 supporting factor, not a risk weight. A rated
-        # corporate is untouched — Art. 122(2) reaches only exposures "for which
-        # such a credit assessment is not available".
+        # Art. 122(2): an unrated corporate (SME or not) takes the higher of 100%
+        # and its sovereign's weight. A rated corporate is untouched — Art. 122(2)
+        # reaches only exposures "for which such a credit assessment is not
+        # available". Shared with the Art. 139(2) seniority test.
         .when(
             uc.str.contains("CORPORATE", literal=True)
             & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
         )
-        .then(
-            pl.max_horizontal(
-                pl.lit(_SA_CRR_RW["corporate_sme"]),
-                sovereign_derived_rw_expr(
-                    CENTRAL_GOVT_CENTRAL_BANK_RISK_WEIGHTS,
-                    _SA_SHARED_RW["cgcb_unrated"],
-                ),
-            )
-        )
+        .then(crr_unrated_corporate_rw_expr())
     )
 
     # Retail-class branches (Art. 123).

@@ -1,12 +1,15 @@
 """
-Basel 3.1 subordinated-debt predicate shared by the SA risk-weight paths.
+Subordinated-debt predicates shared by the SA risk-weight paths.
 
 Pipeline position:
     CRMProcessor -> SACalculator -> Aggregation
-    (read by ``engine/sa/risk_weights.py``'s Basel 3.1 override chain and by
-    its Art. 127 defaulted override)
+    (read by ``engine/sa/risk_weights.py``'s Basel 3.1 override chain, by its
+    Art. 127 defaulted override, and by the CRR Art. 139(2) seniority test in
+    ``engine/sa/issuer_rating_seniority.py``)
 
 Key responsibilities:
+- ``is_subordinated``: the bare seniority test, the single home of the
+  ``seniority`` null default.
 - ``is_b31_subordinated_debt``: which rows take the PS1/26 Art. 133(5) 150%
   — subordinated institution, corporate and specialised-lending exposures.
 
@@ -38,8 +41,9 @@ def is_b31_subordinated_debt(upper_class: pl.Expr) -> pl.Expr:
     """B31 subordinated-debt predicate — Art. 112 Table A2 priority 3.
 
     Shared by the risk-weight chain and the defaulted override so the two
-    cannot drift, and so the single ``seniority.fill_null`` site is not
-    duplicated (check-11 ratchets ``engine_fill_null_sites``).
+    cannot drift; the seniority half is ``is_subordinated``, so the single
+    ``seniority.fill_null`` site is not duplicated (check-11 ratchets
+    ``engine_fill_null_sites``).
 
     Scoped to institution / corporate deliberately: the Art. 133 150% is not a
     universal subordinated weight, and widening it would re-price subordinated
@@ -63,8 +67,19 @@ def is_b31_subordinated_debt(upper_class: pl.Expr) -> pl.Expr:
     Returns:
         Boolean expression, True where the Art. 133(5) 150% applies.
     """
-    return (pl.col("seniority").fill_null("senior") == "subordinated") & (
+    return is_subordinated() & (
         upper_class.str.contains("INSTITUTION", literal=True)
         | upper_class.str.contains("CORPORATE", literal=True)
         | upper_class.str.contains("SPECIALISED", literal=True)
     )
+
+
+def is_subordinated() -> pl.Expr:
+    """True where the exposure ranks junior (``seniority == "subordinated"``).
+
+    The class-free half of the subordinated-debt predicates, so the CRR
+    Art. 139(2) seniority test can read seniority without importing
+    ``is_b31_subordinated_debt``'s class limbs. A null ``seniority`` is senior,
+    matching the SA input contract default.
+    """
+    return pl.col("seniority").fill_null("senior") == "subordinated"

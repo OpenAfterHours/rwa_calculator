@@ -5,12 +5,16 @@ Pipeline position:
     CRMProcessor -> SACalculator -> Aggregation
     (read by ``engine/sa/risk_weights.py``'s CRR and Basel 3.1 dispatchers and
     its Art. 127 defaulted-RE limb, by ``engine/sa/b31_risk_weight_tables.py``'s
-    real-estate route, and by the aggregator's applied-class overlay)
+    real-estate route and Art. 124J weight, by the aggregator's applied-class
+    overlay, and by ``reporting/corep/re_limbs.py`` — the OF 07.00 / OF 09.01
+    real-estate limb rows)
 
 Key responsibilities:
 - ``is_commercial_re_class``: commercial real estate, by class string or by
   ``property_type``
 - ``is_residential_re_class``: residential real estate, by class string
+- ``is_residential_property``: the Art. 124J(2) / 124J(3) residential test on an
+  other real estate exposure, by ``property_type``
 
 Why a module of its own: every reader must route on the SAME expression, or the
 applied risk weight, the reported class and the Basel 3.1 loan-split carriers
@@ -28,6 +32,7 @@ from __future__ import annotations
 import logging
 
 import polars as pl
+from watchfire import cites
 
 logger = logging.getLogger(__name__)
 
@@ -57,3 +62,16 @@ def is_commercial_re_class(uc: pl.Expr) -> pl.Expr:
 def is_residential_re_class(uc: pl.Expr) -> pl.Expr:
     """Match residential RE — relies on commercial being routed first."""
     return uc.str.contains("MORTGAGE", literal=True) | uc.str.contains("RESIDENTIAL", literal=True)
+
+
+@cites("PS1/26, paragraph 124J")
+def is_residential_property() -> pl.Expr:
+    """Whether an other real estate exposure takes Art. 124J(2) (residential) rather
+    than Art. 124J(3) (commercial): its ``property_type`` is residential.
+
+    Read by the Art. 124J weight (``b31_other_re_rw_expr``) and by the OF 07.00 rows
+    0351-0354 that report it (``reporting/corep/re_limbs.py``), so a row names the
+    paragraph whose weight the leg took. A null ``property_type`` reads as
+    commercial, the paragraph with the 60% floor.
+    """
+    return pl.col("property_type").fill_null("").str.to_lowercase() == "residential"

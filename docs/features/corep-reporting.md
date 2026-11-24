@@ -2210,10 +2210,15 @@ substitution effects).
     residential RE) plus the SA loan-splitter's `residential_mortgage` /
     `commercial_mortgage` secured legs — so RE exposure lands in a class row
     rather than surviving only in the country Total. The sub-rows split that
-    class: **0091/0092** (regulatory residential / commercial RE) by
-    `property_type` and the qualifying-RE flag, **0093** (other RE) for
-    non-qualifying exposures, **0094** (land ADC) by the ADC flag, and **0095**
-    the SME of-which. Income-producing commercial RE that classifies as
+    class by the Art. 124 limb the SA dispatcher's real-estate route places each
+    leg in —
+    **0091/0092** regulatory residential / commercial RE, **0093** other RE
+    (Art. 124J: attested non-qualifying, or a property with no value), **0094**
+    land ADC — and **0095** is the SME of-which. A leg is in at most one of
+    0091–0094, and each row holds exactly the legs of OF 07.00 row
+    0330/0340/0350/0360, whose derivation it shares. Row 0090 equals their sum
+    for every leg the route places in a limb, which is every shape measured
+    through the pipeline. Income-producing commercial RE that classifies as
     `corporate` stays in the corporate parent row 0070 (as it does under CRR),
     keeping row 0090 a clean class partition. The specialised-lending rows
     **0071–0073** split the corporate parent row 0070 by `sl_type` (object /

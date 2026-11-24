@@ -239,6 +239,7 @@ from rwa_calc.reporting.corep import c02_rows, irb_sheets
 from rwa_calc.reporting.corep.c07 import c07_population
 from rwa_calc.reporting.corep.c08_sheets import sheet_keys
 from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
+from rwa_calc.reporting.corep.re_limbs import re_limb_exprs, re_limb_terms
 from rwa_calc.reporting.corep.supporting_factors import sf_adjustment_terms, sf_infra_flag_exprs
 from rwa_calc.reporting.corep.templates import (
     C09_01_SA_CLASS_MAP,
@@ -359,16 +360,19 @@ _C09_01_RE_CLASSES: tuple[str, ...] = (
 )
 
 # OF 09.01 real-estate "of which" sub-rows (0091-0095): the presence-tolerant
-# equals terms narrowing the RE class union. property_type / is_adc / is_sme are
-# read raw (a null there correctly excludes the exposure from the sub-row);
-# c09_re_qualifying is the derived null->True regulatory flag (see
-# ``_c09_01_derived_exprs``). ADC (0094) and the SME "of which" (0095) cross-cut
-# the residential/commercial/other partition, mirroring C 07.00's RE memo rows.
+# equals terms narrowing the RE class union. 0091-0094 each have the "Same
+# definition as" OF 07.00 0330 / 0340 / 0350 / 0360 and row 0090 is their "Sum"
+# (Annex II), so they are the Art. 124 limbs (regulatory residential / commercial,
+# other, ADC) and take C 07.00's terms over the same derived limb and property side
+# (``corep/re_limbs.py``): the limb the SA dispatcher's route places it in. No leg
+# is in two of them; a leg the route places in no limb is in row 0090 alone.
+# is_sme is read raw (a null there excludes the exposure); the SME "of which"
+# (0095) cross-cuts the limbs.
 _C09_01_RE_ROW_TERMS: dict[str, tuple[tuple[str, str | bool], ...]] = {
-    "re_residential": (("property_type", "residential"), ("c09_re_qualifying", True)),
-    "re_commercial": (("property_type", "commercial"), ("c09_re_qualifying", True)),
-    "re_other": (("c09_re_qualifying", False),),
-    "re_adc": (("is_adc", True),),
+    "re_residential": re_limb_terms("regulatory", "residential", prefix="c09"),
+    "re_commercial": re_limb_terms("regulatory", "commercial", prefix="c09"),
+    "re_other": re_limb_terms("other", prefix="c09"),
+    "re_adc": re_limb_terms("adc", prefix="c09"),
     "re_sme": (("is_sme", True),),
 }
 
@@ -564,16 +568,16 @@ def generate_c09_01(
 
 def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
     """The C 09.01 discriminator columns: the defaulted ladder, the SME flag, the
-    RE-family regulatory flag and the CCR original-exposure term.
+    RE-family limb flags and the CCR original-exposure term.
 
     ``c09_sme`` is C 07.00's ``c07_sme`` ladder verbatim — the of-which SME rows
     are defined as "Same definition as for row 0020 of CR SA template", so they
     must select exactly the legs that row selects or the cross-template tie-out
-    cannot hold. ``c09_re_qualifying`` fills a null ``is_qualifying_re`` to True —
-    identical to C 07.00's ``c07_qualifying_re``, so a real-estate exposure with an
-    unset qualifying flag counts as regulatory RE (rows 0091/0092) rather than
-    "other real estate" (row 0093). property_type / is_adc / is_sme are read raw by
-    the RE sub-row predicates (a null there correctly excludes the row).
+    cannot hold. ``c09_re_limb`` / ``c09_re_property`` come from the SAME
+    ``re_limb_exprs`` that derives C 07.00's ``c07_re_*`` twins, for the same
+    reason: both evaluate the SA dispatcher's real-estate route on the leg, so rows
+    0091-0094 hold the legs OF 07.00 rows 0330 / 0340 / 0350 / 0360 hold. is_sme is
+    read raw by the SME sub-row predicate (a null there correctly excludes the row).
     ``c09_ccr_gross`` is C 07.00's ``c07_ccr_gross`` verbatim: the original exposure
     of the counterparty-credit-risk / settlement legs, whose per-side gross carriers
     are null by design. Its gate list is EXACTLY the exposure_types the side
@@ -586,8 +590,7 @@ def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
         _defaulted_expr(cols).alias("c09_defaulted"),
         _sme_expr(cols).alias("c09_sme"),
     ]
-    if "is_qualifying_re" in cols:
-        exprs.append(pl.col("is_qualifying_re").fill_null(value=True).alias("c09_re_qualifying"))
+    exprs.extend(re_limb_exprs(cols, prefix="c09"))  # C 07.00's limb (rows 0091-0094)
     if _BENEFICIAL_COL in cols:
         # The post-basis specialised-lending gate (see _SL_OWN_RW_COL), read the
         # same null-safe way C 07.00 reads it: an unknown benefit is not a
@@ -711,10 +714,12 @@ def _c09_01_re_sl_pred(key: str, basis_col: str) -> RowPredicate | None:
 
     - ``real_estate`` (0090): the RE class union over ``basis_col`` (applied
       basis for the primary columns, original basis for the 0020 memo).
-    - ``re_residential`` / ``re_commercial`` (0091/0092): regulatory RE narrowed
-      by property_type + the qualifying flag.
-    - ``re_other`` (0093): non-regulatory RE (is_qualifying_re explicitly False).
-    - ``re_adc`` (0094) / ``re_sme`` (0095): the ADC and SME "of which".
+    - ``re_residential`` / ``re_commercial`` (0091/0092): regulatory RE, by the
+      route's property side.
+    - ``re_other`` (0093): other RE (Art. 124J).
+    - ``re_adc`` (0094): ADC. Each leg is in at most one of 0091-0094: the limb the
+      SA dispatcher's real-estate route places it in (``corep/re_limbs.py``).
+    - ``re_sme`` (0095): the SME "of which", across all four.
     - ``sl_*`` (0071-0073): SA specialised lending by sl_type."""
     if key in _C09_01_SL_TYPE_MAP:
         return RowPredicate(equals=(("sl_type", _C09_01_SL_TYPE_MAP[key]),))

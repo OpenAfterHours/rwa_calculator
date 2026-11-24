@@ -29,8 +29,10 @@ is asserted here as an absolute value rather than as "non-null".
 regimes). This file owns the ARITHMETIC on the golden estate: that the merged
 sheet carries the sum of its parts, and that every breakdown the merge was
 supposed to preserve is still reported — on the ROW axis, where the regulation
-puts it (0020 SME, 0330/0340 by ``property_type`` under Basel 3.1, 0310 under
-CRR), rather than on the sheet axis, where it never belonged.
+puts it (0020 SME; under Basel 3.1, 0330-0360 by the Art. 124 limb and property
+side the SA dispatcher's real-estate route gives each leg,
+``reporting/corep/re_limbs.py``; 0310 under CRR), rather than on the sheet axis,
+where it never belonged.
 
 Deliberately NOT asserted: column 0150. ``0150 = max(0, 0110 - 0130)`` is the
 one non-linear cell on the template, so the merged value is recomputed over the
@@ -243,7 +245,7 @@ class TestRetailLetterH:
 
 class TestRealEstateLetterI:
     """(i) real estate — the three mortgage classes on one sheet, split back out
-    on the row axis by ``property_type``."""
+    on the row axis by Art. 124 limb and property side (``re_limbs.py``)."""
 
     @pytest.mark.parametrize("regime_key", list(_REGIMES))
     def test_total_is_the_sum_of_all_real_estate_classes(self, regime_key: str) -> None:

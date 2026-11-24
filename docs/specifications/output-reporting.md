@@ -198,8 +198,50 @@ when allocating SME CRE exposures.
     deliberately interleaves them as 0341 → 0343 → 0342 → 0344 to make this
     explicit. Do not assume row-ID ordering implies parent-child grouping.
 
-Source: PS1/26 Annex II §3.2, pp. 90–91 of
-`docs/assets/ps1-26-annex-ii-reporting-instructions.pdf`.
+!!! info "0330, 0340, 0350 and 0360: the limb the weight was set under"
+    The four parent rows are the three Art. 124 limbs, and no leg is in two of
+    them. A leg's limb is the one the Basel 3.1 SA dispatcher's real-estate route
+    places it in, read by evaluating the dispatcher's own predicates
+    (`b31_real_estate_route`) on the leg (`reporting/corep/re_limbs.py`), first
+    match in its order. It is the branch the leg's weight is computed on unless
+    an earlier dispatcher branch pre-empts the real-estate ones (subordinated
+    debt's flat 150%, for one):
+
+    1. **0360**: ADC (`is_adc`), even where the leg also meets the other-real-estate
+       test below (attested non-qualifying, or no LTV). Art. 124K wins over
+       Art. 124J as well as over Art. 124F-124I.
+    2. **0350–0354**: other real estate (Art. 124J). Either the property is
+       attested not to meet Art. 124A (`is_qualifying_re` False), or it has a
+       `property_type` but no LTV. A property with no value fails Art. 124A(1)(d),
+       "the value of the property is determined in accordance with Article
+       124D". 0351/0352 versus 0353/0354 follow the Art. 124J(2)/(3) test the
+       weight applies: residential where `property_type` is residential, else
+       commercial.
+    3. **0330–0344**: regulatory real estate. The leg has an LTV, and its
+       property side is the route's: commercial where the class or
+       `property_type` says commercial, else residential. On a mortgage that
+       carries its own LTV and no `property_type`, the class decides.
+
+    PS1/26 Art. 124A(1) makes a regulatory exposure one that "is not an ADC
+    exposure", and the Glossary defines an other real estate exposure as one
+    "that is not a regulatory real estate exposure or an ADC exposure". On the
+    `real_estate` sheet, 0330 + 0340 + 0350 + 0360 equals row 0010 for every leg
+    the route places in a limb. A real-estate-class leg with no ADC flag, no LTV,
+    no `property_type` and no attested non-qualification matches no branch: the
+    engine weights it by counterparty, and it would count in row 0010 alone.
+    The one such shape measured, a mortgage product with no property linked, is
+    classified `retail_other` and never reaches the sheet.
+
+    OF 09.01 rows 0091–0094 have the "Same definition as" these four rows, and
+    row 0090 is their "Sum". They take the same terms over the same derivation,
+    so each OF 09.01 row holds exactly the legs of its OF 07.00 twin
+    (`boe_b0978`–`boe_b0989`). A frame missing any column the route reads
+    (`exposure_class`, `property_type`, `ltv`, `is_qualifying_re`, `is_adc`)
+    reports no limb row in either template. The aggregator exit seals all five.
+
+Source: PS1/26 Annex II §3.2, pp. 90–91 (OF 07.00) and p. 140 (OF 09.01) of
+`docs/assets/ps1-26-annex-ii-reporting-instructions.pdf`; PS1/26 Art. 124,
+Art. 124A(1), Art. 124J and the Glossary.
 
 For the **risk-weight band rows** (Section 3 of OF 07.00), see the dedicated table
 [OF 07.00 Section 3 — Risk Weight Band Row IDs](#of-0700-section-3--risk-weight-band-row-ids)

@@ -11,6 +11,9 @@ Why the rows matter: PS1/26 requires granular reporting of RE exposures by
 property type, cash-flow dependency and SME status, which is what lets a
 supervisor see concentration risk in property-secured lending.
 
+The limb partition itself (regulatory / other / ADC, and the OF 09.01 tie-out)
+is held by ``test_re_limb_partition.py``.
+
 References:
 - PRA PS1/26 Annex II, OF 07.00 rows 0330-0360
 """
@@ -41,7 +44,8 @@ def _sa_results_with_re() -> pl.LazyFrame:
             # class carrier only ever holds enum values, and all three RE members
             # key the single Art. 112(1)(i) ``real_estate`` sheet. The
             # residential / commercial distinction these rows exercise is a ROW
-            # breakdown on that sheet (0330-0360, driven by ``property_type``).
+            # breakdown on that sheet (0330-0360, driven by the SA dispatcher's
+            # real-estate route over the class, ``property_type`` and ``ltv``).
             "exposure_class": [
                 "residential_mortgage",
                 "residential_mortgage",
@@ -89,6 +93,12 @@ def _sa_results_with_re() -> pl.LazyFrame:
                 None,
             ],
             "is_adc": [False, False, False, False, False, True, False],
+            # Sealed on the aggregator exit, so present here; a null reads as
+            # qualifying. The ADC leg is attested True, as the pipeline gives it.
+            "is_qualifying_re": [None, True, True, None, True, True, None],
+            # Sealed too: every property here is valued. A property with no LTV
+            # fails Art. 124A(1)(d) and is other real estate (rows 0350-0354).
+            "ltv": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, None],
             # SME flag for commercial sub-split
             "sme_supporting_factor_eligible": [
                 False,
@@ -152,16 +162,20 @@ class TestRealEstateRows:
         assert row["0200"][0] == pytest.approx(300.0)
 
     def test_commercial_re_total(self) -> None:
-        """Row 0340 shows total regulatory commercial RE."""
+        """Row 0340 shows total regulatory commercial RE — never the ADC leg.
+
+        A regulatory real estate exposure is one that "is not an ADC exposure"
+        (PS1/26 Art. 124A(1)), so SA_RE_ADC_1 is reported in 0360 alone even
+        though its ``property_type`` is commercial and its qualifying flag True.
+        """
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_re(), framework="BASEL_3_1")
         re_comm = bundle.c07_00.get("real_estate")
         assert re_comm is not None
         row = re_comm.filter(pl.col("row_ref") == "0340")
         assert len(row) == 1
-        # All commercial (excl ADC): 500 + 400 + 150 + 100 = 1150
-        # But property_type = commercial for all, including ADC
-        assert row["0200"][0] == pytest.approx(1150.0)
+        # SA_RE_COMM_1 + _2 + _3: 500 + 400 + 150 = 1050 (SA_RE_ADC_1 is in 0360)
+        assert row["0200"][0] == pytest.approx(1050.0)
 
     def test_commercial_not_dependent_non_sme(self) -> None:
         """Row 0341: commercial, not dependent, non-SME."""
@@ -215,7 +229,7 @@ class TestRealEstateRows:
         assert total == pytest.approx(not_dep + dep)
 
     def test_the_property_type_rows_foot_to_the_merged_sheet_total(self) -> None:
-        """0330 + 0340 + 0360 = the sheet's own total row.
+        """0330 + 0340 + 0350 + 0360 = the sheet's own total row.
 
         The merge put four engine rows on one sheet; this is the assertion that
         none of them was dropped on the way onto the row axis (``LESSONS`` E2 —
@@ -230,7 +244,9 @@ class TestRealEstateRows:
         def value(row_ref: str) -> float:
             return float(sheet.filter(pl.col("row_ref") == row_ref)["0200"][0] or 0.0)
 
-        # Row 0340 already counts the ADC leg (its property_type is commercial),
-        # so 0360 is an of-which of 0340 rather than a sibling of it.
-        assert value("0010") == pytest.approx(value("0330") + value("0340"))
+        # The four rows are the Art. 124 limbs (regulatory residential /
+        # regulatory commercial / other / ADC) and partition the class: OF 09.01
+        # row 0090, the "Sum of rows 0091 to 0094", defines them so.
+        limbs = value("0330") + value("0340") + value("0350") + value("0360")
+        assert value("0010") == pytest.approx(limbs)
         assert value("0010") == pytest.approx(1650.0)

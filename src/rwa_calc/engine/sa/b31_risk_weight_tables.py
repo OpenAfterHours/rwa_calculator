@@ -56,7 +56,11 @@ from rwa_calc.contracts.edges import (
 )
 from rwa_calc.domain.enums import ProjectPhase, PropertyType
 from rwa_calc.engine.sa.guarantor_rw import build_corporate_guarantor_rw_expr
-from rwa_calc.engine.sa.re_class import is_commercial_re_class, is_residential_re_class
+from rwa_calc.engine.sa.re_class import (
+    is_commercial_re_class,
+    is_residential_property,
+    is_residential_re_class,
+)
 from rwa_calc.rulebook.resolve import resolve
 
 # Basel 3.1 SA risk-weight values now live in packs/b31.py; the int-keyed CQS
@@ -803,7 +807,7 @@ def b31_other_re_rw_expr(counterparty_rw_col: str = "_cqs_risk_weight") -> pl.Ex
     """
     is_income = pl.col("has_income_cover").fill_null(False)
     cp_rw = pl.col(counterparty_rw_col).fill_null(1.0)
-    is_resi = pl.col("property_type").fill_null("").str.to_lowercase() == "residential"
+    is_resi = is_residential_property()
 
     # Art. 124L — Counterparty type routing for the Art. 124J non-income residual.
     # Art. 124J has no counterparty gate, so all four limbs of the shared

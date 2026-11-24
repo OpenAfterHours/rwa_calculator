@@ -229,7 +229,7 @@ from __future__ import annotations
 
 import logging
 from functools import cache
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple
 
 import polars as pl
 from watchfire import cites
@@ -263,6 +263,7 @@ from rwa_calc.reporting.corep.c07_sheet_scope import (
 from rwa_calc.reporting.corep.ccf_buckets import CCF_CARRIERS, ccf_bucket_expr
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
 from rwa_calc.reporting.corep.postpass import negate_deduction_cols
+from rwa_calc.reporting.corep.re_limbs import RE_LIMB_SOURCES, ReRow, re_limb_exprs, re_limb_terms
 from rwa_calc.reporting.corep.supporting_factors import (
     sf_adjustment_terms,
     sf_infra_flag_exprs,
@@ -521,21 +522,23 @@ _CIU_ROW_APPROACH: dict[str, str] = {
 # Memo defaulted-at-RW rows: ref -> the RW band label (Art. 127 100%/150%).
 _MEMO_DEFAULTED_RW: dict[str, str] = {"0300": "100%", "0320": "150%"}
 _MEMO_RE_SECURED: dict[str, str] = {"0290": "commercial", "0310": "residential"}
-_RE_ROW_FILTERS: dict[str, dict[str, Any]] = {
-    "0330": {"property_type": "residential"},
-    "0331": {"property_type": "residential", "materially_dependent": False},
-    "0332": {"property_type": "residential", "materially_dependent": True},
-    "0340": {"property_type": "commercial"},
-    "0341": {"property_type": "commercial", "materially_dependent": False, "is_sme": False},
-    "0342": {"property_type": "commercial", "materially_dependent": True},
-    "0343": {"property_type": "commercial", "materially_dependent": False, "is_sme": True},
-    "0344": {"property_type": "commercial", "materially_dependent": True, "is_sme": True},
-    "0350": {"is_qualifying": False},
-    "0351": {"is_qualifying": False, "property_type": "residential", "materially_dependent": False},
-    "0352": {"is_qualifying": False, "property_type": "residential", "materially_dependent": True},
-    "0353": {"is_qualifying": False, "property_type": "commercial", "materially_dependent": False},
-    "0354": {"is_qualifying": False, "property_type": "commercial", "materially_dependent": True},
-    "0360": {"is_adc": True},
+# OF 07.00 real-estate rows (B31): the Art. 124 limb the SA dispatcher's route places
+# the leg in (``corep/re_limbs.py``: 0330-0344 regulatory, 0350-0354 other, 0360 ADC).
+_RE_ROW_FILTERS: dict[str, ReRow] = {
+    "0330": ReRow("regulatory", "residential"),
+    "0331": ReRow("regulatory", "residential", md=False),
+    "0332": ReRow("regulatory", "residential", md=True),
+    "0340": ReRow("regulatory", "commercial"),
+    "0341": ReRow("regulatory", "commercial", md=False, sme=False),
+    "0342": ReRow("regulatory", "commercial", md=True),
+    "0343": ReRow("regulatory", "commercial", md=False, sme=True),
+    "0344": ReRow("regulatory", "commercial", md=True, sme=True),
+    "0350": ReRow("other"),
+    "0351": ReRow("other", "residential", md=False),
+    "0352": ReRow("other", "residential", md=True),
+    "0353": ReRow("other", "commercial", md=False),
+    "0354": ReRow("other", "commercial", md=True),
+    "0360": ReRow("adc"),
 }
 _EQUITY_TRANSITIONAL_FILTERS: dict[str, tuple[str, bool]] = {
     "0371": ("sa_transitional", True),
@@ -1029,10 +1032,7 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
     elif "is_income_producing" in cols:
         exprs.append(pl.col("is_income_producing").fill_null(value=False).alias("c07_md"))
 
-    if "property_type" in cols:
-        exprs.append(pl.col("property_type").is_not_null().alias("c07_has_property"))
-    if "is_qualifying_re" in cols:
-        exprs.append(pl.col("is_qualifying_re").fill_null(value=True).alias("c07_qualifying_re"))
+    exprs.extend(re_limb_exprs(cols, prefix="c07"))  # the Art. 124 limb (rows 0330-0360)
     if "ppu_reason" in cols:
         exprs.append(
             pl.col("ppu_reason")
@@ -1711,7 +1711,7 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
         if ref in _PF_PHASE_MAP:
             return _terms(("sl_type", "project_finance"), ("sl_project_phase", _PF_PHASE_MAP[ref]))
         if ref in _RE_ROW_FILTERS:
-            return _re_terms(cols, **_RE_ROW_FILTERS[ref])  # type: ignore[arg-type]
+            return _re_terms(cols, _RE_ROW_FILTERS[ref])
         if ref == "0030":
             return _supporting_factor_terms(cols, "sme")
         if ref == "0035":
@@ -1732,11 +1732,10 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
             # EXCEPT one whose property is attested ``is_qualifying_re=False``,
             # which since review CL-07 takes Art. 124(1)'s 100%
             # (engine/sa/crr_real_estate.py). That leg is still class (i) and
-            # still residential-property-secured; whether the row's "Article 125
-            # CRR" reference excludes it is a reporting-scope decision of the
-            # P1.353 family (operator-gated), NOT taken here — adding
-            # ``c07_qualifying_re`` would also narrow on null-as-True, the P1.292
-            # default. Revisit with P1.353 / P1.292.
+            # still residential-property-secured; whether "Article 125 CRR"
+            # excludes it is an open CRR scoping question, NOT the Basel 3.1
+            # limb partition of rows 0330-0360 (``corep/re_limbs.py``). A term
+            # on ``is_qualifying_re`` would also read null as qualifying.
             return _terms((_SHEET_KEY_COL, _RE_SHEET_KEY), ("property_type", "residential"))
         if ref == "0050":
             return _terms(("c07_ppu", True))
@@ -1790,16 +1789,14 @@ def _terms_for_row(  # noqa: PLR0911, PLR0912, C901 - a direct table of the reti
     return None
 
 
-def _re_terms(
-    cols: set[str],
-    *,
-    property_type: str | None = None,
-    materially_dependent: bool | None = None,
-    is_sme: bool | None = None,
-    is_adc: bool | None = None,
-    is_qualifying: bool | None = None,
-) -> _Terms | None:
-    """RE "of which" membership terms (retired _filter_re semantics).
+def _re_terms(cols: set[str], row: ReRow) -> _Terms | None:
+    """RE "of which" membership terms: the sheet scope, the row's Art. 124 limb,
+    then its property-side / dependency / SME narrowing.
+
+    THE LIMB is the one the SA dispatcher's real-estate route places the leg in:
+    0330-0344 regulatory, 0350-0354 other, 0360 ADC, no leg in two (``re_limbs``
+    holds the Annex II and PS1/26 basis; OF 09.01 reads the same terms). Inert
+    (None) on a frame missing any column the route reads (``RE_LIMB_SOURCES``).
 
     SHEET-SCOPED, and this is the ONE place all fourteen of them are built.
     PS1/26 Annex II closes every OF 07.00 row this builder serves — 0330, 0331,
@@ -1822,23 +1819,14 @@ def _re_terms(
     NOT applied to the memorandum rows 0290/0300/0310/0320, which ¶52/¶54-55
     scope to the class BEFORE default instead (``c07_sheet_scope.py``).
     """
+    if not RE_LIMB_SOURCES.issubset(cols):
+        return None
     terms: list[tuple[str, str | bool]] = [(_SHEET_KEY_COL, _RE_SHEET_KEY)]
-    if property_type is not None:
-        terms.append(("property_type", property_type))
-    else:
-        terms.append(("c07_has_property", True))
-    if is_qualifying is not None:
-        if "is_qualifying_re" not in cols and is_qualifying is False:
-            return None  # no non-qualifying RE to report
-        terms.append(("c07_qualifying_re", is_qualifying))
-    if materially_dependent is not None:
-        terms.append(("c07_md", materially_dependent))
-    if is_sme is not None:
-        terms.append(("c07_sme", is_sme))
-    if is_adc is not None:
-        if "is_adc" not in cols and is_adc is True:
-            return None
-        terms.append(("is_adc", is_adc))
+    terms.extend(re_limb_terms(row.limb, row.property_kind, prefix="c07"))
+    if row.md is not None:
+        terms.append(("c07_md", row.md))
+    if row.sme is not None:
+        terms.append(("c07_sme", row.sme))
     return tuple(terms)
 
 

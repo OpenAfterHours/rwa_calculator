@@ -567,6 +567,9 @@ def _b31_re_results() -> pl.LazyFrame:
             ],
             "is_qualifying_re": [True, True, True, False, True, None],
             "is_adc": [False, False, False, False, True, None],
+            # Sealed on the aggregator exit, as the two flags above are: the limb
+            # rows read the SA dispatcher's real-estate route, which reads the LTV.
+            "ltv": [0.5, 0.5, 0.5, 0.5, 0.5, None],
             "is_sme": [False, False, False, False, False, False],
             "default_status": [False] * 6,
         }

@@ -239,6 +239,7 @@ from rwa_calc.data.schemas import (
 )
 from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.reporting.corep.ccf_buckets import OF08_01_CCF_ROWS
+from rwa_calc.reporting.corep.re_limbs import RE_LIMB_SOURCES
 from rwa_calc.reporting.corep.templates import (
     get_c07_columns,
     get_c08_03_columns,
@@ -715,6 +716,11 @@ _MEMO_DEFAULT_ROWS: tuple[str, ...] = ("0300", "0320")
 #: lands when the Article 133 weight is not carried.
 _EQUITY_ARTICLE_133_ROWS: tuple[str, ...] = ("0250", "0261", "0280")
 
+#: The materially-dependent ladder C 07.00 reads (``corep/c07.py::_prepare``).
+_RE_MD: CellRequirement = _any_of(
+    "materially_dependent_on_property", "has_income_cover", "is_income_producing"
+)
+
 #: Row-axis dependencies: columns that decide WHICH ROWS a sheet emits rather
 #: than what a column reports. A mapping can populate every column of C 07.00 and
 #: still emit only its Total row, so these are reported alongside the cell
@@ -751,21 +757,23 @@ LEDGER_ROW_AXIS: Mapping[str, tuple[RowAxisRequirement, ...]] = {
         ),
         RowAxisRequirement(("0281", "0282", "0283"), _needs("ciu_approach"), "CIU approach rows"),
         RowAxisRequirement(
-            ("0290", "0310", "0330", "0331", "0332", "0340", "0341", "0342", "0343", "0344"),
-            _both(
-                _needs("property_type"),
-                _any_of(
-                    "materially_dependent_on_property", "has_income_cover", "is_income_producing"
-                ),
-            ),
-            "real-estate rows",
+            ("0290", "0310"),
+            _both(_needs("property_type"), _RE_MD),
+            "real-estate memorandum rows",
+        ),
+        # The Art. 124 limb rows read the SA dispatcher's real-estate route, so
+        # every column it reads (corep/re_limbs.py), and the split rows the
+        # materially-dependent ladder as well.
+        RowAxisRequirement(
+            ("0330", "0340", "0350", "0360"),
+            _needs(*sorted(RE_LIMB_SOURCES)),
+            "real-estate limb rows (B31)",
         ),
         RowAxisRequirement(
-            ("0350", "0351", "0352", "0353", "0354"),
-            _needs("is_qualifying_re"),
-            "non-qualifying real estate",
+            ("0331", "0332", "0341", "0342", "0343", "0344", "0351", "0352", "0353", "0354"),
+            _both(_needs(*sorted(RE_LIMB_SOURCES)), _RE_MD),
+            "real-estate limb rows by cash-flow dependency (B31)",
         ),
-        RowAxisRequirement(("0360",), _needs("is_adc"), "ADC row"),
         RowAxisRequirement(
             ("0371", "0372", "0373", "0374"),
             _needs("equity_transitional_approach", "equity_higher_risk"),

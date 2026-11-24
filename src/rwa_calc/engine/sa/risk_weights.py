@@ -561,12 +561,16 @@ def _b31_append_high_risk_branch(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
 def _b31_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     """Append Basel 3.1 retail-class risk-weight branches (Art. 123).
 
-    Covers the retail classes (uc contains "RETAIL"):
-    - Transactor: 45% (Art. 123(3)(a)).
+    Covers the retail classes (uc contains "RETAIL"), in this order:
     - Payroll/pension loans: 35% (Art. 123(4)), unless the row's own maturity
       data shows an original maturity over the (d) cap (``payroll_loan.py``).
+    - Transactor: 45% (Art. 123(3)(a)).
     - Non-regulatory retail (fails Art. 123A criteria): 100% (Art. 123(3)(c)).
     - Regulatory retail (non-mortgage): 75% flat (Art. 123(3)(b)).
+
+    Payroll is first: Art. 123(3) opens "Subject to paragraph 4", so the 35%
+    overrides the whole ladder, the 45% included (P1.350); Art. 123(4) says
+    "Retail exposures", so it is NOT conjoined with Art. 123A qualification.
 
     Art. 123(3) prices the exposure on TWO properties, not one: (a) and (b)
     both open "regulatory retail exposures that are/are not transactor
@@ -589,21 +593,19 @@ def _b31_append_retail_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
     # costs one ``fill_null`` site rather than two).
     qualifies = pl.col("qualifies_as_retail").fill_null(False)
     return (
+        # Payroll/pension loans: 35% (Art. 123(4)), withheld where the row's own
+        # maturity data fails (d) (engine/sa/payroll_loan.py). First, because
+        # Art. 123(3) is "Subject to paragraph 4"; not gated on qualification.
+        chain.when(uc.str.contains("RETAIL", literal=True) & payroll_loan_35pct_expr())
+        .then(pl.lit(_SA_B31_RW["payroll"]))
         # Transactor: 45% (Art. 123(3)(a)) — for "regulatory retail exposures
         # that ARE transactor exposures", hence conjoined with Art. 123A.
-        chain.when(
+        .when(
             uc.str.contains("RETAIL", literal=True)
             & pl.col("is_qrre_transactor").fill_null(False)
             & qualifies
         )
         .then(pl.lit(_SA_B31_RW["qrre_transactor"]))
-        # Payroll/pension loans: 35% (Art. 123(4)), withheld where the row's own
-        # maturity data fails (d) (engine/sa/payroll_loan.py). Ordering against the
-        # transactor branch above is untouched here and audited by P1.350 —
-        # Art. 123(3) opens "Subject to paragraph 4", which reads as payroll
-        # outranking the whole paragraph-3 ladder rather than sitting inside it.
-        .when(uc.str.contains("RETAIL", literal=True) & payroll_loan_35pct_expr())
-        .then(pl.lit(_SA_B31_RW["payroll"]))
         # Non-regulatory retail (fails Art. 123A criteria): 100%.
         .when(uc.str.contains("RETAIL", literal=True) & ~qualifies)
         .then(pl.lit(_SA_B31_RW["non_reg_retail"]))

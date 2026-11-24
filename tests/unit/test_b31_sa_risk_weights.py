@@ -4019,12 +4019,18 @@ class TestB31PayrollPensionLoan:
 
         assert df["risk_weight"][0] == pytest.approx(0.75)
 
-    def test_payroll_loan_qrre_transactor_gets_45pct(
+    def test_payroll_loan_qrre_transactor_gets_35pct(
         self,
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """QRRE transactor takes priority over payroll loan in the when-chain."""
+        """A payroll loan that is also a transactor takes 35%, not 45% (P1.350).
+
+        PS1/26 Art. 123(3) opens "Subject to paragraph 4", so the Art. 123(4)
+        35% overrides the whole paragraph-3 ladder, the (a) 45% transactor
+        weight included. This test used to assert 45% on the strength of the
+        when-chain's own ordering, citing no article for the precedence.
+        """
         exposures = pl.DataFrame(
             {
                 "exposure_reference": ["PAY_QRRE_001"],
@@ -4042,8 +4048,7 @@ class TestB31PayrollPensionLoan:
         result = sa_calculator.calculate_branch(exposures, b31_config)
         df = result.collect()
 
-        # QRRE transactor (45%) takes priority over payroll (35%) in the when-chain
-        assert df["risk_weight"][0] == pytest.approx(0.45)
+        assert df["risk_weight"][0] == pytest.approx(0.35)
 
     def test_null_payroll_flag_defaults_to_non_payroll(
         self,

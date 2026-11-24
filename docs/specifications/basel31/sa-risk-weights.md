@@ -1252,6 +1252,20 @@ progression.
     regulatory retail, 100% where Art. 123A is not met. The same check applies under CRR; see
     the [CRR SA spec](../crr/sa-risk-weights.md#payroll-pension-loans-crr-art-123-crr2).
 
+!!! note "Precedence — the payroll 35% overrides the 45% transactor weight"
+    Art. 123(3) opens *"Subject to paragraph 4, retail exposures shall be assigned the following
+    risk weights"*, so the Art. 123(4) 35% sits above the whole paragraph-3 ladder, the (a)
+    transactor weight included. A payroll / pension loan that meets (d) takes **35%** even where
+    it is also a regulatory-retail transactor exposure. Two input shapes reach that case: a
+    payroll drawing mapped under a transactor card or overdraft facility (the hierarchy copies
+    the facility's `is_qrre_transactor` onto each child loan), and the undrawn row of a facility
+    that carries both flags. Art. 123(4) speaks of *"Retail exposures"*, not regulatory retail,
+    so the 35% does not depend on Art. 123A qualification either. The Basel 3.1 retail chain
+    therefore runs: payroll 35% → transactor 45% (regulatory retail only) → 100% (not
+    regulatory retail) → 75%. Until P1.350 the transactor limb ran first and gave the
+    regulatory-retail transactor payroll loan 45%. CRR has no transactor weight, so the same
+    row has always taken 35% there.
+
 The retail threshold is changed from EUR 1m to **GBP 880,000** under PRA PS1/26 Art. 123(1)(b)(ii).
 
 ### Transactor Exposure Eligibility (Art. 123(3)(a), PRA Glossary)

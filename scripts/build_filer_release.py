@@ -31,11 +31,15 @@ its tests hold it to, re-measured, never typed.
 The deny list is not part of a release's publication: the Bank publishes it,
 and the known-issues log beside it, between releases, and both change monthly.
 ``--deny-list`` reads the newest of each from ``docs/assets/`` (git-ignored;
-``scripts/download_docs.py`` fetches them) — the newest by the month and year
-in the Bank's file name — and writes, or with ``--check`` compares,
-``packages/rwa-filer/src/rwa_filer/boe/data/deny/<version>.json``. Every code
-the list names that matches no rule of the release is printed, and kept in the
-file under ``unmatched``.
+``scripts/check_bank_publications.py`` fetches the Bank's current ones) — the
+newest by the month and year in the Bank's file name — and writes, or with
+``--check`` compares, ``packages/rwa-filer/src/rwa_filer/boe/data/deny/<version>.json``.
+A file the pattern matches whose name gives no month and year (a ``-v2``
+suffix) fails the command rather than being skipped: it may be the newest, and
+skipping it would check an older list green. Every code the list names that
+matches no rule of the release is printed, and kept in the file under
+``unmatched``. The scheduled Bank Publications workflow runs ``--check`` for
+every shipped release against the Bank's current files.
 
 Exit codes:
     0  built, checked identical, or measured
@@ -101,7 +105,7 @@ BANK_FILES_URL = (
     "https://www.bankofengland.co.uk/-/media/boe/files/prudential-regulation/"
     "regulatory-reporting/banking/"
 )
-_MONTHS = (
+MONTHS = (
     "january",
     "february",
     "march",
@@ -116,6 +120,9 @@ _MONTHS = (
     "december",
 )
 _DATED_NAME = re.compile(r"-(?P<month>[a-z]+)-(?P<year>\d{4})\.xlsx$")
+
+#: The name of the handler ``main`` gives rwa-filer's logger, so a second run replaces it.
+_HANDLER_NAME = "build_filer_release"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -140,11 +147,7 @@ def main(argv: list[str] | None = None) -> int:
         "(with --check, compare it with the packaged one) instead of building the release",
     )
     args = parser.parse_args(argv)
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter("%(message)s"))
-    package_logger = logging.getLogger("rwa_filer")
-    package_logger.addHandler(handler)
-    package_logger.setLevel(logging.INFO)
+    _log_to_stdout()
     version = RELEASES[args.version]
     source = DOWNLOADS[version]
 
@@ -190,6 +193,48 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+class UndatedBankFileError(ValueError):
+    """A file matches the Bank's naming pattern, but its name gives no month and year."""
+
+
+def newest_bank_file(pattern: str, folder: Path) -> Path | None:
+    """The newest of the Bank's files matching ``pattern`` in ``folder``, by the date it names.
+
+    The Bank ends each file's name with the month and year it was published
+    (``boe-banking-known-issues-november-2026.xlsx``); that date, not the name's
+    alphabetical order, decides which is newest. ``None`` when nothing matches.
+
+    Raises:
+        UndatedBankFileError: a file matches ``pattern`` but its name gives no
+            month and year. It may be the newest, so it is never skipped: a
+            skipped ``...-december-2026-v2.xlsx`` would leave the November file
+            checked green.
+    """
+    dated: list[tuple[tuple[int, int], Path]] = []
+    undated: list[str] = []
+    for path in sorted(folder.glob(pattern)):
+        when = bank_file_date(path.name)
+        if when is None:
+            undated.append(path.name)
+        else:
+            dated.append((when, path))
+    if undated:
+        raise UndatedBankFileError(
+            f"cannot date {', '.join(undated)} in {_shown(folder)}/: the Bank's files end "
+            "-<month>-<year>.xlsx, and an undated one may be the newest. Rename it to the "
+            "name the Bank publishes it under, or remove it"
+        )
+    return max(dated)[1] if dated else None
+
+
+def bank_file_date(name: str) -> tuple[int, int] | None:
+    """``(year, month index)`` from a Bank file name ending ``-<month>-<year>.xlsx``, or ``None``."""
+    match = _DATED_NAME.search(name)
+    if match is None or match.group("month") not in MONTHS:
+        return None
+    return int(match.group("year")), MONTHS.index(match.group("month"))
+
+
 def _print_build(build: Any) -> None:  # noqa: ANN401 - a ReleaseBuild, imported late
     """The build's summary: what was packaged, what was refused and why."""
     print(f"\nTaxonomy {build.version}")
@@ -207,20 +252,24 @@ def _print_build(build: Any) -> None:  # noqa: ANN401 - a ReleaseBuild, imported
 
 def _deny_list(version: str, *, check: bool) -> int:
     """Import the newest deny list in ``docs/assets`` for ``version``; write or check it."""
-    workbook = _newest(DENY_LIST_PATTERN)
+    try:
+        workbook = newest_bank_file(DENY_LIST_PATTERN, ASSETS)
+        known_issues = newest_bank_file(KNOWN_ISSUES_PATTERN, ASSETS)
+    except UndatedBankFileError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 1
     if workbook is None:
         print(
-            f"error: no {DENY_LIST_PATTERN} in {ASSETS.relative_to(_REPO_ROOT).as_posix()}/ "
-            "(uv run python scripts/download_docs.py fetches it)",
+            f"error: no {DENY_LIST_PATTERN} in {_shown(ASSETS)}/ "
+            "(uv run python scripts/check_bank_publications.py fetches the Bank's current one)",
             file=sys.stderr,
         )
         return 1
-    known_issues = _newest(KNOWN_ISSUES_PATTERN)
     imported = import_deny_list(
         workbook, version, known_issues=known_issues, url=BANK_FILES_URL + workbook.name
     )
     target = DENY_LISTS[version]
-    shown = target.relative_to(_REPO_ROOT).as_posix()
+    shown = _shown(target)
     print(
         f"\nDeny list {workbook.name} (known issues: {known_issues.name if known_issues else 'none'})"
     )
@@ -229,22 +278,44 @@ def _deny_list(version: str, *, check: bool) -> int:
         if is_deny_list_current(imported.payload, committed):
             print(f"  [OK] {shown} is exactly what the Bank's workbook yields")
             return 0
-        state = "missing" if committed is None else "out of date"
-        print(f"  [DIFF] {shown} is {state}: it does not match {workbook.name}")
+        print(f"  [DIFF] {shown} {_why_out_of_date(imported.payload, committed)}")
         return 1
     write_deny_list(imported.payload, target)
     print(f"Wrote {shown}. Review the diff before committing.")
     return 0
 
 
-def _newest(pattern: str) -> Path | None:
-    """The newest of the Bank's dated files in ``docs/assets``, by the month and year named."""
-    dated = []
-    for path in ASSETS.glob(pattern):
-        match = _DATED_NAME.search(path.name)
-        if match is not None and match.group("month") in _MONTHS:
-            dated.append(((int(match.group("year")), _MONTHS.index(match.group("month"))), path))
-    return max(dated)[1] if dated else None
+def _why_out_of_date(payload: dict[str, Any], committed: str | None) -> str:
+    """The rest of a ``[DIFF]`` line: which of the Bank's two files the packaged list predates.
+
+    A packaged list records the deny list AND the known-issues log it was built
+    from (file name and sha256), and either moving fails ``--check``. The line
+    names the one that moved, so a red run sends its reader to the right file;
+    it named the deny-list workbook whichever had moved. When neither moved, the
+    import itself changed.
+    """
+    current = payload.get("source") or {}
+    if committed is None:
+        return f"is missing: {current.get('file')} yields one"
+    try:
+        packaged = json.loads(committed).get("source") or {}
+    except (json.JSONDecodeError, AttributeError):
+        packaged = {}
+    current_log = current.get("known_issues") or {}
+    packaged_log = packaged.get("known_issues") or {}
+    moved = [
+        f"{now.get('file') or 'no known-issues log'} (the packaged list is from "
+        f"{then.get('file') or 'none'})"
+        for now, then in ((current, packaged), (current_log, packaged_log))
+        if (now.get("file"), now.get("sha256")) != (then.get("file"), then.get("sha256"))
+    ]
+    if moved:
+        return f"is out of date: the Bank's {' and '.join(moved)}"
+    return (
+        f"is out of date: it is from {current.get('file')} and "
+        f"{current_log.get('file') or 'no known-issues log'}, but they now import to "
+        "something else (the import changed)"
+    )
 
 
 def _write_measurements(version: str, samples: dict[str, Path] | Any) -> None:  # noqa: ANN401
@@ -261,7 +332,32 @@ def _write_measurements(version: str, samples: dict[str, Path] | Any) -> None:  
     # and read-back content must not reach a path-taking call (S2083).
     with path.open("w", encoding="utf-8") as handle:
         handle.write(dump_measurements(measured))
-    print(f"Wrote {path.relative_to(_REPO_ROOT).as_posix()}")
+    print(f"Wrote {_shown(path)}")
+
+
+def _log_to_stdout() -> None:
+    """Print rwa-filer's progress lines on stdout, once however often ``main`` runs.
+
+    ``scripts/check_bank_publications.py`` runs ``main`` once per shipped release
+    in one process; a handler added on each run would print each line once per run.
+    """
+    package_logger = logging.getLogger("rwa_filer")
+    for handler in [item for item in package_logger.handlers if item.name == _HANDLER_NAME]:
+        package_logger.removeHandler(handler)
+    handler = logging.StreamHandler(sys.stdout)
+    handler.set_name(_HANDLER_NAME)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    package_logger.addHandler(handler)
+    package_logger.setLevel(logging.INFO)
+
+
+def _shown(path: Path) -> str:
+    """``path`` as output names it: relative to the repository, where it is inside it."""
+    return (
+        path.relative_to(_REPO_ROOT).as_posix()
+        if path.is_relative_to(_REPO_ROOT)
+        else path.as_posix()
+    )
 
 
 if __name__ == "__main__":

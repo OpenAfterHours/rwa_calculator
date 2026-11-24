@@ -1,0 +1,92 @@
+name: Bank Publications
+
+# Checks rwa-filer against what the Bank of England has published SINCE a
+# taxonomy release. The Bank's validations deny list switches rules off, or
+# downgrades them, at its gateway; its known-issues log says which published
+# rules are wrong and how to report until the taxonomy is fixed. Both override
+# the taxonomy, and both change monthly, between releases.
+#
+# rwa-filer packages the deny list per release (boe/data/deny/<release>.json,
+# joined to the log), and `scripts/build_filer_release.py <release> --deny-list
+# --check` says whether the packaged list is still the Bank's. Until this job,
+# that check ran only against files someone had downloaded by hand, so a list
+# published next month reached no gate (docs/development/escape-log.md,
+# 2026-11-16, the deny-list entry; IMPLEMENTATION_PLAN.md P5.77).
+#
+# Two steps:
+#   1. scripts/check_bank_publications.py finds both files by the links on the
+#      Bank's banking reporting page (never by a month typed into the repo),
+#      downloads them into docs/assets, and runs the deny-list check for every
+#      release rwa-filer ships. It fails closed when the page links no file, two,
+#      or a name the check cannot date.
+#   2. The known-issues accounting: every entry of the log is deny-listed, logged
+#      on a publisher issue, or dispositioned in
+#      tests/contracts/data/known_issues_dispositions.json - plus the register's
+#      verbatim quotes of the log. RWA_BANK_FILES_REQUIRED turns the skip those
+#      tests take without the files into a failure. Runs even when step 1 is red:
+#      both say something about a new publication.
+#
+# WHAT A RED RUN MEANS:
+#   * "[DIFF] ... deny/<release>.json is out of date" - the Bank published a new
+#     deny list or known-issues log. Run the step locally, then re-import:
+#     `uv run python scripts/build_filer_release.py <release> --deny-list`, and
+#     read the diff. A newly deactivated or future-dated rule can move the
+#     supervisory register and the filing-mapping ratchet (P5.79 (a)).
+#   * "not accounted for" - a log entry nothing covers: deny-list it, log it on a
+#     publisher issue, or disposition it with the kind the test names.
+#   * "links no", "links 2 files", "cannot date", "not in the Bank's banking
+#     reporting folder" - the Bank's page changed shape. Read it before
+#     loosening anything; the job fails closed on purpose.
+#
+# `schedule` fires only on the default branch, and GitHub disables a schedule
+# after 60 days without repository activity. A red scheduled run notifies the
+# last editor of the cron line only.
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'scripts/check_bank_publications.py'
+      - 'scripts/build_filer_release.py'
+      - 'packages/rwa-filer/src/rwa_filer/boe/data/deny/**'
+      - 'packages/rwa-filer/src/rwa_filer/boe/data/issues/**'
+      - 'tests/contracts/_bank_files.py'
+      - 'tests/contracts/test_known_issues_dispositions.py'
+      - 'tests/contracts/test_publisher_issue_quotes.py'
+      - 'tests/contracts/data/known_issues_dispositions.json'
+      - '.github/workflows/bank-publications.yml'
+  # 05:37 UTC on Tuesdays, on an odd minute: GitHub queues scheduled workflows
+  # in bulk on the hour.
+  schedule:
+    - cron: '37 5 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bank-publications-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bank-publications:
+    name: Bank Publications (deny list and known-issues log)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Fetch the Bank's current files and check every shipped release
+        run: uv run python scripts/check_bank_publications.py
+
+      - name: Account for every known-issues entry
+        if: ${{ !cancelled() }}
+        env:
+          RWA_BANK_FILES_REQUIRED: "1"
+        run: uv run pytest tests/contracts/test_known_issues_dispositions.py tests/contracts/test_publisher_issue_quotes.py -n 0 -p no:cacheprovider

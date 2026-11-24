@@ -8,6 +8,7 @@ The project includes several scripts for setup, deployment, test data generation
 |--------|---------|-------------|
 | `scripts/download_docs.py` | Download regulatory PDFs, templates and validation-rule workbooks | After cloning the repo |
 | `scripts/extract_validation_rules.py` | Re-extract the committed validation-rule JSON from those workbooks | After refreshing the workbooks |
+| `scripts/check_bank_publications.py` | Fetch the Bank's current deny list and known-issues log, and check every shipped rwa-filer release's deny list against them | Weekly in CI (Bank Publications); by hand when the Bank publishes |
 | `scripts/deploy.py` | Version bump + PyPI publish | Cutting a release |
 | `scripts/generate_dependency_graph.py` | Regenerate the module dependency graph docs page | After structural refactors |
 | `scripts/generate_regulatory_tables.py` | Regenerate the regulatory-tables page and the skill value fragments from the rulepacks | After any rulepack change |
@@ -273,7 +274,7 @@ uv run python scripts/check_parked_registers.py --update-baseline
 
 Three conditions fail it. **An entry outside `scripts/parked_registers_baseline.json`** — the id set may only shrink, and `--update-baseline` deliberately refuses to bank an addition, so parking a new known-wrong number means hand-editing the baseline where a reviewer sees it. **An entry naming no owning plan bullet** — every reason string must carry an `OWNER: P<tier>.<n>` token pointing at the `IMPLEMENTATION_PLAN.md` item responsible for the fix (`.claude/LESSONS.md` B7). **An entry naming a plan bullet that is not open** — the script reads `IMPLEMENTATION_PLAN.md`, and an owner counts only while its bullet carries a status box other than `[x]`; closed bullets are pruned, so a bullet the plan no longer holds is a closed one. Every `OWNER:` token in a reason is held to that, not only the first (the entry's owner, which the baseline banks), so a closed bullet cited as history is written as prose, `plan item P<n>.<n>`. A token that parses owns nothing once its bullet has closed, so the change that closes or prunes an owning bullet fails this gate until it removes the entries it fixed, re-owns the ones it did not, or reopens the bullet. Removing an entry is free: that is the outcome the register exists to provoke, and `xfail(strict=True)` already fails the suite when a parked disagreement starts agreeing.
 
-The set arithmetic, the owner grammar and the plan reader (`open_bullets`, `stale_owners`, `closed_owners`) live in `scripts/tolerated_findings.py`, shared with the **measured** register in `tests/acceptance/reporting/test_supervisory_validations.py` — that one keeps its own runner, because its membership is a union over sixteen pipeline runs, but both use the same `diff`. `tests/contracts/test_parked_register_ratchet.py` runs this gate on every pytest run, so it cannot rot unwired. The measured register is held to owners by `tests/contracts/test_register_owners.py`: every break reason there that is not wholly a publisher issue's carries an `OWNER:`, and every `OWNER:` in it names an open bullet; `tests/contracts/test_branch_census_ratchet.py` holds the branch census's dead limbs to the same open-owner rule.
+The set arithmetic, the owner grammar and the plan reader (`open_bullets`, `stale_owners`, `closed_owners`) live in `scripts/tolerated_findings.py`, shared with the **measured** register in `tests/acceptance/reporting/test_supervisory_validations.py` — that one keeps its own runner, because its membership is a union over sixteen pipeline runs, but both use the same `diff`. `tests/contracts/test_parked_register_ratchet.py` runs this gate on every pytest run, so it cannot rot unwired. The measured register is held to owners by `tests/contracts/test_register_owners.py`: every break reason there that is not wholly a publisher issue's carries an `OWNER:`, and every `OWNER:` in it names an open bullet; `tests/contracts/test_branch_census_ratchet.py` holds the branch census's dead limbs to the same open-owner rule, and `tests/contracts/test_known_issues_dispositions.py` holds every `OWNER:` in `tests/contracts/data/known_issues_dispositions.json` (the known-issues entries parked `owed`) to it as well.
 
 ---
 
@@ -315,6 +316,8 @@ read from `.taxonomy/boe-banking-<version>/` (git-ignored).
 uv run python scripts/build_filer_release.py 4.2.0                  # build (and retire unlisted releases)
 uv run python scripts/build_filer_release.py 4.1.1 --check          # rebuild in scratch, fail on any difference
 uv run python scripts/build_filer_release.py 4.1.1 --measure-only   # re-measure without the Bank's files
+uv run python scripts/build_filer_release.py 4.1.1 --deny-list      # import the Bank's newest deny list
+uv run python scripts/build_filer_release.py 4.1.1 --deny-list --check   # fail if the packaged one is not it
 ```
 
 The downloads folder is a fixed place, not an argument: a path built from the
@@ -323,6 +326,35 @@ that needs another folder imports `rwa_filer.release_build`. Every build and che
 writes `packages/rwa-filer/tests/releases/<version>/measurements.json`, the numbers
 the release's tests are held to (`tests/test_release_measurements.py`). See
 [rwa-filer → Packaging a taxonomy release](../rwa-filer/index.md#packaging-a-taxonomy-release).
+
+### `scripts/check_bank_publications.py` — The Bank's between-release files
+
+The Bank of England publishes its validations deny list and its banking
+known-issues log between taxonomy releases, monthly, and both override the
+taxonomy. This command finds the current file of each by the link on the Bank's
+banking reporting page, downloads both into `docs/assets/` under the Bank's own
+names, and runs `build_filer_release.py <release> --deny-list --check` for every
+release `rwa-filer` ships.
+
+```bash
+uv run python scripts/check_bank_publications.py
+```
+
+It takes no arguments and fails closed: when the page links no file of a kind,
+links two, links one outside the Bank's banking reporting folder, or names one
+whose month and year cannot be read (the check reads the newest file by that
+date). It also fails when `docs/assets/` already holds a later-dated file than
+the one the Bank lists, since the check would read that file instead. A new
+known-issues log alone fails the check too: the packaged list records the log it
+was joined to, byte for byte. To bring a release up to date, run
+`build_filer_release.py <release> --deny-list` and read the diff.
+
+The scheduled `Bank Publications` workflow (`.github/workflows/bank-publications.yml`,
+weekly, on demand, and on a pull request touching the deny list, the register or
+these files) runs it, then runs `tests/contracts/test_known_issues_dispositions.py`
+and the log half of `tests/contracts/test_publisher_issue_quotes.py` with
+`RWA_BANK_FILES_REQUIRED` set, so a missing log fails rather than skips. Its
+contract tests are in `tests/contracts/test_bank_publications.py`.
 
 ### `scripts/referee_differential.py` — The referee differential
 

@@ -1333,12 +1333,33 @@ lists; it is the one file edited by hand. To add a release:
 4. Import the Bank's validations deny list for the release:
    `uv run python scripts/build_filer_release.py <version> --deny-list`. It reads
    the newest deny list and known-issues log in `docs/assets/` (git-ignored;
-   `uv run python scripts/download_docs.py` fetches them) and writes
-   `boe/data/deny/<version>.json`. Every code it cannot match to a rule is
+   `uv run python scripts/check_bank_publications.py` fetches the Bank's current
+   ones), the newest by the month and year that end the Bank's file name, and
+   writes `boe/data/deny/<version>.json`. Every code it cannot match to a rule is
    printed. A release cannot ship without one. Re-run it whenever the Bank
    publishes a new list, and `--deny-list --check` fails when the packaged file
-   is out of date. Rebuilding a release leaves its deny list alone, and retiring
-   a release removes it.
+   is out of date. A file there whose name gives no month and year (a `-v2`
+   suffix) fails both rather than being skipped, since it may be the newest.
+   Rebuilding a release leaves its deny list alone, and retiring a release
+   removes it.
+
+   The Bank publishes the deny list and the known-issues log monthly, between
+   releases, so a scheduled workflow (`.github/workflows/bank-publications.yml`,
+   weekly and on demand) fetches the Bank's current files and runs
+   `--deny-list --check` for every shipped release: a new publication turns it
+   red without anyone downloading it. The same job requires every entry of the
+   newest log to be covered by the packaged deny list (a `known_issue`), logged on
+   a publisher issue (`publisher_log`), or dispositioned in
+   `tests/contracts/data/known_issues_dispositions.json`
+   (`tests/contracts/test_known_issues_dispositions.py`), which checks each
+   disposition's kind against the log: an open entry that names a rule the release
+   ships can only be parked with an `OWNER: P<n>.<n>` token naming a bullet
+   `IMPLEMENTATION_PLAN.md` holds open. A rule is read from the entry's title and
+   description in each spelling the Bank uses (`boe-b0141-3_ss`, `v0830_m` for
+   `boe_v0830_m`, the surplus leading zero of `boe_b04006_1`, codes run
+   together), and the same test holds every code the release's rule books carry
+   to be read by its own spelling, so no shipped rule (PRA_MEM's one-digit
+   `boe_b1_m`, say) can pass as naming none.
 5. Review the diff and release `rwa-filer`.
 
 `--check` rebuilds a packaged release in a scratch folder and fails on any file

@@ -13,10 +13,14 @@ every quote, whitespace- and typography-normalised, on its ``pdf_page`` — or,
 for one that runs over a page break, starting on ``pdf_page`` and ending on
 ``pdf_page_end``. A quote with an ellipsis must have its parts in order. Every
 entry of the Bank's known-issues log an issue quotes is checked against the
-log itself (its 'Issue description', 'Solution' and publication date).
+NEWEST log in ``docs/assets`` (its 'Issue description', 'Solution' and
+publication date), so a quote the Bank has since amended is seen as soon as the
+newer log is downloaded.
 
-The PDFs are git-ignored (``docs/assets``), so each document's quotes skip when
-its PDF is absent: this is a local and pre-share gate, not a CI one.
+The PDFs and the log are git-ignored (``docs/assets``), so each document's
+quotes skip when its file is absent: this is a local and pre-share gate, not a
+CI one. The scheduled Bank Publications workflow runs the log's half with the
+Bank's current log, where a missing log fails rather than skips.
 
 References:
 - rwa_filer.boe.issues — the register and its ``Authority`` entries
@@ -30,6 +34,7 @@ from functools import cache
 from pathlib import Path
 
 import pytest
+from tests.contracts._bank_files import known_issues_rows, newest_known_issues_log
 
 from rwa_filer.boe.issues import load_issues
 from rwa_filer.release import shipped_releases
@@ -121,7 +126,6 @@ def _log_entries() -> list[tuple[str, str, int, str, str]]:
 
 
 LOG_ENTRIES = _log_entries()
-KNOWN_ISSUES_LOG = "boe-banking-known-issues-november-2026.xlsx"
 
 
 @pytest.mark.parametrize(
@@ -136,13 +140,10 @@ def test_each_known_issues_log_entry_is_quoted_verbatim(  # noqa: PLR0913 - one 
 
     An acknowledged issue rests on the Bank's own words, so the 'Issue description'
     and 'Solution' it quotes, and the publication date, are checked against the
-    log's cells - the workbook is git-ignored, so this skips without it.
+    newest log's cells - the workbook is git-ignored, so this skips without it.
     """
     # Arrange
-    path = ASSETS / KNOWN_ISSUES_LOG
-    if not path.is_file():
-        pytest.skip(f"{KNOWN_ISSUES_LOG} is not in docs/assets (git-ignored)")
-    log = _known_issues(path)
+    log = known_issues_rows(newest_known_issues_log())
 
     # Act
     row = log.get(entry)
@@ -158,26 +159,6 @@ def test_each_known_issues_log_entry_is_quoted_verbatim(  # noqa: PLR0913 - one 
 def test_quotes_to_check_were_found() -> None:
     """The parametrisation is not empty: a register with no quote would check nothing."""
     assert QUOTES
-
-
-@cache
-def _known_issues(path: Path) -> dict[int, dict[str, str]]:
-    """The log's 'Known Issues' sheet: each entry's cells, by number."""
-    openpyxl = pytest.importorskip("openpyxl")
-    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    header: tuple[object, ...] | None = None
-    found: dict[int, dict[str, str]] = {}
-    for row in workbook["Known Issues"].iter_rows(values_only=True):
-        if row and row[0] == "#":
-            header = row
-            continue
-        if header is not None and isinstance(row[0], int | float):
-            found[int(row[0])] = {
-                str(name): "" if value is None else str(value)
-                for name, value in zip(header, row, strict=False)
-                if name is not None
-            }
-    return found
 
 
 @cache

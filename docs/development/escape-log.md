@@ -4079,13 +4079,24 @@ requires every register reason on such a rule to cite the issue or rebut it.
   behavioural red was taken with a probe written against the old API; the
   reviewer reproduced it on the real 4.1.1 return at both commits.
 
-  Two limbs of the gate change are **OPEN** under the closing rule, because no
-  red line is quoted for them:
+  Two limbs of the gate change were **OPEN** under the closing rule, because no
+  red line was quoted for them:
   - **OPEN**: `967fe39`'s `compare` and template-level downgrade tests. Its
     message says they were "observed red with the deny list not applied" and
     quotes no line.
-  - **OPEN**: the `scripts/build_filer_release.py 4.1.1 --deny-list --check`
-    gate. It was run green and has not been seen red.
+  - **CLOSED (P5.77)**: the `scripts/build_filer_release.py 4.1.1 --deny-list
+    --check` gate. Observed red on the unchanged script, with a later-dated
+    workbook (the November list plus one `Deactivate` row) beside the November
+    one in `docs/assets/`: `[DIFF] packages/rwa-filer/src/rwa_filer/boe/data/deny/4.1.1.json
+    is out of date: it does not match
+    boe-banking-validations-deny-list-december-2026.xlsx`, exit 1. The same
+    probe found it failing open: renamed `...-december-2026-v2.xlsx`, the
+    workbook was skipped (its name gives no month and year) and the November
+    list checked `[OK]`, exit 0. An undated file now fails the check
+    (`UndatedBankFileError`). `tests/contracts/test_bank_publications.py` holds
+    both directions and the undated case. The `[DIFF]` line has since been
+    reworded to name the file that moved: it named the deny-list workbook even
+    when only the known-issues log had moved.
 - **What the fix moved**: no figure. Filing-mapping ratchet
   `error_rule_breaks` 64 → 50 (`boe_b0710` 13 → gone, `boe_b0710_1` 1 → gone).
   Register: b31 `boe_b0710` and `_1` leave `known_broken_rules`, `_2` and `_3`
@@ -4097,6 +4108,35 @@ requires every register reason on such a rule to cite the issue or rebut it.
     after someone downloads the newer workbook. A list published next month
     reaches no gate. Filed as P5.77. Until it lands, this escape is closed for the
     16 November 2026 list only.
+
+    **Closed by P5.77.** `.github/workflows/bank-publications.yml` (weekly, on
+    demand, and on a pull request touching the deny list or the register) runs
+    `scripts/check_bank_publications.py`. That script finds the Bank's current
+    files by the links on its banking reporting page, downloads them, and runs
+    `--deny-list --check` for every shipped release. The workflow then runs
+    `tests/contracts/test_known_issues_dispositions.py` with
+    `RWA_BANK_FILES_REQUIRED` set. That test requires every entry of the newest
+    log to be deny-listed, logged on a publisher issue, or dispositioned with a
+    kind it checks against the log.
+    - **Red before the fix**: the accounting, run against the November log with
+      no dispositions, listed exactly the 20 entries nothing covered (#1-#14,
+      #16-#20, #25). The fetch's tests failed to import the absent script.
+    - **Still owed**: four open entries name a rule 4.1.1 ships and are covered
+      by nothing: #10, #11 (LVR002 `boe_b0057`, which the Bank says misfires and
+      "will be deactivated"), #12 and #19. They are parked `owed` on
+      `OWNER: P5.92`, the bullet that deny-lists them or logs them on a
+      publisher issue. Until it lands, P5.77's "packaged or cited" is not met
+      for these four. An owner must be a bullet the plan holds open, as in the
+      other parked registers (P5.83). The first cut parked them on P5.91, which
+      the plan had closed for an unrelated fix, and every check was green.
+      `test_every_disposition_has_a_known_kind_a_reason_and_an_open_owner_where_owed`
+      now reads the plan on every dev-loop run, with or without the Bank's log.
+      Red on P5.91, all four named: `4.1.1 #10: OWNER: P5.91 is not a bullet
+      IMPLEMENTATION_PLAN.md holds open (closed, pruned or never filed), so it
+      owns nothing`.
+    - **Limit**: the scheduled run's first red can only come from
+      `workflow_dispatch`, because a `schedule` fires on the default branch
+      only.
   - `rwa_calc.reporting.filing.bindings.derive_variant_columns` still reads
     `.enforced`, which now moves with the date. Repoint it at
     `published_in_force` once rwa-calc's `rwa-filer` floor reaches the release

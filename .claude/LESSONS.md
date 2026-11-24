@@ -480,8 +480,12 @@ of the above:
    default per rule where the gateway applies each reference's own.
 
 A "limit of the published rule" reason must cite the publisher issue that
-records it — that half is a check now (ledger, 2026-11-16). Nothing yet fetches
-a newer deny list (P5.77).
+records it — that half is a check now (ledger, 2026-11-16). The scheduled
+Bank Publications job (`scripts/check_bank_publications.py`, P5.77) fetches the
+current deny list and known-issues log and fails when a shipped release's
+packaged deny list is not what they yield, or when an open log entry naming a
+shipped rule has no disposition; read its last run before trusting the
+packaged list.
 
 ### C6. Enumerate a rule family by ID prefix, never by the members someone quoted
 

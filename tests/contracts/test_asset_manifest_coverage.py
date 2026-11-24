@@ -28,9 +28,9 @@ The four forms read (``_named_assets``):
 4. ``scripts/regulation_text.py``'s ``REGIME_DOCUMENTS``, which it downloads by
    manifest filename.
 
-Not read: a bare filename held in a variable and joined elsewhere (e.g.
-``KNOWN_ISSUES_LOG`` in ``test_publisher_issue_quotes.py``), a glob pattern
-(``scripts/build_filer_release.py``), ``IMPLEMENTATION_PLAN.md``, where a bullet may
+Not read: a bare filename held in a variable and joined elsewhere, a glob pattern
+(``scripts/build_filer_release.py``, which the contract tests share through
+``tests/contracts/_bank_files.py``), ``IMPLEMENTATION_PLAN.md``, where a bullet may
 name an artefact still to be acquired, and this module, whose self-tests name made-up
 files. A name in an unread form needs its own check, or a citation in one of the four.
 

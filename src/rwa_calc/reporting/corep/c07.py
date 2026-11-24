@@ -260,8 +260,8 @@ from rwa_calc.reporting.corep.c07_sheet_scope import (
     publish_sheets,
     sheet_unreported,
 )
-from rwa_calc.reporting.corep.ccf_buckets import CCF_CARRIERS, ccf_bucket_expr
-from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
+from rwa_calc.reporting.corep.ccf_buckets import CCF_CARRIERS, sa_ccf_bucket_expr
+from rwa_calc.reporting.corep.crm_substitution import covered_pre_ccf, irb_origin_inflows
 from rwa_calc.reporting.corep.postpass import negate_deduction_cols
 from rwa_calc.reporting.corep.supporting_factors import (
     sf_adjustment_terms,
@@ -1014,11 +1014,11 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
     # RW band labels, one per basis (``c07_rw_bands``).
     exprs.extend(rw_band_exprs(framework, cols))
 
-    # CCF bucket ref (retired _c07_ccf_cols map), off the resolved carrier.
+    # CCF bucket ref, off the resolved carrier and, on a crossing leg, ``ccf_guaranteed``.
     ccf_col = pick(cols, *CCF_CARRIERS)
     if ccf_col is not None:
         ccf_map = _CCF_MAP_B31 if framework == "BASEL_3_1" else _CCF_MAP_CRR
-        exprs.append(ccf_bucket_expr(ccf_col, ccf_map).alias("c07_ccf_bucket"))
+        exprs.append(sa_ccf_bucket_expr(cols, ccf_col, ccf_map).alias("c07_ccf_bucket"))
 
     # Materially-dependent ladder (exact field keeps nulls-excluded; proxies
     # fill null to False — retired _filter_re_materially_dependent).
@@ -1375,9 +1375,8 @@ def _protection_exprs(cols: set[str]) -> list[pl.Expr]:
     own risk weight. Gating the CARRIER, not the two cells, is what keeps outflow
     and inflow on a single decision, so neither can move without the other.
     """
-    guaranteed = (
-        pl.col("guaranteed_portion").fill_null(0.0) if "guaranteed_portion" in cols else pl.lit(0.0)
-    )
+    # Pre-conversion, like col 0040 the flow is subtracted from (``covered_pre_ccf``).
+    guaranteed = covered_pre_ccf(cols) if "guaranteed_portion" in cols else pl.lit(0.0)
     if "protection_type" in cols:
         # Same split the retired 0050/0060 cell predicates made: a null
         # protection_type contributes to neither column.

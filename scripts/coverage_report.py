@@ -189,6 +189,21 @@ EXCLUDED_PORTFOLIOS: dict[str, str] = {
         "rather than banked here. Full reasoning: the DELIBERATELY NOT REGISTERED comment "
         "in tests/acceptance/reporting/test_supervisory_validations.py."
     ),
+    "reporting_offbs_substitution_portfolio.py::build_reporting_offbs_substitution_bundle": (
+        "WITHHELD from RUNS until the operator banks the register, not an oversight. It is "
+        "the first portfolio holding guaranteed legs with an undrawn amount (one per "
+        "substitution route: F-IRB->SA, SA->SA, F-IRB->IRB), built 2026-11-23 to pin "
+        "the pre-conversion basis of the C 07.00 / C 08.01 substitution flows, and its "
+        "own acceptance test (tests/acceptance/reporting/test_substitution_flows_pre_ccf.py) "
+        "asserts v6364_m / v0308_m / boe_b0471 on it in both regimes. Measured on the "
+        "template-level engine 2026-11-23, it breaks v09779_m (CRR and Basel 3.1: run "
+        "without a prior frame) and, under Basel 3.1, boe_b0380 / boe_b0395 (EL on the "
+        "inflow-only institution sheet), boe_b0307 (OF 08.01 col 0100 leaves out the "
+        "off-BS inflow), boe_b0703 and boe_b0908, none banked for this portfolio, so "
+        "registration is a baseline regeneration and an operator decision. The P1.398 "
+        "declined-guarantee portfolio carries the cross-approach route (DG-KEPT) into "
+        "RUNS meanwhile."
+    ),
 }
 
 #: How many dead cells and never-evaluated rules to print. The full lists always

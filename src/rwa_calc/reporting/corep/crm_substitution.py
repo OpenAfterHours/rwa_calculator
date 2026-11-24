@@ -13,6 +13,9 @@ Key responsibilities:
   approach the substituted leg is actually treated under.
 - Own the C 08.01/02 col 0090 waterfall identity and its per-row-scope column
   selection, so the published rule and the code that satisfies it sit together.
+- Own the BASIS of the covered part both templates book as a flow
+  (:func:`covered_pre_ccf`): pre-conversion-factor, as Annex II defines it, not
+  the post-conversion covered exposure value the engine carries.
 
 WHY THIS IS NOT A PER-TEMPLATE HELPER (the defect it retires). C 07.00 and
 C 08.01 each derived their own inflow map from their OWN approach-filtered
@@ -75,10 +78,8 @@ References:
   (C 08.01.a), ``v0347_m`` / ``v1665_m`` (C 08.02)
 
 The two calling generators (``c07_plans`` / ``generate_c08_01``) carry the
-``@cites`` annotations for this code path; a decorator pair here
-(``CRR Art. 235`` + ``PS1/26, paragraph 1.3``) is a worthwhile addition but
-needs ``uv run python scripts/generate_citation_matrix.py`` re-run to refresh
-the docs matrix and the contract snapshot alongside it.
+``@cites`` annotations for the routing; :func:`covered_pre_ccf` carries its own
+(CRR Art. 235 / PS1/26 Art. 235, the covered and uncovered parts).
 """
 
 from __future__ import annotations
@@ -87,6 +88,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
 import polars as pl
+from watchfire import cites
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -104,8 +106,17 @@ _ORIGIN_APPROACH_COL: str = "reporting_approach_origin"
 # The guarantor's exposure class — the destination sheet key.
 _DESTINATION_CLASS_COL: str = "post_crm_exposure_class_guaranteed"
 # The raw covered-part carrier. Its PRESENCE gates the whole mechanism; its VALUE
-# is never summed directly — see :data:`IRB_UNFUNDED_COL`.
+# is never summed directly — see :data:`IRB_UNFUNDED_COL` and :func:`covered_pre_ccf`.
 _COVERED_COL: str = "guaranteed_portion"
+# Its uncovered twin: together they are the leg's exposure value, so the covered
+# share of the leg is ``covered / (covered + uncovered)``.
+_UNCOVERED_COL: str = "unguaranteed_portion"
+# The leg's off-balance-sheet amount before and after its conversion factor
+# (``engine/ccf.py``: ``ead_from_ccf = nominal_after_provision * ccf``), both split
+# onto the ``__G_`` / ``__REM`` legs in proportion to cover and both re-stated by the
+# cross-approach factor swap. Their difference is what the factor took off.
+_NOMINAL_PRE_CCF_COL: str = "nominal_after_provision"
+_NOMINAL_POST_CCF_COL: str = "ead_from_ccf"
 # The calculators' "the substitution was actually applied" flag
 # (``engine/sa/rw_adjustments.py`` / ``engine/irb/guarantee.py``). CONDITIONAL on
 # the aggregator exit (``inject=False``), and absent altogether from the synthetic
@@ -505,6 +516,58 @@ def _decline_gate(cols: set[str], magnitude: pl.Expr) -> pl.Expr:
     return pl.when(pl.col(_BENEFICIAL_COL) == True).then(magnitude).otherwise(pl.lit(0.0))  # noqa: E712
 
 
+@cites("CRR Art. 235")
+@cites("PS1/26, paragraph 235")
+def covered_pre_ccf(cols: set[str]) -> pl.Expr:
+    """The covered part of a leg's original exposure PRE conversion factors.
+
+    THE BASIS EVERY SUBSTITUTION FLOW IS STATED ON. Annex II, both frameworks and
+    both templates: "Outflows shall correspond to the covered part of the Original
+    Exposure pre-conversion factors" (CRR C 07.00 cols 0090-0100, p.88; C 08.01
+    cols 0070-0080, p.100); PS1/26 adds, of OF 07.00 cols 0050-0100 and OF 08.01
+    cols 0040-0050, "institutions shall separate each exposure, prior to the
+    application of conversion factors, into a covered part and an uncovered part"
+    (pp.83-84, 103). C 07.00 col 0040 / C 08.01 col 0020 are pre-conversion, and
+    col 0110 / 0090 subtract the flow from them, so the flow must be too.
+
+    ``guaranteed_portion`` is NOT that amount: it is the covered EXPOSURE VALUE,
+    after the conversion factor (``engine/crm/guarantees.py`` re-applies the factor
+    to the covered fraction, Art. 236(3)). Booking it as the flow reported a 70%
+    guarantee of a 600,000-drawn 1,000,000 commitment as 560,000 out of a
+    1,000,000 col 0010 instead of 700,000, and on C 07.00 left col 0150 unable to
+    equal the conversion-factor columns that break it down (``v6364_m``,
+    ``boe_b0471``).
+
+    WHAT IS ADDED BACK IS ONLY WHAT THE FACTOR TOOK OFF: the covered share of the
+    leg's ``nominal_after_provision - ead_from_ccf``. Nothing else separates the
+    two bases, so a drawn leg's flow stays its covered exposure value exactly —
+    including where collateral was recognised first and the covered exposure value
+    sits below the covered gross. Sizing the flow as a share of the gross instead
+    would deduct that collateralised part here AND at col 0130. Because
+    ``ead_from_ccf`` is re-stated by the cross-approach swap, an IRB leg covered by
+    an SA guarantor un-converts at the SA factor it was actually converted at.
+
+    The covered share is ``guaranteed_portion / (guaranteed_portion +
+    unguaranteed_portion)``: 1 on a ``__G_`` leg, 0 on a ``__REM`` leg, the
+    engine's own split. A frame missing any of the four carriers (synthetic unit
+    frames) books the raw covered exposure value, as before; a null off-balance
+    amount adds nothing back.
+
+    Not decline-gated or capped: :func:`irb_protection_exprs` and C 07.00's
+    ``_protection_exprs`` apply their template's gate and block cap to it.
+    """
+    covered = pl.col(_COVERED_COL).fill_null(0.0)
+    carriers = {_COVERED_COL, _UNCOVERED_COL, _NOMINAL_PRE_CCF_COL, _NOMINAL_POST_CCF_COL}
+    if not carriers <= cols:
+        return covered
+    exposure_value = covered + pl.col(_UNCOVERED_COL).fill_null(0.0)
+    share = pl.when(exposure_value > 0).then(covered / exposure_value).otherwise(0.0)
+    converted_off = (pl.col(_NOMINAL_PRE_CCF_COL) - pl.col(_NOMINAL_POST_CCF_COL)).clip(
+        lower_bound=0.0
+    )
+    return covered + (share * converted_off).fill_null(0.0)
+
+
 def irb_block_cap_scale(cols: set[str], block_total: pl.Expr) -> pl.Expr:
     """The 0-1 factor that caps the substitution block at the leg's own exposure.
 
@@ -581,7 +644,10 @@ def irb_protection_exprs(cols: set[str]) -> list[pl.Expr]:
     for 0060). The PRE-conversion-factor basis (what col 0020 sums) is the one
     adopted for the whole block, because the block feeds the PRE-CCF waterfall at
     col 0090; capping against the post-CCF exposure value inside a pre-CCF
-    waterfall would leave 0090 able to go negative.
+    waterfall would leave 0090 able to go negative. The guarantee magnitude the
+    cap acts on is on that basis too (:func:`covered_pre_ccf`): until 2026-11-23 it
+    was the covered EXPOSURE VALUE, so a covered undrawn amount left the obligor's
+    sheet, and arrived on the guarantor's, at its post-conversion value.
 
     COL 0070 IS THE BLOCK'S SUBTOTAL, NOT A FIFTH COMPONENT OF IT. Annex II
     defines the substitution outflow as "the covered part of the original
@@ -619,7 +685,7 @@ def irb_protection_exprs(cols: set[str]) -> list[pl.Expr]:
     parts = [pl.col(col).fill_null(0.0) for col in IRB_OFCP_CARRIERS if col in cols]
     unfunded: pl.Expr | None = None
     if "guaranteed_portion" in cols:
-        gp = pl.col("guaranteed_portion").fill_null(0.0)
+        gp = covered_pre_ccf(cols)
         # Cols 0040/0050 split the same carrier by protection type, so a leg
         # contributes to the block only through the type it actually carries;
         # with no ``protection_type`` column col 0040 takes the whole amount.
@@ -648,9 +714,7 @@ def irb_protection_exprs(cols: set[str]) -> list[pl.Expr]:
         # guarantee that cols 0040/0050 still report and break the live identity
         # ``{c0070} = {c0040} + {c0050} + {c0060}`` (``v1663_m`` / ``v1665_m``).
         exprs.append(
-            (_decline_gate(cols, pl.col("guaranteed_portion").fill_null(0.0)) * scale).alias(
-                "c08_prot_guaranteed"
-            )
+            (_decline_gate(cols, covered_pre_ccf(cols)) * scale).alias("c08_prot_guaranteed")
         )
     # The col 0070 subtotal: the SAME capped magnitudes cols 0040/0050/0060 sum,
     # added up once per leg. ``unfunded`` already carries the protection_type

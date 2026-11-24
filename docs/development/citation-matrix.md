@@ -12,7 +12,7 @@ Regenerate after annotation changes:
 uv run python scripts/generate_citation_matrix.py
 ```
 
-Last generated: 2026-11-23.
+Last generated: 2026-11-24.
 
 ## CRR (Capital Requirements Regulation)
 

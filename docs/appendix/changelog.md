@@ -591,6 +591,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reports no metric moved.
 
 ### Fixed
+- **COREP books a guarantee's substitution flows before conversion factors when
+  the covered part includes an undrawn or issued amount.** C 07.00 / OF 07.00
+  cols 0050, 0060, 0090 and 0100 and C 08.01 / C 08.02 / OF 08.01 / OF 08.02
+  cols 0040, 0050, 0070 and 0080 carried the covered exposure value, after the
+  conversion factor, beside a pre-conversion col 0010 / 0020. Annex II defines
+  every one of them as "the covered part of the Original Exposure pre-conversion
+  factors". A 70% guarantee of a 1,000,000 commitment drawn to 600,000 now moves
+  700,000 rather than 560,000. On C 07.00, an IRB leg covered by an SA guarantor
+  is now reported in the conversion-factor column of the SA factor its exposure
+  value was computed with; under CRR it was left out of cols 0160-0190, because
+  its F-IRB 75% has no column there. Together these clear `v6364_m` (CRR) and
+  `boe_b0471` (Basel 3.1) wherever a covered part includes an off-balance-sheet
+  amount. Drawn legs are unchanged, collateralised ones included, and no exposure
+  value, RWEA or capital figure moves. `boe_b0735` still breaks on such a return
+  (OF 08.01 col 0100 is post-substitution, OF 08.03 col 0020 is not), now by the
+  pre-conversion amount.
 - **Several guarantors on one exposure, one of them declined: the declined share now
   moves to the other guarantors without being priced twice (P1.458, review GT-09).**
   When a guarantee would not lower the risk weight the calculators decline it (CRR

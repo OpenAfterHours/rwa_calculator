@@ -51,6 +51,12 @@ def is_commercial_re_class(uc: pl.Expr) -> pl.Expr:
     overlay (``_add_exposure_class_applied``) reuses this exact predicate to put
     such an exposure in Art. 112(1)(i) for reporting: sharing one expression is
     what keeps the reported class and the applied risk weight from drifting apart.
+
+    The exact equality is safe for any spelling the input contract accepts,
+    because the hierarchy hands ``property_type`` over lowercased
+    (``hierarchy/enrich.add_collateral_ltv``); the contract accepts any case, and
+    before P1.362 a ``"Commercial"`` spelling missed this limb and a
+    retail-mortgage row fell to the residential branch.
     """
     return (
         uc.str.contains("COMMERCIAL", literal=True)

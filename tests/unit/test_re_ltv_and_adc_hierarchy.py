@@ -12,7 +12,8 @@ Key responsibilities pinned here:
 - ``enrich.add_collateral_ltv``: a real-estate row without ``property_ltv``
   still delivers its property attributes, an LTV-bearing row wins the per-level
   keep-first whatever its input position, and the loan row's own ``ltv``
-  survives a collateral file that does not link to it.
+  survives a collateral file that does not link to it. ``property_type`` leaves
+  it lowercased, whatever the input case (P1.362).
 - ``enrich.enrich_with_property_coverage``: collateral ``is_adc`` /
   ``is_presold`` reach every exposure the pledge covers, any-True.
 
@@ -299,6 +300,50 @@ class TestCollateralLtvAttributes:
             [_property("P1", "loan", "L1", 100_000.0, property_ltv=0.4)],
         )
         assert _row(df, "L1")["ltv"] == pytest.approx(0.4)
+
+
+class TestPropertyTypeLowercased:
+    """P1.362: ``property_type`` leaves the hierarchy lowercased.
+
+    The input contract accepts it case-insensitively, while every downstream
+    reader (the SA real-estate routing, the CRR Art. 164(4) LGD-floor bucket,
+    the COREP / Pillar 3 property-kind rows) compares it to the lowercase value.
+    Lowercasing is the whole normalisation: it mirrors the contract's DQ006
+    check and does not strip or correct a value that check rejects.
+    """
+
+    @pytest.mark.parametrize(
+        ("spelling", "lowercased"),
+        [
+            ("Commercial", "commercial"),
+            ("COMMERCIAL", "commercial"),
+            ("Residential", "residential"),
+            ("commercial", "commercial"),
+        ],
+    )
+    def test_collateral_property_type_is_lowercased(self, spelling: str, lowercased: str) -> None:
+        # Act
+        df = _resolve(
+            [_loan("L1", 50_000.0)],
+            [_property("P1", "loan", "L1", 100_000.0, property_type=spelling, property_ltv=0.5)],
+        )
+
+        # Assert
+        assert _row(df, "L1")["property_type"] == lowercased
+
+    def test_loan_level_property_type_is_lowercased(self) -> None:
+        # Act: no collateral file, so the loan row's own property data is used.
+        df = _resolve([_loan("L1", 50_000.0, property_type="Commercial", ltv=0.5)], None)
+
+        # Assert
+        assert _row(df, "L1")["property_type"] == "commercial"
+
+    def test_no_property_type_stays_null(self) -> None:
+        # Act
+        df = _resolve([_loan("L1", 50_000.0)], None)
+
+        # Assert
+        assert _row(df, "L1")["property_type"] is None
 
 
 class TestCollateralAdcFlags:

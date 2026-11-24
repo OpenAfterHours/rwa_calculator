@@ -340,7 +340,7 @@ financial hedge in place. Under CRR there is no equivalent retail FX uplift.
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `property_type` | `String` | `"residential"` / `"commercial"` |
+| `property_type` | `String` | `"residential"` / `"commercial"` — always lowercase, whatever the input case |
 | `property_ltv` | `Float64` | Loan-to-value ratio |
 | `ltv_band` | `String` | LTV band for RW lookup |
 | `is_income_producing` | `Boolean` | CRE income flag |

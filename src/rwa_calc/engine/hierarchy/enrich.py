@@ -632,6 +632,14 @@ def add_collateral_ltv(
     commercial type with it — and any collateral file at all discarded the
     loan-level ``ltv`` (review RE-10 / CL-08).
 
+    ``property_type`` leaves here lowercased on both paths (collateral or
+    loan-level) — the same normalisation the input contract's DQ006 check
+    applies — so a downstream reader may compare it exactly to ``"commercial"``
+    / ``"residential"`` (:func:`_lowercase_property_type`, P1.362). Lowercasing
+    is all it does: a value DQ006 rejects (``"Comercial"``, ``" commercial"``)
+    comes out lowercased but still matches no limb, and loan-level
+    ``property_type`` is not value-checked at all.
+
     Args:
         exposures: Unified exposures with exposure_reference
         collateral: Collateral data with beneficiary_reference and property_ltv (optional)
@@ -644,7 +652,9 @@ def add_collateral_ltv(
     # Requires beneficiary_reference and property_ltv columns
     required_cols = {"beneficiary_reference", "property_ltv"}
     if not has_required_columns(collateral, required_cols):
-        return _add_ltv_defaults_for_missing_collateral(exposures)
+        return _add_ltv_defaults_for_missing_collateral(exposures).with_columns(
+            _lowercase_property_type()
+        )
 
     # Rows with LTV data, plus real-estate rows without it (their property
     # attributes still describe the security). A stable sort puts LTV-bearing
@@ -732,6 +742,7 @@ def add_collateral_ltv(
     exposures = exposures.with_columns(
         pl.coalesce("ltv", "_loan_ltv").alias("ltv"),
         pl.coalesce("is_qualifying_re", "_loan_qualifying_re").alias("is_qualifying_re"),
+        _lowercase_property_type(),
     ).drop("_loan_ltv", "_loan_qualifying_re")
     return derive_missing_ltv(exposures, collateral)
 
@@ -899,6 +910,25 @@ def _add_ltv_defaults_for_missing_collateral(exposures: pl.LazyFrame) -> pl.Lazy
     )
     defaults = [expr for col, expr in default_specs if col not in existing]
     return exposures.with_columns(defaults) if defaults else exposures
+
+
+def _lowercase_property_type() -> pl.Expr:
+    """``property_type`` lowercased (P1.362).
+
+    The input contract validates ``property_type`` case-insensitively
+    (``contracts/validation.py`` lowercases before its DQ006 membership test), so
+    ``"Commercial"`` is a valid input, while the readers downstream — the SA
+    real-estate routing (``sa/re_class.is_commercial_re_class``, the Basel 3.1
+    ``b31_real_estate_route``), the CRR Art. 164(4) LGD-floor bucket and the
+    COREP / Pillar 3 property-kind rows — compare it to the lowercase value.
+    This applies exactly the contract's normalisation and nothing more: it does
+    not strip whitespace or map a misspelling onto a ``PropertyType`` member.
+    Before this, a retail-mortgage row secured on commercial property spelt
+    ``"Commercial"`` missed the commercial limb and was priced on the residential
+    ladder through its class string (CRR Art. 125 instead of Art. 126; PS1/26
+    Art. 124F instead of Art. 124H), with no error raised. Null stays null.
+    """
+    return pl.col("property_type").str.to_lowercase().alias("property_type")
 
 
 def _prepare_short_term_lookup(

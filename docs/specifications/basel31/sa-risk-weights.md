@@ -1352,6 +1352,8 @@ If either component instead failed Art. 124A (e.g., the retail unit's income bec
 
 The Art. 124(4) pro-rata split is **automatically applied** by the post-CRM `RealEstateSplitter` stage. Firms supply real-estate collateral as separate rows in the `collateral` input table (`property_type = "residential"` or `"commercial"`); the hierarchy resolver aggregates them into per-exposure `residential_collateral_value` and `property_collateral_value` (RRE+CRE total), and the classifier emits per-component eligibility flags consumed by the splitter.
 
+`property_type` is matched case-insensitively, as the input contract's DQ006 check matches it: the hierarchy lowercases the exposure-level value once, so `"Commercial"` routes exactly as `"commercial"` on a row the splitter does not split too — a `retail_mortgage` row, a loan carrying its own property data, and the output-floor SA-equivalent of an IRB row — in both regimes (P1.362). Before that, such a row missed the commercial limb: a `retail_mortgage` row fell to the residential weights (understated), and a `retail_other`, `corporate_sme` or `corporate` row to the obligor's unsecured weight — overstated where the property earns the preferential weight (CRR Art. 126 50%; PS1/26 Art. 124H(1) 60%), understated where it does not (CRR Art. 124(1) 100% for an unattested or income-producing property; PS1/26 Art. 124I for an income-producing one). Every moved figure is the one the lowercase spelling already produced.
+
 For each mixed exposure the splitter emits:
 
 - one `secured_rre` row reclassified to `RESIDENTIAL_MORTGAGE`, EAD = `min(EAD × rre_share, 0.55 × rre_v − prior_charge_ltv × rre_v)`,

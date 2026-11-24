@@ -20,6 +20,7 @@ References:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -852,173 +853,194 @@ def _allocate_guarantees_pro_rata(
     )
 
 
-def redistribute_non_beneficial(exposures: pl.LazyFrame) -> pl.LazyFrame:
+@cites("CRR Art. 193(1)")
+@cites("CRR Art. 235")
+@cites("CRR Art. 236")
+@cites("PS1/26, paragraph 193")
+@cites("PS1/26, paragraph 235")
+def redistribute_non_beneficial(
+    exposures: pl.LazyFrame,
+    *,
+    extra_carriers: Sequence[str] = (),
+    scope: pl.Expr | None = None,
+) -> pl.LazyFrame:
     """
-    Redistribute non-beneficial guarantee portions to beneficial guarantors.
+    Reallocate a declined guarantor's share of an exposure to beneficial guarantors.
 
-    When multi-guarantor exposures have mixed beneficial/non-beneficial sub-rows,
-    the non-beneficial portions are reallocated to beneficial guarantors using a
-    greedy strategy ordered by ascending ``guarantor_rw`` (lowest risk weight first).
-    This minimises total RWA by filling the best guarantors first.
+    Pipeline position:
+        Calculator benefit test (``is_guarantee_beneficial``) ->
+        redistribute_non_beneficial -> risk-weight / RWA blend
 
-    Only operates on multi-guarantor sub-rows (created by ``_apply_guarantee_splits``).
-    Single-guarantor and non-guaranteed exposures pass through unchanged.
+    The CRM split (``_apply_guarantee_splits``) gives each guarantor a leg whose
+    size is its protection ``GA`` pro-rated, when the guarantors together cover
+    more than the exposure, so that the legs partition ``E``. The calculators then
+    DECLINE a guarantee that would not lower the risk weight (CRR Art. 193(1);
+    PS1/26 Art. 193(2A) "may choose to disregard any item of credit protection"),
+    which leaves the declined leg uncovered at the obligor's weight. Once it is
+    disregarded, the remaining guarantors' covered parts are re-sized on their own:
+    each is again at most ``min(GA, E)`` (Art. 235(1)(a)), so a beneficial
+    guarantor that the pro-rating cut below its ``GA`` can take over part of the
+    declined leg. This function does that, greedily, lowest ``guarantor_rw``
+    first. Any subdivision within those bounds is a permitted one; this one
+    minimises the RWEA when the legs share a conversion factor, and the ranking is
+    by risk weight alone where they do not (an SA guarantor's leg of an IRB
+    commitment carries the SA factor — ``_apply_cross_approach_ccf``).
+
+    Everything is measured on the CCF=100% basis Art. 235(1)(a) / 236(3) size the
+    covered part on — ``guarantee_amount`` (the leg's share of E) against
+    ``original_guarantee_amount`` (the guarantor's whole ``GA``). Comparing ``GA``
+    with the post-CCF ``guaranteed_portion`` instead invents capacity on an
+    off-balance-sheet leg.
+
+    The move is a CONSERVING one: basis taken over by a beneficial leg leaves the
+    declined legs (pro rata to their size), and every per-leg money carrier the CRM
+    split sized by the leg's share — ``leg_share_carriers()`` plus the caller's
+    ``extra_carriers`` (the IRB RWEA and expected-loss amounts computed before
+    this step) — is scaled by the same factor, so each leg's exposure value,
+    covered amount and RWEA keep describing the same part of E. The ``__REM`` leg
+    never moves: it holds basis only when no guarantor is left with unused
+    protection. A declined leg is not zeroed; it keeps its smaller share at the
+    obligor's weight, exactly as a declined single guarantee does.
+
+    The reallocation runs within ``(parent_exposure_reference, re_split_role)``,
+    so basis never crosses from a real-estate secured leg to a residual one.
+    ``scope`` restricts which legs may move at all: the output-floor SA pass over
+    the unified frame passes the SA-branch predicate, so IRB and slotting legs are
+    reallocated only by their own calculator, on their own benefit test.
 
     References:
-        CRR Art. 193(1): a guarantee must never raise the RWEA (sa/rw_adjustments.py)
-        CRR Art. 215-217: Guarantee substitution with multiple protections
+        CRR Art. 193(1): no CRM may raise the RWEA — the basis for the decline.
+        PS1/26 Art. 193(2A): an institution may disregard any item of protection.
+        CRR Art. 235(1) / PS1/26 Art. 235(1)(a)-(b): Eg = min(GA, E) on the
+            CCF=100% basis; the uncovered part at the obligor's weight.
+        CRR Art. 236(3): the IRB twin of that basis.
     """
-    schema = exposures.collect_schema()
-    cols = schema.names()
-
-    # Guard: need the columns created by _apply_guarantee_splits and the beneficial check
-    required = [
+    cols = exposures.collect_schema().names()
+    required = (
         "parent_exposure_reference",
         "exposure_reference",
         "is_guarantee_beneficial",
         "guaranteed_portion",
-        "ead_after_collateral",
+        "guarantee_amount",
         "original_guarantee_amount",
         "guarantor_rw",
-    ]
+        "re_split_role",
+    )
     if not all(c in cols for c in required):
         return exposures
 
-    # Classify row types
-    is_sub_row = pl.col("parent_exposure_reference") != pl.col("exposure_reference")
-    # The split emits one "<parent>__REM" remainder row per parent, but this runs
-    # in the calculators, AFTER re_splitter has renamed a split remainder to
-    # "__REM_sec" / "__REM_res" — so match the stem, not the suffix.
-    is_remainder = pl.col("exposure_reference").str.contains("__REM")
-    is_guarantor_sub = is_sub_row & ~is_remainder
-
-    # Check if any parent group has mixed beneficial/non-beneficial sub-rows.
-    # If no non-beneficial sub-rows exist at all, skip redistribution entirely.
-    has_non_ben = (
-        pl.when(~pl.col("is_guarantee_beneficial") & is_guarantor_sub)
-        .then(pl.lit(1))
-        .otherwise(pl.lit(0))
-        .sum()
-        .over("parent_exposure_reference")
+    # Basis moves within one (parent, re_split_role) partition. A null role is an
+    # unsplit leg, so the nulls pooling into one group per parent is the intended
+    # grouping, not a collapse of unrelated rows.
+    #
+    # A guarantor leg is a split sub-row that is not the remainder. The calculators
+    # run after re_splitter, which renames a split remainder "__REM_sec" /
+    # "__REM_res", so match the stem.
+    is_guarantor_leg = (
+        (pl.col("parent_exposure_reference") != pl.col("exposure_reference"))
+        & ~pl.col("exposure_reference").str.contains("__REM")
+        & (scope if scope is not None else pl.lit(True))
     )
-    has_ben = (
-        pl.when(pl.col("is_guarantee_beneficial") & is_guarantor_sub)
-        .then(pl.lit(1))
-        .otherwise(pl.lit(0))
-        .sum()
-        .over("parent_exposure_reference")
+    # Every predicate below is null-safe by construction (a null comparison is not
+    # a match), so a leg with an unknown amount neither frees nor takes basis.
+    beneficial = pl.col("is_guarantee_beneficial")
+    basis = pl.col("guarantee_amount")
+    protection = pl.col("original_guarantee_amount")
+    # Declined, not merely empty: a leg with no covered exposure value (a 0% CCF)
+    # adds nothing to the RWEA, so taking its basis away saves nothing.
+    is_declined_leg = (
+        is_guarantor_leg & ~beneficial & (pl.col("guaranteed_portion") > 0) & (basis > 0)
     )
+    is_beneficial_leg = is_guarantor_leg & beneficial & (basis > 0)
 
-    # Only redistribute for groups that have BOTH beneficial and non-beneficial
-    needs_redistribution = (has_non_ben > 0) & (has_ben > 0) & is_sub_row
-
-    # Pre-compute group-level amounts
     exposures = exposures.with_columns(
-        # Total non-beneficial amount to free up (per parent group)
-        pl.when(~pl.col("is_guarantee_beneficial") & is_guarantor_sub)
-        .then(pl.col("guaranteed_portion"))
+        pl.when(is_declined_leg)
+        .then(basis)
         .otherwise(pl.lit(0.0))
         .sum()
-        .over("parent_exposure_reference")
-        .alias("_non_ben_total"),
-        # Total parent EAD (sum of all sub-row EADs in the group)
-        pl.when(is_sub_row)
-        .then(pl.col("ead_after_collateral"))
+        .over("parent_exposure_reference", "re_split_role")
+        .alias("_freed_basis"),
+        pl.when(is_beneficial_leg & (protection > basis))
+        .then(protection - basis)
         .otherwise(pl.lit(0.0))
-        .sum()
-        .over("parent_exposure_reference")
-        .alias("_parent_ead"),
+        .alias("_spare_basis"),
     )
-
-    # For beneficial sub-rows, compute remaining capacity and sort rank
+    # Greedy fill, lowest guarantor RW first (exposure_reference breaks ties so the
+    # split between equally-weighted guarantors is deterministic).
     exposures = exposures.with_columns(
-        pl.when(pl.col("is_guarantee_beneficial") & is_guarantor_sub)
-        .then(
-            (pl.col("original_guarantee_amount") - pl.col("guaranteed_portion")).clip(
-                lower_bound=0.0
+        (
+            pl.col("_spare_basis")
+            .cum_sum()
+            .over(
+                "parent_exposure_reference",
+                "re_split_role",
+                order_by=["guarantor_rw", "exposure_reference"],
             )
-        )
-        .otherwise(pl.lit(0.0))
-        .alias("_remaining_capacity"),
+            - pl.col("_spare_basis")
+        ).alias("_spare_before"),
     )
-
-    # Greedy fill: sort beneficial guarantors by guarantor_rw ascending,
-    # compute cumulative capacity, and determine how much each absorbs.
-    # Use ordered window function so lowest-RW guarantors fill first.
     exposures = exposures.with_columns(
-        # Cumulative capacity of beneficial guarantors sorted by RW (ascending)
-        # For non-beneficial or non-sub-rows, capacity is 0 so cumsum stays 0.
-        pl.col("_remaining_capacity")
-        .cum_sum()
-        .over("parent_exposure_reference", order_by="guarantor_rw")
-        .alias("_cum_capacity"),
+        pl.min_horizontal(
+            pl.col("_spare_basis"),
+            (pl.col("_freed_basis") - pl.col("_spare_before")).clip(lower_bound=0.0),
+        ).alias("_absorbed_basis"),
     )
-
     exposures = exposures.with_columns(
-        # Previous cumulative (capacity of better-ranked guarantors)
-        (pl.col("_cum_capacity") - pl.col("_remaining_capacity")).alias("_prev_cum"),
-    )
-
-    # Each beneficial guarantor absorbs:
-    #   min(remaining_capacity, max(0, freed_amount - prev_cumulative))
-    absorbed = pl.min_horizontal(
-        pl.col("_remaining_capacity"),
-        (pl.col("_non_ben_total") - pl.col("_prev_cum")).clip(lower_bound=0.0),
-    )
-
-    # Compute new guaranteed portion for each row
-    new_guaranteed = (
-        pl.when(needs_redistribution & pl.col("is_guarantee_beneficial") & is_guarantor_sub)
-        .then(pl.col("guaranteed_portion") + absorbed)
-        .when(needs_redistribution & ~pl.col("is_guarantee_beneficial") & is_guarantor_sub)
-        .then(pl.lit(0.0))
-        .otherwise(pl.col("guaranteed_portion"))
-    )
-
-    # Compute total new beneficial EAD per group (for remainder calculation)
-    exposures = exposures.with_columns(new_guaranteed.alias("_new_guaranteed"))
-
-    new_ben_total = (
-        pl.when(is_guarantor_sub)
-        .then(pl.col("_new_guaranteed"))
-        .otherwise(pl.lit(0.0))
+        pl.col("_absorbed_basis")
         .sum()
-        .over("parent_exposure_reference")
+        .over("parent_exposure_reference", "re_split_role")
+        .alias("_absorbed_total"),
     )
-
-    # Update all affected columns
     exposures = exposures.with_columns(
-        # guaranteed_portion
-        pl.col("_new_guaranteed").alias("guaranteed_portion"),
-        # ead_after_collateral: for guarantor sub-rows = guaranteed_portion,
-        # for remainder = parent_ead - sum(guarantor sub-row EADs)
-        pl.when(needs_redistribution & is_guarantor_sub)
-        .then(pl.col("_new_guaranteed"))
-        .when(needs_redistribution & is_remainder)
-        .then((pl.col("_parent_ead") - new_ben_total).clip(lower_bound=0.0))
-        .otherwise(pl.col("ead_after_collateral"))
-        .alias("ead_after_collateral"),
-        # unguaranteed_portion
-        pl.when(needs_redistribution & pl.col("is_guarantee_beneficial") & is_guarantor_sub)
-        .then(pl.lit(0.0))
-        .when(needs_redistribution & ~pl.col("is_guarantee_beneficial") & is_guarantor_sub)
-        .then(pl.lit(0.0))
-        .when(needs_redistribution & is_remainder)
-        .then((pl.col("_parent_ead") - new_ben_total).clip(lower_bound=0.0))
-        .otherwise(pl.col("unguaranteed_portion"))
-        .alias("unguaranteed_portion"),
+        pl.when(is_beneficial_leg)
+        .then((basis + pl.col("_absorbed_basis")) / basis)
+        .when(is_declined_leg & (pl.col("_freed_basis") > 0))
+        .then(
+            (pl.lit(1.0) - pl.col("_absorbed_total") / pl.col("_freed_basis")).clip(lower_bound=0.0)
+        )
+        .otherwise(pl.lit(1.0))
+        .alias("_leg_scale"),
+    )
+    carriers = dict.fromkeys((*leg_share_carriers(), *extra_carriers))
+    exposures = exposures.with_columns(
+        (pl.col(c) * pl.col("_leg_scale")).alias(c) for c in carriers if c in cols
+    )
+    return exposures.drop(
+        "_freed_basis",
+        "_spare_basis",
+        "_spare_before",
+        "_absorbed_basis",
+        "_absorbed_total",
+        "_leg_scale",
     )
 
-    # Drop transient columns
-    transient = [
-        "_non_ben_total",
-        "_parent_ead",
-        "_remaining_capacity",
-        "_cum_capacity",
-        "_prev_cum",
-        "_new_guaranteed",
-    ]
-    return _drop_columns_if_present(exposures, transient)
+
+def leg_share_carriers() -> tuple[str, ...]:
+    """Per-leg money carriers sized by a guarantee leg's share of the exposure.
+
+    The CRM split multiplies ``_stock_split_cols()`` by each leg's coverage
+    fraction and writes the covered / uncovered portions, the leg's exposure value
+    and its share of the protection (``guarantee_amount``) from the same fraction;
+    ``ead_final`` and ``ead_after_guarantee`` are copied from
+    ``ead_after_collateral`` when CRM finalises, and ``sa_rwa`` is the output-floor
+    SA pass's ``ead_final x risk_weight`` on a Basel 3.1 IRB or slotting leg.
+    These are the carriers ``redistribute_non_beneficial`` must move together when
+    it moves basis between legs. Deliberately ABSENT: ``original_guarantee_amount``
+    (the guarantor's whole ``GA`` — the capacity, not a share of E) and every
+    carrier the split leaves whole on each leg (``ead_for_crm``, ``crm_alloc_*``,
+    ``total_collateral_for_lgd``, ``facility_limit``, ...), which describe the
+    parent and stay identical across its legs.
+    """
+    return (
+        *_stock_split_cols(),
+        "guaranteed_portion",
+        "unguaranteed_portion",
+        "guarantee_amount",
+        "ead_after_collateral",
+        "ead_after_guarantee",
+        "ead_final",
+        "sa_rwa",
+    )
 
 
 @cites("CRR Art. 217")

@@ -607,6 +607,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   value, RWEA or capital figure moves. `boe_b0735` still breaks on such a return
   (OF 08.01 col 0100 is post-substitution, OF 08.03 col 0020 is not), now by the
   pre-conversion amount.
+- **Several guarantors on one exposure, one of them declined: the declined share now
+  moves to the other guarantors without being priced twice (P1.458, review GT-09).**
+  When a guarantee would not lower the risk weight the calculators decline it (CRR
+  Art. 193(1); PS1/26 Art. 193(2A) "may choose to disregard any item of credit
+  protection"), and a beneficial guarantor whose cover the CRM split had pro-rated
+  down may take over part of the declined share, up to its own protection
+  (Art. 235(1): the covered part is `min(GA, E)`). That reallocation was half
+  applied. It added the moved amount to the beneficial leg's covered amount without
+  moving any exposure value, so the declined leg still carried RWEA on its whole
+  exposure at the obligor's weight and the moved amount was charged again at the
+  guarantor's weight; and it measured a guarantor's unused protection against the
+  post-CCF covered amount instead of the CCF=100% basis, inventing cover on undrawn
+  commitments. RWEA was overstated, sometimes above the unprotected figure, which
+  CRR Art. 193(1) forbids: on GT-09's SA case (loan 1,000,000, guarantor A an
+  institution at CQS 2 covering 50%, a declined guarantor B covering 100%) the loan
+  was 916,667 under CRR / 816,667 under Basel 3.1 and is now 750,000 / 650,000, and
+  the undrawn 1,000,000 at 50% CCF was 583,333 under CRR against an unprotected
+  500,000 and is now 375,000. Guarantee legs now exchange their share of the
+  exposure on the CCF=100% basis and every per-leg amount moves with it (exposure
+  value, covered amount, the split balance-sheet amounts, and on IRB legs the RWEA
+  and expected loss); a declined leg keeps the rest at the obligor's weight rather
+  than being zeroed. Under Basel 3.1 the output floor's SA-equivalent pass, which
+  runs over IRB and slotting legs first, no longer reallocates them: it had zeroed
+  an SA-declined guarantor's cover on an IRB leg, so the IRB calculator then lost a
+  guarantee it found beneficial (one IRB case: 1,177,004 RWEA against 900,000).
+  No registered reporting portfolio holds a multi-guarantor exposure, so no golden
+  or baseline moves; the shape is in `tests/fixtures/multi_guarantor_decline_portfolio.py`
+  and `tests/integration/test_multi_guarantor_decline_pipeline.py`.
 - **Validating a Basel 3.1 filing package no longer slows down with the square
   of the countries it reports.** The Bank of England rule checks that
   `export_filing_package` runs through `rwa-filer` took 12 s on a return with

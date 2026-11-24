@@ -225,11 +225,13 @@ def apply_third_party_deposit_rw_mapping(lf: pl.LazyFrame) -> pl.LazyFrame:
 
 @cites("CRR Art. 193")
 @cites("CRR Art. 235")
+@cites("PS1/26, paragraph 193")
 def apply_guarantee_substitution(
     lf: pl.LazyFrame,
     config: CalculationConfig,
     *,
     pack: ResolvedRulepack | None = None,
+    redistribution_scope: pl.Expr | None = None,
 ) -> pl.LazyFrame:
     """Apply guarantee substitution for unfunded credit protection.
 
@@ -320,23 +322,33 @@ def apply_guarantee_substitution(
         zero capital effect, and a real effect on which sheet the exposure
         appears on.
 
-    A PS1/26 GAP, STATED RATHER THAN GLOSSED. PS1/26 Art. 113(3) is word for word
-    the CRR text with "the Credit Risk Mitigation (CRR) Part" substituted for
-    "Chapter 4", so the permissive hook carries into 2027. A PS1/26 equivalent of
-    Art. 193(1) has NOT been verified: the PRA renumbers (in ``ps126app1.pdf``
-    "Article 193" is the CRR Art. 161 IRB-parameter-substitution rule — read the
-    ``[Note: This rule corresponds to Article NNN of CRR ...]`` line, never the
-    number), and the PRA Credit Risk Mitigation (CRR) Part is not in
-    ``docs/assets/`` at all. The consequence matters: under CRR the decline is
-    COMPELLED, so doing neither it nor apply-and-cap is a breach; if the PRA CRM
-    Part turns out to lack the equivalent, from 1 Jan 2027 this becomes a pure
-    ELECTION — and an election needs a recorded policy basis in a way that
-    compliance with a mandatory cap does not. No PS1/26 citation is asserted
-    here, because none has been read.
+    PS1/26: THE DECLINE BECOMES AN ELECTION (read 2026-11-23, ``ps126app1.pdf``
+    pp. 169-170, the Credit Risk Mitigation (CRR) Part — Article 193 there carries
+    "[Note: This rule corresponds to Article 193 of CRR ...]"). PS1/26 Art. 113(3)
+    is word for word the CRR text with "the Credit Risk Mitigation (CRR) Part"
+    substituted for "Chapter 4", so the permissive hook carries into 2027. But
+    Art. 193(1) is "[Note: Provision left blank]" — DELETED — and a new 193(2A)
+    reads: "For the purpose of applying the methods set out in paragraph A1, an
+    institution may choose to disregard any item of credit protection." So from
+    1 Jan 2027 the no-worse outcome is no longer mandated; declining a guarantee
+    that would raise the risk weight is a permitted ELECTION under 193(2A), and it
+    is this engine's election in both regimes. Under CRR it remains COMPELLED by
+    193(1), so doing neither it nor apply-and-cap is a breach there.
+
+    MORE THAN ONE GUARANTOR. Declining one of several guarantees disregards that
+    item only; the others are re-sized on their own (Art. 235(1)(a): each covered
+    part is at most ``min(GA, E)``), which is what
+    ``engine/crm/guarantees.py::redistribute_non_beneficial`` does between the
+    benefit test and the blend. ``redistribution_scope`` limits which legs it may
+    move: the output-floor pass over the unified frame
+    (``SACalculator.calculate_unified``) passes the SA-branch predicate, so IRB and
+    slotting legs are reallocated only by their own calculator on their own
+    benefit test, never on this SA-equivalent one.
 
     References:
         CRR Art. 193(1), (3): CRM recognition principles — the no-worse outcome
             cap, and the election to amend the calculation at all.
+        PS1/26 Art. 193(2A): the election to disregard any item of protection.
         CRR Art. 113(3): the SA per-item permissive hook Art. 235(1) hangs off.
         CRR Art. 235: SA risk-weight substitution formula.
         CRR Art. 213-217: eligibility of the protection itself, gated upstream in
@@ -419,12 +431,12 @@ def apply_guarantee_substitution(
         ]
     )
 
-    # Redistribute non-beneficial guarantee portions to beneficial guarantors.
-    # For multi-guarantor exposures, non-beneficial guarantors' EAD is reallocated
-    # to the most beneficial (lowest RW) guarantors using greedy fill.
+    # Reallocate a declined guarantor's share of a multi-guarantor exposure to the
+    # beneficial guarantors with protection left over (lowest RW first), within
+    # ``redistribution_scope`` — see this function's docstring.
     from rwa_calc.engine.crm.guarantees import redistribute_non_beneficial
 
-    exposures = redistribute_non_beneficial(exposures)
+    exposures = redistribute_non_beneficial(exposures, scope=redistribution_scope)
 
     # Calculate blended risk weight using substitution approach
     # Only apply if guarantee is beneficial

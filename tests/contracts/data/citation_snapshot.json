@@ -285,6 +285,13 @@
     "CRR Art. 213",
     "CRR Art. 217"
   ],
+  "rwa_calc.engine.crm.guarantees::redistribute_non_beneficial": [
+    "CRR Art. 193(1)",
+    "CRR Art. 235",
+    "CRR Art. 236",
+    "PS1/26, paragraph 193",
+    "PS1/26, paragraph 235"
+  ],
   "rwa_calc.engine.crm.guarantor_eligibility::assign_guarantor_approach": [
     "CRR Art. 201",
     "CRR Art. 194",
@@ -768,7 +775,8 @@
   ],
   "rwa_calc.engine.sa.rw_adjustments::apply_guarantee_substitution": [
     "CRR Art. 193",
-    "CRR Art. 235"
+    "CRR Art. 235",
+    "PS1/26, paragraph 193"
   ],
   "rwa_calc.engine.sa.rw_adjustments::apply_intragroup_zero_rw": [
     "CRR Art. 113"

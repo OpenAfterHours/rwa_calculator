@@ -6,12 +6,21 @@ Pipeline position:
     build_reporting_crm_substitution_bundle() -> RawDataBundle -> PipelineOrchestrator
         -> AggregatedResultBundle -> COREPGenerator / Pillar3Generator
 
-Why this portfolio: every substitution cell (C 07.00 cols 0050/0060/0090/0100,
-C 08.01 cols 0040/0050/0070/0080, C 08.02 col 0080) is exactly 0.0 in every one of
-the 70+ frozen golden ndjson files under ``tests/expected_outputs/reporting/`` —
-no golden portfolio contains a guaranteed exposure that migrates exposure class.
-This portfolio closes that blind spot with guarantee legs, each on a
-distinct obligor/guarantor pair with a distinct round guaranteed amount so a
+Why this portfolio: when it was built, every substitution cell (C 07.00 cols
+0050/0060/0090/0100, C 08.01 cols 0040/0050/0070/0080, C 08.02 col 0080) was exactly
+0.0 in every frozen golden ndjson file then under ``tests/expected_outputs/reporting/``
+— no golden portfolio contained a guaranteed exposure that migrates exposure class.
+Since every registered run got a golden (P5.48) that is no longer true of the golden
+estate as a whole: this portfolio's own ``crm_substitution_*`` goldens carry those
+cells, and ``irb_shapes_crr`` carries C 08.01 col 0070 from a CRR life-policy
+outflow with no matching inflow (a candidate defect; see the ``crm-substitution``
+entry in ``tests/acceptance/reporting/test_supervisory_validations.py``'s docstring).
+This portfolio closes that blind spot for every one of those cells except C 07.00
+col 0050 ("(-) Guarantees", which Annex II defines as unfunded protection other
+than credit derivatives). Its only SA-origin protected leg, S4, is a credit
+derivative, so col 0050 still reads 0.00 or null here (measured on the
+``crm_substitution_*`` goldens, 2026-11-23). The legs that close it are guarantee
+legs, each on a distinct obligor/guarantor pair with a distinct round guaranteed amount so a
 mis-posted cell is identifiable on sight. S1 and S3-S5 are BENEFICIALLY substituted
 (``is_guarantee_beneficial`` derives True); S2 is a natural person's guarantee
 that Art. 201 does not recognise at all (P1.384 — see the table); S6 adds the

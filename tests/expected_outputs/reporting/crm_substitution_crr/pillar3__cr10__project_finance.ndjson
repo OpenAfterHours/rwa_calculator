@@ -1,0 +1,12 @@
+{"row_ref":"1","row_name":"Category 1 (Strong) — remaining maturity < 2.5 years","a":0.0,"b":0.0,"c":50.0,"d":null,"e":null,"f":null}
+{"row_ref":"2","row_name":"Category 1 (Strong) — remaining maturity >= 2.5 years","a":10000000.0,"b":0.0,"c":70.0,"d":10000000.0,"e":7000000.0,"f":40000.0}
+{"row_ref":"3","row_name":"Category 2 (Good) — remaining maturity < 2.5 years","a":0.0,"b":0.0,"c":70.0,"d":null,"e":null,"f":null}
+{"row_ref":"4","row_name":"Category 2 (Good) — remaining maturity >= 2.5 years","a":18500000.0,"b":0.0,"c":90.0,"d":10700000.0,"e":9630000.0,"f":85600.0}
+{"row_ref":"5","row_name":"Category 3 (Satisfactory) — remaining maturity < 2.5 years","a":0.0,"b":0.0,"c":114.99999999999999,"d":null,"e":null,"f":null}
+{"row_ref":"6","row_name":"Category 3 (Satisfactory) — remaining maturity >= 2.5 years","a":0.0,"b":0.0,"c":114.99999999999999,"d":null,"e":null,"f":null}
+{"row_ref":"7","row_name":"Category 4 (Weak) — remaining maturity < 2.5 years","a":0.0,"b":0.0,"c":250.0,"d":null,"e":null,"f":null}
+{"row_ref":"8","row_name":"Category 4 (Weak) — remaining maturity >= 2.5 years","a":0.0,"b":0.0,"c":250.0,"d":null,"e":null,"f":null}
+{"row_ref":"9","row_name":"Category 5 (Default) — remaining maturity < 2.5 years","a":0.0,"b":0.0,"c":0.0,"d":null,"e":null,"f":null}
+{"row_ref":"10","row_name":"Category 5 (Default) — remaining maturity >= 2.5 years","a":0.0,"b":0.0,"c":0.0,"d":null,"e":null,"f":null}
+{"row_ref":"11","row_name":"Total — remaining maturity < 2.5 years","a":0.0,"b":0.0,"c":null,"d":null,"e":null,"f":null}
+{"row_ref":"12","row_name":"Total — remaining maturity >= 2.5 years","a":28500000.0,"b":0.0,"c":null,"d":20700000.0,"e":16630000.0,"f":125600.0}

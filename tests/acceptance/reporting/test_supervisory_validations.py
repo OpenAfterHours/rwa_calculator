@@ -210,13 +210,22 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     Tier 2 register. So the ``NOT_EVALUATED`` half is mitigated, not closed, and
     it is owed work — not a property of legs (f)/(g).
 
-    Where the single-portfolio case actually goes, stated per portfolio rather
-    than waved at ``test_reporting_*_golden.py``: only SIX goldens exist — rich,
-    ccr, irb-classes, off-bs, sa-classes and netting. ``crm-substitution``,
-    ``re-split``, ``art199`` and ``irb-shapes`` have NO golden, only focused
-    acceptance tests pinning the columns
-    each fixture was built for: strong on those columns, silent elsewhere. Golden
-    coverage for those four is owed work too.
+    Where the single-portfolio case actually goes: to the goldens, one per run.
+    Six portfolios keep their own golden modules (rich, ccr, irb-classes,
+    off-bs, sa-classes, netting); every other run in ``RUNS`` is frozen by
+    ``test_reporting_registered_goldens.py``, from the run's own builder, config
+    and prior-period config, in its own ``<portfolio>_<regime>`` directory. Its
+    ``test_every_registered_run_has_a_golden`` fails while any registered run
+    lacks one, so a portfolio added here owes a golden the day it is added.
+    Measured 2026-11-23: zeroing C 09.01 col 0010 on the GB sheet of
+    ``re-split`` alone left every leg of this gate, the re-split focused tests
+    and the cell-coverage census green, and reddened exactly the two re-split
+    goldens. Owed: the ``rich`` and ``irb-classes`` goldens predate the prior
+    frame and freeze C 08.04 and CR8 null (that module's ``_PRIOR_FRAME_OWED``),
+    and all six legacy Basel 3.1 goldens freeze Pillar 3 OV1 row 27 ("Output
+    floor adjustment") null for want of the output-floor summary
+    (``_FLOOR_SUMMARY_OWED``). This gate's own Pillar 3 call below withholds
+    both side inputs, so no register rule sees either cell populated.
 
 Cost, and why every run is load-bearing:
     This file is the most expensive test in the suite: fifteen portfolios x two
@@ -244,12 +253,34 @@ Cost, and why every run is load-bearing:
     - ``sa-classes``       the SA exposure-class sheet axis;
     - ``irb-classes``      the ONLY route to the C 08.03 / C 08.05 PD-band row
                            rules and the thin C 08.xx class sheets;
-    - ``crm-substitution`` the ONLY portfolio with a non-zero CRM-substitution
-                           cell anywhere in the estate (C 07.00 cols
-                           0050/0060/0090/0100, C 08.01 cols
-                           0040/0050/0070/0080, C 08.02 col 0080) — the sole
-                           route to every rule written over the
-                           outflow/inflow columns.
+    - ``crm-substitution`` the ONLY run in ``RUNS`` with a non-zero figure in
+                           C 07.00 cols 0060/0090/0100, C 08.01 cols
+                           0040/0050/0080 and C 08.02 col 0080, and so the
+                           sole route here to every rule written over the
+                           inflow columns and the C 07.00 outflow. C 08.01
+                           col 0070 is the exception: ``crr/irb-shapes``
+                           also books its Art. 200(1)(b) life policy as a
+                           substitution outflow, -80,000.00 in cols 0060 and
+                           0070 of the retail_other sheet, rows
+                           0010/0020/0070. That outflow has NO matching
+                           inflow on any C 08.01 col 0080 or C 07.00 col 0100
+                           of the run, although Annex II C 08.01 cols
+                           0070-0080 says an outflow "shall be considered as
+                           an inflow into the guarantor's exposure class". It
+                           is a candidate defect, and the ``irb_shapes_crr``
+                           golden now freezes it, so a fix owes a
+                           preserve-or-fix record. Under Basel 3.1 the same
+                           policy books to cols 0170/0172 instead. C 07.00
+                           col 0050 ("(-) Guarantees") reads 0.00 or null on
+                           every run in ``RUNS`` (all measured on the goldens,
+                           2026-11-23). Outside ``RUNS``, the property
+                           corpus's ``mitigated`` run keeps C 07.00 cols
+                           0050/0090/0100 live in the cell census, so for
+                           those three columns the census is no guard here.
+                           The guards are ``test_crm_substitution_flows.py``'s
+                           absolute inflow/outflow pins and its
+                           cross-template conservation test, plus the
+                           ``crm_substitution_*`` goldens.
     - ``netting``          the ONLY portfolio whose on-balance-sheet netting
                            agreement spans more than one counterparty, and so
                            the only route to C 07.00 col 0035 ("(-) Adjustment
@@ -796,6 +827,12 @@ class GateInput(NamedTuple):
 #: other-physical collateral). ``scripts/check_template_cell_coverage.py`` reads
 #: this tuple verbatim, so registration also moves them inside the cell-coverage
 #: ratchet with no edit to that script.
+#:
+#: Registration also owes the run a golden. ``test_reporting_registered_goldens.py``
+#: reads this tuple too and freezes every run whose portfolio has no golden module
+#: of its own, from the entry's own builder and configs; its completeness test is
+#: red until the new run's directory is banked (``REGEN_REGISTERED_GOLDENS=
+#: <regime>/<portfolio>``, never a bulk regeneration).
 RUNS: tuple[GateInput, ...] = (
     GateInput(
         "crr", "CRR", "rich", build_reporting_bundle, _crr_config, lambda: _prior_config("CRR")

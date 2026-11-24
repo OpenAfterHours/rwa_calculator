@@ -1,0 +1,18 @@
+{"row_ref":"1","row_name":"0.00 to <0.15","a":"0.00 to <0.15","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"2","row_name":"0.00 to <0.10","a":"0.00 to <0.10","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"3","row_name":"0.10 to <0.15","a":"0.10 to <0.15","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"4","row_name":"0.15 to <0.25","a":"0.15 to <0.25","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"5","row_name":"0.25 to <0.50","a":"0.25 to <0.50","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"6","row_name":"0.50 to <0.75","a":"0.50 to <0.75","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"7","row_name":"0.75 to <2.50","a":"0.75 to <2.50","b":7400000.0,"c":6000000.0,"d":0.793939393939394,"e":11360000.0,"f":1.5871478873239437,"g":2.0,"h":40.0,"i":4.583561643835616,"j":14536712.49562835,"k":1.2796401844743266,"l":72120.0,"m":null}
+{"row_ref":"8","row_name":"0.75 to <1.75","a":"0.75 to <1.75","b":4100000.0,"c":6000000.0,"d":0.793939393939394,"e":8060000.0,"f":1.5,"g":1.0,"h":40.0,"i":4.5835616438356155,"j":9480422.90509389,"k":1.1762311296642542,"l":48360.0,"m":null}
+{"row_ref":"9","row_name":"1.75 to <2.5","a":"1.75 to <2.5","b":3300000.0,"c":0.0,"d":null,"e":3300000.0,"f":1.7999999999999998,"g":1.0,"h":40.0,"i":4.583561643835616,"j":5056289.590534459,"k":1.5322089668286238,"l":23760.0,"m":null}
+{"row_ref":"10","row_name":"2.50 to <10.00","a":"2.50 to <10.00","b":90000.0,"c":0.0,"d":null,"e":90000.0,"f":2.5,"g":1.0,"h":4.399775527382968,"i":4.583561643835616,"j":13051.093377954938,"k":0.14501214864394374,"l":98.99494936611677,"m":null}
+{"row_ref":"11","row_name":"2.5 to <5","a":"2.5 to <5","b":90000.0,"c":0.0,"d":null,"e":90000.0,"f":2.5,"g":1.0,"h":4.399775527382968,"i":4.583561643835616,"j":13051.093377954938,"k":0.14501214864394374,"l":98.99494936611677,"m":null}
+{"row_ref":"12","row_name":"5 to <10","a":"5 to <10","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"13","row_name":"10.00 to <100.00","a":"10.00 to <100.00","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"14","row_name":"10 to <20","a":"10 to <20","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"15","row_name":"20 to <30","a":"20 to <30","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"16","row_name":"30.00 to <100.00","a":"30.00 to <100.00","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"17","row_name":"100.00 (Default)","a":"100.00 (Default)","b":null,"c":null,"d":null,"e":null,"f":null,"g":null,"h":null,"i":null,"j":null,"k":null,"l":null,"m":null}
+{"row_ref":"18","row_name":"Total","a":"Total","b":7490000.0,"c":6000000.0,"d":0.793939393939394,"e":11450000.0,"f":1.5943231441048034,"g":3.0,"h":39.7201729080755,"i":4.5835616438356155,"j":14549763.589006305,"k":1.2707217108302449,"l":72218.99494936611,"m":null}

@@ -324,6 +324,24 @@ Each record has at minimum:
 
 The JSON file is the canonical source of truth. Parquet/CSV are derived for faster loading. When updating expected values, edit the JSON and regenerate the other formats.
 
+### Reporting goldens
+
+`tests/expected_outputs/reporting/` freezes the full COREP + Pillar 3 output of every reporting run registered in `RUNS` (`tests/acceptance/reporting/test_supervisory_validations.py`), one directory per run: per-template NDJSON frames plus a `manifest.json` holding each frame's schema and the bundle metadata. The comparison is structure-exact with Float64 cells within `rtol=1e-9`, never byte-exact.
+
+- Six portfolios have their own golden module (`test_reporting_golden.py` for `rich`, and the `ccr`, `irb_classes`, `netting`, `offbs` and `sa_classes` modules).
+- Every other registered run is frozen by `test_reporting_registered_goldens.py` in `<portfolio>_<regime>/`, generated from the run's own builder, config and prior-period config. Both generators get the side inputs the REST layer passes (`api/rest.py::get_template_bundles`): the prior-period frame and the run's output-floor summary. The register withholds both from Pillar 3, so these goldens freeze more than the register evaluates: CR8's flow rows and Basel 3.1 OV1 row 27 ("Output floor adjustment").
+- The Python API's Pillar 3 paths do not pass the run's summary. `ResultExporter.export_to_pillar3`, `export_pillar3_facts` and `validate_submission`'s Pillar 3 bundle use only a caller-supplied one, and `CalculationResponse.to_pillar3()` supplies none. So on those paths OV1 row 27 is null, where the goldens freeze a figure.
+- `test_every_registered_run_has_a_golden` fails while any run in `RUNS` has no golden, so registering a portfolio also means banking its golden.
+
+The register's vacuity legs and the coverage ratchets are unions over runs, so a cell emptied on one portfolio while another keeps it live can leave every one of them green; only a published rule over that exact cell would object. A golden catches that, and any change in a value, but only in cells it froze with a figure. A cell the golden froze as null is still a blind spot. That is true of some legacy goldens, which were captured without a side input:
+
+- C 08.04 rows 0010-0080 and CR8 rows 1-8 on `rich` and `irb-classes` (both regimes), listed in `_PRIOR_FRAME_OWED`.
+- OV1 row 27 on all six legacy Basel 3.1 goldens, listed in `_FLOOR_SUMMARY_OWED`.
+
+Two parity limbs hold each list two-way. Every other run in scope must freeze a figure in those cells. An owed golden that starts freezing one must come off its list.
+
+Regenerate one run at a time with `REGEN_REGISTERED_GOLDENS=<regime>/<portfolio>` (comma-separated), or `REGEN_REGISTERED_GOLDENS=missing` for runs with no golden yet. There is no "all". Every moved cell needs a recorded preserve-or-fix decision; never regenerate to turn a red gate green.
+
 ### How conftest.py wires it together
 
 Each acceptance suite's `conftest.py` (e.g. `tests/acceptance/crr/conftest.py`) provides session-scoped fixtures:

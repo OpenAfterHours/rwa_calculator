@@ -133,7 +133,15 @@ class SACalculator:
             .pipe(apply_fcsm_rw_substitution, config)
             .pipe(apply_life_insurance_rw_mapping)
             .pipe(apply_third_party_deposit_rw_mapping)
-            .pipe(apply_guarantee_substitution, config, pack=pack)
+            # IRB and slotting legs are reallocated between their guarantors by
+            # their own calculators, on their own benefit test — never on this
+            # SA-equivalent one (``redistribute_non_beneficial``).
+            .pipe(
+                apply_guarantee_substitution,
+                config,
+                pack=pack,
+                redistribution_scope=is_sa_branch,
+            )
             .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
             .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)
             # CRR Art. 113(6): final 0% override for eligible core-UK-group

@@ -675,6 +675,39 @@ The guarantor's risk weight replaces the borrower's risk weight for the guarante
 3. If guarantor RW < borrower RW, apply substitution on the guaranteed portion
 4. If guarantor RW ≥ borrower RW, no substitution (guarantee is non-beneficial)
 
+### Several Guarantors, One Declined
+
+The CRM stage splits a multi-guarantor exposure into one `__G_<guarantor>` leg per
+guarantor plus a `__REM` leg. When the guarantors together cover more than the
+exposure, each guarantor's protection `GA` is pro-rated so the legs partition `E`.
+Declining one guarantee (CRR Art. 193(1); PS1/26 Art. 193(2A) "may choose to
+disregard any item of credit protection") disregards that item only: the remaining
+guarantors are re-sized on their own, each covering at most `min(GA, E)` (Art.
+235(1)), so a beneficial guarantor that the pro-rating cut below its `GA` takes over
+part of the declined leg — lowest guarantor risk weight first
+(`engine/crm/guarantees.py::redistribute_non_beneficial`).
+
+- **Measured on the CCF=100% basis.** A guarantor's unused protection is
+  `original_guarantee_amount − guarantee_amount`, both before any conversion factor
+  (Art. 235(1) / 236(3)); the post-CCF `guaranteed_portion` is never compared with
+  `GA`.
+- **Conserving.** The legs exchange their share of `E`, and every per-leg amount
+  moves with it — exposure value, covered amount, the split balance-sheet amounts,
+  and on IRB legs the RWEA and expected loss already computed. No leg is covered
+  beyond its own exposure value, and no part of `E` is priced twice.
+- **The declined leg keeps the rest** at the obligor's weight; it is not zeroed. The
+  `__REM` leg never moves (it holds exposure only when no guarantor has protection
+  left over).
+- **Each branch decides for itself.** Under Basel 3.1 the SA calculator first runs
+  over IRB and slotting legs for the output floor's SA-equivalent RWEA; that pass
+  does not reallocate them. IRB and slotting legs are reallocated by their own
+  calculator on their own benefit test, and the SA-equivalent moves with the leg.
+
+| Example (SA, loan E = 1,000,000) | A: institution CQS 2, 50% of E | B: corporate CQS 5, 100% of E (declined) | RWEA |
+|---|---|---|---|
+| CRM split (pro-rated) | 333,333 | 666,667 | — |
+| After the decline (CRR) | 500,000 at 50% | 500,000 at the obligor's 100% | 750,000 |
+
 ### Blended Risk Weight
 
 For partially guaranteed exposures:

@@ -170,12 +170,13 @@ def apply_guarantee_substitution(
         ]
     )
 
-    # Redistribute non-beneficial guarantee portions to beneficial guarantors.
-    # For multi-guarantor exposures, non-beneficial guarantors' EAD is reallocated
-    # to the most beneficial (lowest RW) guarantors using greedy fill.
+    # Reallocate a declined guarantor's share of a multi-guarantor exposure to the
+    # beneficial guarantors with protection left over (lowest RW first). The IRB
+    # RWEA and expected-loss amounts were computed per leg above, so they move with
+    # the leg's exposure value — see ``_irb_leg_share_carriers``.
     from rwa_calc.engine.crm.guarantees import redistribute_non_beneficial
 
-    lf = redistribute_non_beneficial(lf)
+    lf = redistribute_non_beneficial(lf, extra_carriers=_irb_leg_share_carriers())
 
     # Calculate blended RWA using substitution approach. The predicate and the
     # retained share are named once and reused below, so the post-model-adjustment
@@ -1012,4 +1013,32 @@ def _add_guarantee_status_columns(lf: pl.LazyFrame) -> pl.LazyFrame:
             .otherwise(pl.lit(0.0))
             .alias("guarantee_benefit_rw"),
         ]
+    )
+
+
+def _irb_leg_share_carriers() -> tuple[str, ...]:
+    """The IRB amounts on a guarantee leg that scale with its exposure value.
+
+    ``apply_all_formulas`` and ``apply_post_model_adjustments`` price each leg
+    before substitution, and this function stores the pre-CRM copies, so when
+    ``redistribute_non_beneficial`` moves part of the exposure between legs these
+    amounts must move with it — each is linear in the leg's ``ead_final`` at the
+    leg's fixed PD, LGD and maturity. ``double_default_unfunded_protection`` is
+    the leg's covered amount on the double-default path. Rates (``k``,
+    ``risk_weight*``, ``guarantor_rw*``, ``beel``) are deliberately absent.
+    """
+    return (
+        "rwa",
+        "rwa_irb_original",
+        "pre_crm_rwa",
+        "rwa_pre_adjustments",
+        "post_model_adjustment_rwa",
+        "mortgage_rw_floor_adjustment",
+        "unrecognised_exposure_adjustment",
+        "expected_loss",
+        "expected_loss_irb_original",
+        "el_pre_adjustment",
+        "post_model_adjustment_el",
+        "el_after_adjustment",
+        "double_default_unfunded_protection",
     )

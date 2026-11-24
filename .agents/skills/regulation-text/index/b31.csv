@@ -138,7 +138,7 @@ article,heading,crr_article,left_blank,not_in_rulebook,in_snapshot,pack_entries,
 191,INTERNAL AUDIT,191,,,yes,,
 191A,USE OF CREDIT RISK MITIGATION TECHNIQUES UNDER THE STANDARDISED APPROACH AND THE IRB APPROACH,,,,yes,,engine/crm/expressions.py::ccr_engine_row_expr
 192,,192,(1),,yes,,
-193,PRINCIPLES FOR RECOGNISING THE EFFECT OF CREDIT RISK MITIGATION TECHNIQUES,193,(1),,yes,,
+193,PRINCIPLES FOR RECOGNISING THE EFFECT OF CREDIT RISK MITIGATION TECHNIQUES,193,(1),,yes,,engine/crm/guarantees.py::redistribute_non_beneficial; engine/sa/rw_adjustments.py::apply_guarantee_substitution
 194,PRINCIPLES GOVERNING THE ELIGIBILITY OF CREDIT RISK MITIGATION TECHNIQUES,,(5); (10),,yes,,engine/crm/guarantor_eligibility.py::assign_guarantor_approach
 195,ON-BALANCE SHEET NETTING,195,,,yes,b31:on_bs_netting_perimeter_is_agreement,
 196,MASTER NETTING AGREEMENTS COVERING SECURITIES FINANCING TRANSACTIONS,196,,,yes,,
@@ -179,7 +179,7 @@ article,heading,crr_article,left_blank,not_in_rulebook,in_snapshot,pack_entries,
 232,OTHER FUNDED CREDIT PROTECTION METHOD,232,,,yes,,
 233,VALUATION UNDER THE RISK-WEIGHT SUBSTITUTION METHOD AND THE PARAMETER SUBSTITUTION METHOD,233,,,yes,,engine/crm/protection_value.py::_apply_fx_mismatch; engine/crm/protection_value.py::_apply_restructuring_exclusion; engine/crm/protection_value.py::value_unfunded_protection
 234,CALCULATING RISK-WEIGHTED EXPOSURE AMOUNTS AND EXPECTED LOSS AMOUNTS IN THE EVENT OF PARTIAL PROTECTION AND TRANCHING,234,,,yes,,engine/crm/protection_screen.py::screen_unfunded_protection
-235,CALCULATING RISK-WEIGHTED EXPOSURE AMOUNTS UNDER THE RISK- WEIGHT SUBSTITUTION METHOD,235,,,yes,b31:slotting_guarantee_substitution,engine/eu_sovereign.py::build_domestic_cgcb_guarantor_expr; engine/slotting/transforms.py::apply_guarantee_substitution; engine/slotting/transforms.py::zero_covered_expected_loss
+235,CALCULATING RISK-WEIGHTED EXPOSURE AMOUNTS UNDER THE RISK- WEIGHT SUBSTITUTION METHOD,235,,,yes,b31:slotting_guarantee_substitution,engine/crm/guarantees.py::redistribute_non_beneficial; engine/eu_sovereign.py::build_domestic_cgcb_guarantor_expr; engine/slotting/transforms.py::apply_guarantee_substitution; engine/slotting/transforms.py::zero_covered_expected_loss
 236,APPLICATION AND DEFINITIONS,4; 236,(2); (3),,yes,,
 237,MATURITY MISMATCH,237,,,yes,,engine/crm/guarantees.py::_apply_maturity_mismatch_to_guarantees
 238,MATURITY OF CREDIT PROTECTION,238,,,yes,,engine/crm/haircuts.py::with_derived_residual_maturity

@@ -289,7 +289,10 @@ Where:
   way PSM is applied: PSM is recognised only when the resulting `guarantor_rw <
   risk_weight_irb_original` (the `is_guarantee_beneficial` gate); a non-beneficial
   PSM result is simply not applied (Art. 236(1)(c) blended formula collapses to
-  `rn × E / E`).
+  `rn × E / E`). Declining one of several guarantees disregards that item only
+  (Art. 193(2A)); how the remaining guarantors are re-sized is in the CRR
+  specification, "Several Guarantors, One Declined" — the mechanics are the same in
+  both regimes.
 
 The same floored PD is used in the correlation and maturity-adjustment formulas
 below — it is *not* re-floored separately at each step.

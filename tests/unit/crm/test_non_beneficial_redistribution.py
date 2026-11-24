@@ -1,248 +1,329 @@
 """
-Unit tests for redistribute_non_beneficial() — greedy RW-ordered reallocation.
+Unit tests for redistribute_non_beneficial() — reallocating a declined guarantor's share.
 
-When multi-guarantor exposures have mixed beneficial/non-beneficial sub-rows,
-the non-beneficial portions are reallocated to beneficial guarantors in order
-of ascending guarantor_rw (lowest risk weight first) to minimise total RWA.
+When an exposure has several guarantors and the calculator declines one (its risk
+weight does not beat the obligor's), the declined item is disregarded and the
+remaining guarantors are re-sized on their own, each covering at most its
+protection GA (CRR Art. 235(1) / PS1/26 Art. 235(1)(a): Eg = min(GA, E), on the
+CCF=100% basis). Basis taken over by a beneficial guarantor leaves the declined
+legs, and every per-leg money carrier moves with it.
+
+Every frame here is built the way ``engine/crm/guarantees.py::_apply_guarantee_splits``
+builds one (``_split``): each guarantor's protection GA is pro-rated by
+``min(1, E / sum(GA))``, its leg's ``guarantee_amount`` is that share of E, and the
+leg's exposure value and covered amount are the share times the CCF. So a
+guarantor has unused protection ONLY when the guarantors over-cover E — in which
+case the remainder leg is empty. The previous version of this file used frames
+with spare protection beside a non-empty remainder, which the split cannot
+produce, and asserted the remainder absorbing basis.
 
 References:
-    CRR Art. 213: Only beneficial guarantees should be applied
-    CRR Art. 215-217: Guarantee substitution with multiple protections
-    GitHub issue #239: Multiple guarantors — some not beneficial
+    CRR Art. 193(1); PS1/26 Art. 193(2A): the decline.
+    CRR Art. 235(1), 236(3); PS1/26 Art. 235(1): covered part on the CCF=100% basis.
+    GitHub issue #239; plan item P1.458 (review GT-09).
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import polars as pl
 import pytest
 
-from rwa_calc.engine.crm.guarantees import redistribute_non_beneficial
+from rwa_calc.engine.crm.guarantees import leg_share_carriers, redistribute_non_beneficial
+
+_PARENT = "EXP001"
 
 
-def _make_multi_guarantor_frame(
+@dataclass(frozen=True)
+class _G:
+    """One guarantor: protection GA, its risk weight, and the calculator's verdict."""
+
+    ref: str
+    protection: float
+    rw: float
+    beneficial: bool
+
+
+def _split(
+    guarantors: list[_G],
     *,
-    parent: str = "EXP001",
-    guarantors: list[dict],
-    remainder_ead: float = 0.0,
-) -> pl.LazyFrame:
-    """Build a LazyFrame simulating multi-guarantor sub-rows from _apply_guarantee_splits."""
+    exposure: float = 1000.0,
+    ccf: float = 1.0,
+    parent: str = _PARENT,
+    role: str | None = None,
+    approach: str = "standardised",
+) -> list[dict]:
+    """Legs as the CRM split emits them for one parent (see the module docstring)."""
+    total = sum(g.protection for g in guarantors)
+    scale = min(1.0, exposure / total) if total > 0 else 0.0
     rows: list[dict] = []
     for g in guarantors:
+        share = g.protection * scale
+        ead = share * ccf
         rows.append(
             {
                 "parent_exposure_reference": parent,
-                "exposure_reference": f"{parent}__G_{g['ref']}",
-                "is_guarantee_beneficial": g["beneficial"],
-                "guaranteed_portion": g["portion"],
-                "ead_after_collateral": g["portion"],
-                "original_guarantee_amount": g["original"],
-                "guarantor_rw": g["rw"],
+                "exposure_reference": f"{parent}__G_{g.ref}",
+                "is_guarantee_beneficial": g.beneficial and ead > 0,
+                "guarantor_rw": g.rw,
+                "guarantee_amount": share,
+                "original_guarantee_amount": g.protection,
+                "guaranteed_portion": ead,
                 "unguaranteed_portion": 0.0,
+                "ead_after_collateral": ead,
+                "ead_final": ead,
+                "drawn_amount": share,
+                "ead_for_crm": exposure,
+                "re_split_role": role,
+                "approach": approach,
             }
         )
-    # Remainder row
+    retained = exposure - sum(g.protection * scale for g in guarantors)
     rows.append(
         {
             "parent_exposure_reference": parent,
             "exposure_reference": f"{parent}__REM",
             "is_guarantee_beneficial": False,
-            "guaranteed_portion": 0.0,
-            "ead_after_collateral": remainder_ead,
-            "original_guarantee_amount": 0.0,
             "guarantor_rw": None,
-            "unguaranteed_portion": remainder_ead,
+            "guarantee_amount": 0.0,
+            "original_guarantee_amount": 0.0,
+            "guaranteed_portion": 0.0,
+            "unguaranteed_portion": retained * ccf,
+            "ead_after_collateral": retained * ccf,
+            "ead_final": retained * ccf,
+            "drawn_amount": retained,
+            "ead_for_crm": exposure,
+            "re_split_role": role,
+            "approach": approach,
         }
     )
-    return pl.LazyFrame(rows)
+    return rows
 
 
-class TestRedistributeNonBeneficial:
-    """redistribute_non_beneficial() reallocates EAD from non-beneficial to beneficial."""
+def _frame(rows: list[dict]) -> pl.LazyFrame:
+    return pl.LazyFrame(
+        rows, schema_overrides={"guarantor_rw": pl.Float64, "re_split_role": pl.String}
+    )
 
-    def test_mixed_beneficial_redistributes_to_best_guarantor(self) -> None:
-        """Non-beneficial portion is absorbed by the lowest-RW beneficial guarantor."""
-        # 3 guarantors, 1 non-beneficial:
-        # G1 (RW=0.20, beneficial): 200k used, 1000k original capacity
-        # G2 (RW=0.50, beneficial): 200k used, 200k original (no spare capacity)
-        # G3 (RW=1.00, non-beneficial): 200k used
-        # Remainder: 400k
-        # Total EAD: 200+200+200+400 = 1000k
-        lf = _make_multi_guarantor_frame(
-            guarantors=[
-                {"ref": "G1", "beneficial": True, "portion": 200.0, "original": 1000.0, "rw": 0.20},
-                {"ref": "G2", "beneficial": True, "portion": 200.0, "original": 200.0, "rw": 0.50},
-                {"ref": "G3", "beneficial": False, "portion": 200.0, "original": 200.0, "rw": 1.00},
-            ],
-            remainder_ead=400.0,
-        )
 
+def _column(result: pl.DataFrame, column: str) -> dict[str, float]:
+    return dict(zip(result["exposure_reference"], result[column], strict=True))
+
+
+def _approx(values: dict[str, float]) -> dict[str, object]:
+    return {ref: pytest.approx(value, abs=1e-9) for ref, value in values.items()}
+
+
+class TestReallocation:
+    """The declined share moves to beneficial guarantors with protection left over."""
+
+    def test_declined_share_moves_to_the_beneficial_leg(self) -> None:
+        """G1 (GA 1000) was pro-rated to 666.67; declining G2 lets it cover all of E."""
+        # Arrange
+        lf = _frame(_split([_G("G1", 1000.0, 0.2, True), _G("G2", 500.0, 1.0, False)]))
+
+        # Act
         result = redistribute_non_beneficial(lf).collect()
 
-        # G3's 200k freed. G1 has 800k spare capacity (1000-200), G2 has 0.
-        # Greedy fill by RW: G1 absorbs all 200k (lowest RW, has capacity).
-        g1 = result.filter(pl.col("exposure_reference") == "EXP001__G_G1")
-        assert g1["guaranteed_portion"][0] == pytest.approx(400.0, rel=1e-6)
-        assert g1["ead_after_collateral"][0] == pytest.approx(400.0, rel=1e-6)
-
-        # G2 unchanged (no spare capacity)
-        g2 = result.filter(pl.col("exposure_reference") == "EXP001__G_G2")
-        assert g2["guaranteed_portion"][0] == pytest.approx(200.0, rel=1e-6)
-
-        # G3 zeroed out
-        g3 = result.filter(pl.col("exposure_reference") == "EXP001__G_G3")
-        assert g3["guaranteed_portion"][0] == pytest.approx(0.0, rel=1e-6)
-        assert g3["ead_after_collateral"][0] == pytest.approx(0.0, rel=1e-6)
-
-        # Remainder absorbs any un-redistributable amount
-        rem = result.filter(pl.col("exposure_reference") == "EXP001__REM")
-        # Total new beneficial EAD = 400 + 200 = 600, parent EAD = 1000
-        assert rem["ead_after_collateral"][0] == pytest.approx(400.0, rel=1e-6)
-
-    def test_all_beneficial_no_change(self) -> None:
-        """When all guarantors are beneficial, nothing changes."""
-        lf = _make_multi_guarantor_frame(
-            guarantors=[
-                {"ref": "G1", "beneficial": True, "portion": 300.0, "original": 300.0, "rw": 0.20},
-                {"ref": "G2", "beneficial": True, "portion": 300.0, "original": 300.0, "rw": 0.50},
-            ],
-            remainder_ead=400.0,
+        # Assert
+        assert _column(result, "ead_final") == _approx(
+            {"EXP001__G_G1": 1000.0, "EXP001__G_G2": 0.0, "EXP001__REM": 0.0}
         )
 
+    def test_capacity_limits_the_move_and_the_rest_stays_declined(self) -> None:
+        """G1 has 200 spare: G2 keeps 400 of its 600, still declined, still covered."""
+        # Arrange
+        lf = _frame(_split([_G("G1", 600.0, 0.2, True), _G("G2", 900.0, 1.0, False)]))
+        assert lf.collect()["guarantee_amount"].to_list()[:2] == pytest.approx([400.0, 600.0])
+
+        # Act
         result = redistribute_non_beneficial(lf).collect()
 
-        g1 = result.filter(pl.col("exposure_reference") == "EXP001__G_G1")
-        assert g1["guaranteed_portion"][0] == pytest.approx(300.0, rel=1e-6)
-
-        g2 = result.filter(pl.col("exposure_reference") == "EXP001__G_G2")
-        assert g2["guaranteed_portion"][0] == pytest.approx(300.0, rel=1e-6)
-
-    def test_all_non_beneficial_zeroes_all(self) -> None:
-        """When all guarantors are non-beneficial, all portions become 0."""
-        lf = _make_multi_guarantor_frame(
-            guarantors=[
-                {"ref": "G1", "beneficial": False, "portion": 400.0, "original": 400.0, "rw": 1.00},
-                {"ref": "G2", "beneficial": False, "portion": 400.0, "original": 400.0, "rw": 1.00},
-            ],
-            remainder_ead=200.0,
+        # Assert
+        assert _column(result, "guaranteed_portion") == _approx(
+            {"EXP001__G_G1": 600.0, "EXP001__G_G2": 400.0, "EXP001__REM": 0.0}
         )
 
-        result = redistribute_non_beneficial(lf).collect()
-
-        # No beneficial guarantors → no redistribution, all portions zeroed
-        g1 = result.filter(pl.col("exposure_reference") == "EXP001__G_G1")
-        assert g1["guaranteed_portion"][0] == pytest.approx(400.0, rel=1e-6)
-
-        g2 = result.filter(pl.col("exposure_reference") == "EXP001__G_G2")
-        assert g2["guaranteed_portion"][0] == pytest.approx(400.0, rel=1e-6)
-
-    def test_capacity_limited_excess_to_remainder(self) -> None:
-        """When beneficial guarantors can't absorb all, excess goes to remainder."""
-        # G1 (beneficial, 100k used, 150k original → 50k spare)
-        # G2 (non-beneficial, 300k used)
-        # Remainder: 600k
-        # Total EAD: 100+300+600 = 1000k
-        lf = _make_multi_guarantor_frame(
-            guarantors=[
-                {"ref": "G1", "beneficial": True, "portion": 100.0, "original": 150.0, "rw": 0.20},
-                {"ref": "G2", "beneficial": False, "portion": 300.0, "original": 300.0, "rw": 1.00},
-            ],
-            remainder_ead=600.0,
+    def test_lowest_risk_weight_guarantor_fills_first(self) -> None:
+        """Freed 333.33: G1 (5%) takes its full 266.67 spare, G2 (20%) the other 66.67."""
+        # Arrange
+        lf = _frame(
+            _split(
+                [
+                    _G("G1", 600.0, 0.05, True),
+                    _G("G2", 600.0, 0.20, True),
+                    _G("G3", 600.0, 1.00, False),
+                ]
+            )
         )
 
+        # Act
         result = redistribute_non_beneficial(lf).collect()
 
-        # G1 absorbs 50k (all spare capacity), 250k unabsorbed
-        g1 = result.filter(pl.col("exposure_reference") == "EXP001__G_G1")
-        assert g1["guaranteed_portion"][0] == pytest.approx(150.0, rel=1e-6)
+        # Assert
+        assert _column(result, "guarantee_amount") == _approx(
+            {"EXP001__G_G1": 600.0, "EXP001__G_G2": 400.0, "EXP001__G_G3": 0.0, "EXP001__REM": 0.0}
+        )
 
-        # G2 zeroed
-        g2 = result.filter(pl.col("exposure_reference") == "EXP001__G_G2")
-        assert g2["guaranteed_portion"][0] == pytest.approx(0.0, rel=1e-6)
+    def test_spare_protection_is_measured_on_the_ccf_100_basis(self) -> None:
+        """Undrawn E = 1000 at CCF 50%, G1 30% + G2 40%: G1 is at its full GA already.
 
-        # Remainder: 1000 - 150 = 850 (original 600 + 250 unabsorbed)
-        rem = result.filter(pl.col("exposure_reference") == "EXP001__REM")
-        assert rem["ead_after_collateral"][0] == pytest.approx(850.0, rel=1e-6)
-
-    def test_re_split_remainder_leg_is_still_the_remainder(self) -> None:
-        """A remainder the RE splitter has suffixed (``__REM_res``) is not a guarantor leg.
-
-        The calculators call this AFTER ``re_splitter``, which renames a split
-        remainder ``<parent>__REM`` to ``<parent>__REM_sec`` / ``__REM_res``. Read
-        as a non-beneficial guarantor leg it would be zeroed (850 -> 0) instead of
-        absorbing the unredistributed 250.
+        Comparing G1's GA (300, CCF=100% basis) with its post-CCF covered amount (150)
+        would invent 150 of capacity and cover 300 on a leg whose exposure value is 150.
         """
-        lf = _make_multi_guarantor_frame(
-            guarantors=[
-                {"ref": "G1", "beneficial": True, "portion": 100.0, "original": 150.0, "rw": 0.20},
-                {"ref": "G2", "beneficial": False, "portion": 300.0, "original": 300.0, "rw": 1.00},
-            ],
-            remainder_ead=600.0,
-        ).with_columns(pl.col("exposure_reference").str.replace(r"__REM$", "__REM_res"))
+        # Arrange
+        lf = _frame(_split([_G("G1", 300.0, 0.2, True), _G("G2", 400.0, 1.0, False)], ccf=0.5))
 
+        # Act
         result = redistribute_non_beneficial(lf).collect()
 
-        rem = result.filter(pl.col("exposure_reference") == "EXP001__REM_res")
-        assert rem["ead_after_collateral"][0] == pytest.approx(850.0, rel=1e-6)
-        assert rem["unguaranteed_portion"][0] == pytest.approx(850.0, rel=1e-6)
-
-    def test_single_guarantor_not_affected(self) -> None:
-        """Single guarantor (no multi-split) passes through unchanged."""
-        lf = pl.LazyFrame(
-            {
-                "parent_exposure_reference": ["EXP001"],
-                "exposure_reference": ["EXP001"],  # Same → not a sub-row
-                "is_guarantee_beneficial": [False],
-                "guaranteed_portion": [500.0],
-                "ead_after_collateral": [1000.0],
-                "original_guarantee_amount": [500.0],
-                "guarantor_rw": [1.0],
-                "unguaranteed_portion": [500.0],
-            }
+        # Assert
+        assert _column(result, "guaranteed_portion") == _approx(
+            {"EXP001__G_G1": 150.0, "EXP001__G_G2": 200.0, "EXP001__REM": 0.0}
         )
 
+    def test_carriers_move_with_the_leg_and_parent_carriers_do_not(self) -> None:
+        """Split amounts and caller extras scale by the leg factor; GA and E stay put."""
+        # Arrange
+        rows = _split([_G("G1", 1000.0, 0.2, True), _G("G2", 500.0, 1.0, False)])
+        for row in rows:
+            row["rwa_irb_original"] = row["ead_final"] * 0.8
+        lf = _frame(rows)
+
+        # Act
+        result = redistribute_non_beneficial(lf, extra_carriers=("rwa_irb_original",)).collect()
+
+        # Assert
+        g1 = result.row(0, named=True)
+        assert (
+            g1["drawn_amount"],
+            g1["rwa_irb_original"],
+            g1["original_guarantee_amount"],
+            g1["ead_for_crm"],
+        ) == (pytest.approx(1000.0), pytest.approx(800.0), 1000.0, 1000.0)
+
+    def test_every_leg_share_carrier_on_the_frame_is_conserved(self) -> None:
+        """Summed over the parent, a split amount is unchanged by an on-balance move."""
+        # Arrange
+        lf = _frame(_split([_G("G1", 1000.0, 0.2, True), _G("G2", 500.0, 1.0, False)]))
+        present = [c for c in leg_share_carriers() if c in lf.collect_schema().names()]
+        before = lf.select(present).sum().collect().row(0)
+
+        # Act
+        after = redistribute_non_beneficial(lf).select(present).sum().collect().row(0)
+
+        # Assert
+        assert after == pytest.approx(before)
+
+
+class TestNothingMoves:
+    """Cases where the CRM split's allocation stands."""
+
+    def test_all_beneficial(self) -> None:
+        # Arrange
+        lf = _frame(_split([_G("G1", 600.0, 0.2, True), _G("G2", 900.0, 0.5, True)]))
+
+        # Act
         result = redistribute_non_beneficial(lf).collect()
 
-        # Unchanged — redistribution only affects multi-guarantor sub-rows
-        assert result["guaranteed_portion"][0] == pytest.approx(500.0, rel=1e-6)
-        assert result["unguaranteed_portion"][0] == pytest.approx(500.0, rel=1e-6)
+        # Assert
+        assert _column(result, "ead_final") == _column(lf.collect(), "ead_final")
+
+    def test_all_declined_keeps_every_covered_amount(self) -> None:
+        """No beneficial leg: declined legs are not zeroed, the blend ignores them."""
+        # Arrange
+        lf = _frame(_split([_G("G1", 600.0, 1.0, False), _G("G2", 900.0, 1.5, False)]))
+
+        # Act
+        result = redistribute_non_beneficial(lf).collect()
+
+        # Assert
+        assert _column(result, "guaranteed_portion") == _column(lf.collect(), "guaranteed_portion")
+
+    def test_under_covered_exposure_has_no_spare_protection(self) -> None:
+        """30% + 40% of a drawn E: both legs are at their full GA, the remainder holds 300."""
+        # Arrange
+        lf = _frame(_split([_G("G1", 300.0, 0.2, True), _G("G2", 400.0, 1.0, False)]))
+
+        # Act
+        result = redistribute_non_beneficial(lf).collect()
+
+        # Assert
+        assert _column(result, "ead_final") == _approx(
+            {"EXP001__G_G1": 300.0, "EXP001__G_G2": 400.0, "EXP001__REM": 300.0}
+        )
+
+    def test_declined_leg_with_no_exposure_value_frees_nothing(self) -> None:
+        """A 0% CCF leg costs nothing; moving its basis to G1 could only add RWEA."""
+        # Arrange
+        rows = _split([_G("G1", 1000.0, 0.2, True), _G("G2", 500.0, 1.0, False)])
+        rows[1].update(guaranteed_portion=0.0, ead_final=0.0, ead_after_collateral=0.0)
+        lf = _frame(rows)
+
+        # Act
+        result = redistribute_non_beneficial(lf).collect()
+
+        # Assert
+        assert _column(result, "guarantee_amount") == _column(lf.collect(), "guarantee_amount")
+
+    def test_legs_out_of_scope_do_not_move(self) -> None:
+        """The output-floor SA pass passes the SA-branch predicate: IRB legs are left alone."""
+        # Arrange
+        lf = _frame(
+            _split(
+                [_G("G1", 1000.0, 0.2, True), _G("G2", 500.0, 1.0, False)],
+                approach="foundation_irb",
+            )
+        )
+
+        # Act
+        result = redistribute_non_beneficial(
+            lf, scope=pl.col("approach") == "standardised"
+        ).collect()
+
+        # Assert
+        assert _column(result, "ead_final") == _column(lf.collect(), "ead_final")
+
+    def test_basis_does_not_cross_real_estate_split_roles(self) -> None:
+        """G1's spare on the secured leg cannot take over G2's residual leg."""
+        # Arrange
+        secured = _split(
+            [_G("G1", 1000.0, 0.2, True), _G("G2", 500.0, 1.0, True)], role="secured_rre"
+        )
+        residual = _split(
+            [_G("G1", 1000.0, 0.2, False), _G("G2", 500.0, 1.0, False)], role="residual"
+        )
+        for row in secured:
+            row["exposure_reference"] += "_sec"
+        for row in residual:
+            row["exposure_reference"] += "_res"
+        lf = _frame(secured + residual)
+
+        # Act
+        result = redistribute_non_beneficial(lf).collect()
+
+        # Assert
+        assert _column(result, "ead_final") == _column(lf.collect(), "ead_final")
+
+    def test_single_unsplit_row_is_not_a_leg(self) -> None:
+        # Arrange
+        lf = _frame(
+            _split([_G("G1", 1000.0, 0.2, True), _G("G2", 500.0, 1.0, False)])[:1]
+        ).with_columns(pl.lit(_PARENT).alias("exposure_reference"))
+
+        # Act
+        result = redistribute_non_beneficial(lf).collect()
+
+        # Assert
+        assert result["ead_final"].to_list() == lf.collect()["ead_final"].to_list()
 
     def test_missing_columns_returns_unchanged(self) -> None:
-        """When required columns are missing, function returns input unchanged."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP001"],
-                "ead_after_collateral": [1000.0],
-            }
-        )
+        # Arrange
+        lf = pl.LazyFrame({"exposure_reference": ["EXP001"], "ead_after_collateral": [1000.0]})
 
+        # Act
         result = redistribute_non_beneficial(lf).collect()
+
+        # Assert
         assert result.columns == ["exposure_reference", "ead_after_collateral"]
-
-    def test_greedy_fills_lowest_rw_first(self) -> None:
-        """Two beneficial guarantors: lowest RW gets filled before higher RW."""
-        # G1 (RW=0.05, beneficial, 100k used, 500k original → 400k spare)
-        # G2 (RW=0.20, beneficial, 100k used, 500k original → 400k spare)
-        # G3 (non-beneficial, 300k used)
-        # Remainder: 500k, Total EAD: 1000k
-        lf = _make_multi_guarantor_frame(
-            guarantors=[
-                {"ref": "G1", "beneficial": True, "portion": 100.0, "original": 500.0, "rw": 0.05},
-                {"ref": "G2", "beneficial": True, "portion": 100.0, "original": 500.0, "rw": 0.20},
-                {"ref": "G3", "beneficial": False, "portion": 300.0, "original": 300.0, "rw": 1.00},
-            ],
-            remainder_ead=500.0,
-        )
-
-        result = redistribute_non_beneficial(lf).collect()
-
-        # G3's 300k freed. G1 (RW=0.05) has 400k spare → absorbs all 300k.
-        g1 = result.filter(pl.col("exposure_reference") == "EXP001__G_G1")
-        assert g1["guaranteed_portion"][0] == pytest.approx(400.0, rel=1e-6)
-
-        # G2 (RW=0.20) has 400k spare but G1 already absorbed all → no change
-        g2 = result.filter(pl.col("exposure_reference") == "EXP001__G_G2")
-        assert g2["guaranteed_portion"][0] == pytest.approx(100.0, rel=1e-6)
-
-        # Remainder unchanged (all 300k absorbed by G1)
-        rem = result.filter(pl.col("exposure_reference") == "EXP001__REM")
-        assert rem["ead_after_collateral"][0] == pytest.approx(500.0, rel=1e-6)

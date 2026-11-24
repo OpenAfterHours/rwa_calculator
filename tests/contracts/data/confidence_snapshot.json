@@ -984,6 +984,7 @@
         "tests/fixtures/p1_99/p1_99.py",
         "tests/fixtures/reporting_offbs_portfolio.py",
         "tests/integration/test_ccr_pipeline_integration.py",
+        "tests/integration/test_multi_guarantor_decline_pipeline.py",
         "tests/integration/test_sft_stage_dark_launch.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_b31.py",
@@ -2231,6 +2232,7 @@
         "tests/fixtures/reporting_portfolio.py",
         "tests/fixtures/sme_assets_fallback/sme_assets_fallback.py",
         "tests/integration/test_group_consolidated_size_tests.py",
+        "tests/integration/test_multi_guarantor_decline_pipeline.py",
         "tests/oracle/derivations/formulas.py",
         "tests/oracle/derivations/irb.py",
         "tests/oracle/derivations/specialised.py",
@@ -2573,7 +2575,6 @@
         "engine/irb/formulas.py",
         "engine/irb/guarantee.py",
         "engine/irb/transforms.py",
-        "engine/sa/rw_adjustments.py",
         "reporting/corep/crm_substitution.py",
         "rulebook/packs/crr.py"
       ],
@@ -3027,6 +3028,7 @@
     {
       "article": "193",
       "code_functions": [
+        "rwa_calc.engine.crm.guarantees::redistribute_non_beneficial",
         "rwa_calc.engine.sa.rw_adjustments::apply_guarantee_substitution"
       ],
       "confidence": "HIGH",
@@ -3051,11 +3053,14 @@
         "reporting/corep/crm_substitution.py"
       ],
       "test_files": [
+        "tests/fixtures/multi_guarantor_decline_portfolio.py",
         "tests/integration/test_collateral_links_pipeline.py",
+        "tests/integration/test_multi_guarantor_decline_pipeline.py",
         "tests/oracle/derivations/crm_sa.py",
         "tests/properties/test_monotonicity.py",
         "tests/unit/contracts/test_validation_collateral_links.py",
         "tests/unit/crm/test_collateral_link_allocation.py",
+        "tests/unit/crm/test_non_beneficial_redistribution.py",
         "tests/unit/data/test_collateral_link_schema.py"
       ],
       "watchfire_index_gap": false
@@ -3460,8 +3465,7 @@
         "tests/unit/crm/test_guarantee_collateral_split.py",
         "tests/unit/crm/test_guarantee_submodules.py",
         "tests/unit/crm/test_multi_guarantor_split.py",
-        "tests/unit/crm/test_multi_level_guarantees.py",
-        "tests/unit/crm/test_non_beneficial_redistribution.py"
+        "tests/unit/crm/test_multi_level_guarantees.py"
       ],
       "watchfire_index_gap": false
     },
@@ -3481,8 +3485,7 @@
         "engine/irb/guarantee.py"
       ],
       "test_files": [
-        "tests/integration/test_domestic_sovereign_guarantor_end_to_end.py",
-        "tests/unit/crm/test_non_beneficial_redistribution.py"
+        "tests/integration/test_domestic_sovereign_guarantor_end_to_end.py"
       ],
       "watchfire_index_gap": false
     },
@@ -4281,6 +4284,7 @@
         "rwa_calc.engine.aggregator.aggregator::_add_reporting_projection",
         "rwa_calc.engine.crm.guarantees::_build_guarantor_sub_rows",
         "rwa_calc.engine.crm.guarantees::_build_remainder_sub_rows",
+        "rwa_calc.engine.crm.guarantees::redistribute_non_beneficial",
         "rwa_calc.engine.eu_sovereign::build_domestic_cgcb_guarantor_expr",
         "rwa_calc.engine.eu_sovereign::funding_currency_expr",
         "rwa_calc.engine.irb.guarantee::_compute_guarantor_rw_sa",
@@ -4328,15 +4332,18 @@
         "tests/acceptance/crr/test_p1_229_art_235_3_funding_currency.py",
         "tests/acceptance/crr/test_scenario_crr_d2_crm_advanced.py",
         "tests/acceptance/reporting/test_crm_substitution_flows.py",
+        "tests/fixtures/multi_guarantor_decline_portfolio.py",
         "tests/fixtures/p1_122/p1_122.py",
         "tests/fixtures/p1_218/p1_218.py",
         "tests/fixtures/p1_229/p1_229.py",
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
+        "tests/integration/test_multi_guarantor_decline_pipeline.py",
         "tests/integration/test_pre_post_crm_reporting.py",
         "tests/oracle/derivations/crm_sa.py",
         "tests/properties/corpus.py",
         "tests/properties/test_monotonicity.py",
         "tests/unit/crm/test_guarantee_submodules.py",
+        "tests/unit/crm/test_non_beneficial_redistribution.py",
         "tests/unit/crm/test_protection_screen.py",
         "tests/unit/reporting/corep/test_c07_crm_substitution.py",
         "tests/unit/test_aggregator.py"
@@ -4345,17 +4352,23 @@
     },
     {
       "article": "236",
-      "code_functions": [],
-      "confidence": "GAP",
+      "code_functions": [
+        "rwa_calc.engine.crm.guarantees::redistribute_non_beneficial"
+      ],
+      "confidence": "MEDIUM",
       "framework": "CRR",
-      "layer_count": 1,
+      "layer_count": 3,
       "oracle_cases": [],
       "pack_entries": [],
-      "source_files": [],
+      "source_files": [
+        "engine/crm/guarantees.py"
+      ],
       "test_files": [
         "tests/acceptance/crr/test_p1_218_guarantee_coverage_ccf_basis.py",
+        "tests/fixtures/multi_guarantor_decline_portfolio.py",
         "tests/fixtures/p1_156/p1_156.py",
         "tests/fixtures/p1_218/p1_218.py",
+        "tests/integration/test_multi_guarantor_decline_pipeline.py",
         "tests/unit/irb/test_p1_156_psm_guarantor_lgd_seniority.py"
       ],
       "watchfire_index_gap": false
@@ -6727,6 +6740,7 @@
         "tests/fixtures/p1_93/p1_93.py",
         "tests/fixtures/ratings/ratings.py",
         "tests/integration/test_model_permissions_pipeline.py",
+        "tests/integration/test_multi_guarantor_decline_pipeline.py",
         "tests/oracle/derivations/branch_sa.py",
         "tests/oracle/derivations/sa_b31.py",
         "tests/properties/test_regime_deltas.py",
@@ -6889,6 +6903,7 @@
         "tests/fixtures/p1_95/p1_95.py",
         "tests/fixtures/p2_18/p2_18.py",
         "tests/fixtures/reporting_netting_portfolio.py",
+        "tests/integration/test_multi_guarantor_decline_pipeline.py",
         "tests/integration/test_re_qualification_pipeline.py",
         "tests/integration/test_re_split_pipeline.py",
         "tests/oracle/derivations/branch_sa.py",
@@ -8085,6 +8100,7 @@
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
         "tests/fixtures/reporting_irb_shapes_portfolio.py",
         "tests/integration/test_group_consolidated_size_tests.py",
+        "tests/integration/test_multi_guarantor_decline_pipeline.py",
         "tests/oracle/derivations/formulas.py",
         "tests/oracle/derivations/irb.py",
         "tests/oracle/derivations/specialised.py",
@@ -8663,6 +8679,27 @@
         "tests/fixtures/p1_161/p1_161.py",
         "tests/fixtures/reporting_funded_protection_portfolio.py",
         "tests/integration/test_ccr_loan_collateral_isolation.py"
+      ],
+      "watchfire_index_gap": false
+    },
+    {
+      "article": "193",
+      "code_functions": [
+        "rwa_calc.engine.crm.guarantees::redistribute_non_beneficial",
+        "rwa_calc.engine.sa.rw_adjustments::apply_guarantee_substitution"
+      ],
+      "confidence": "MEDIUM",
+      "framework": "PS1/26",
+      "layer_count": 3,
+      "oracle_cases": [],
+      "pack_entries": [],
+      "source_files": [
+        "engine/crm/guarantees.py",
+        "engine/sa/rw_adjustments.py"
+      ],
+      "test_files": [
+        "tests/fixtures/multi_guarantor_decline_portfolio.py",
+        "tests/unit/crm/test_non_beneficial_redistribution.py"
       ],
       "watchfire_index_gap": false
     },
@@ -9260,6 +9297,7 @@
     {
       "article": "235",
       "code_functions": [
+        "rwa_calc.engine.crm.guarantees::redistribute_non_beneficial",
         "rwa_calc.engine.eu_sovereign::build_domestic_cgcb_guarantor_expr",
         "rwa_calc.engine.slotting.transforms::apply_guarantee_substitution",
         "rwa_calc.engine.slotting.transforms::zero_covered_expected_loss"
@@ -9293,6 +9331,7 @@
         "tests/acceptance/basel31/test_pse_rgla_guarantor_irb_sa_substitution.py",
         "tests/acceptance/basel31/test_slotting_guarantee_rwsm.py",
         "tests/acceptance/crr/test_p1_30e_art_234_partial_protection_tranching.py",
+        "tests/fixtures/multi_guarantor_decline_portfolio.py",
         "tests/fixtures/p1_110/p1_110.py",
         "tests/fixtures/p1_122a/p1_122a.py",
         "tests/fixtures/p1_122b/p1_122b.py",
@@ -9304,6 +9343,8 @@
         "tests/fixtures/p1_95/p1_95.py",
         "tests/fixtures/pse_rgla_guarantor/pse_rgla_guarantor.py",
         "tests/fixtures/reporting_crm_substitution_portfolio.py",
+        "tests/integration/test_multi_guarantor_decline_pipeline.py",
+        "tests/unit/crm/test_non_beneficial_redistribution.py",
         "tests/unit/crm/test_protection_screen.py"
       ],
       "watchfire_index_gap": false

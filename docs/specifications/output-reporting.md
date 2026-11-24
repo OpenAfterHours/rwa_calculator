@@ -437,6 +437,46 @@ Approach's), but always allocated to row 0261 in Section 3.
       0372, because an on-balance-sheet holding has no conversion-factor
       breakdown. These are banked in the supervisory register as rule limits;
       the figures are not altered to satisfy them.
+    - **Memorandum rows 0300 / 0320 — exposures in default, by the class before
+      default.** Row 0300 is the "in default" class at 100% (Art. 127(1)(b) and (3)),
+      row 0320 at 150% (Art. 127(1)(a)); *"the figures reported, however, are the same
+      as used to calculate the risk-weighted exposure amounts in the exposure class
+      'exposures in default'"* (PS1/26 Annex II ¶54). Under Basel 3.1 each leg is
+      reported on the Total and on the sheet of the class it would otherwise have had,
+      where table OF07.00.01.03 publishes the rows (sheets 0002–0004 and 0007–0009).
+      An MDB- or international-organisation-origin default goes on the Total only
+      because the taxonomy publishes no sheet for either class in that table (¶52
+      leaves both out, although the row 0300 / 0320 instructions read "Article
+      112(1)(a) to (i)"; the sheet set is held to the taxonomy both ways by
+      `tests/contracts/test_of07_published_cells.py`). A real-estate-origin default
+      also goes on the Total only: ¶52 does list real estate, but sheet 0010 is
+      missing from the table, and the Bank of England known-issues log (November
+      2026, #27) tells firms to report it on the Total sheet alone until that sheet
+      is added. The "in default" sheet carries neither row
+      (`reporting/corep/c07_sheet_scope.py`). Under CRR the rows are still keyed on
+      the applied class, so they appear on the Total and the "in default" sheet
+      (COREP Annex II ¶55) and not yet on the obligor's class sheet (P1.377). A
+      covered defaulted part keeps its original exposure (c0010) in the obligor's memo
+      row at the Art. 127 weight; its exposure value and RWEA (c0200 on) are the
+      protection provider's, on the provider's sheet at the provider's weight, and are
+      not in the memo row. Registered book:
+      `tests/fixtures/reporting_default_populations_portfolio.py`
+      (`crr/default-populations`, `b31/default-populations`; P5.80) — provisioned
+      defaults either side of the 20% threshold on the central-government, regional,
+      PSE, institution and retail sheets; a defaulted corporate 40% guaranteed by a
+      CQS 2 institution (50% under CRR, 30% under Basel 3.1 — a non-zero weight, so
+      the RWEA that crosses to the institution's sheet is a figure); a
+      real-estate-origin default that takes 100% under Art. 127(3) despite a 5%
+      provision, in both regimes (CRR: the whole loan is secured within Art. 125's
+      80%); and under Basel 3.1 a defaulted high-risk leg beside a performing one (row
+      0015 on sheet 0012) and an Art. 124F loan split guaranteed by the UK sovereign at
+      0%. A correct return of it fails `boe_b0350`
+      (OF 09.01 c0010 ≥ c0020, WARNING) on every class row whose obligors are all in
+      default: publisher issue PI-28, banked as a rule limit. Its Basel 3.1 Pillar 3
+      CR4 / CR5 row 11 ("Items associated with particularly high risk") is still null
+      while row 17 (Total) holds both high-risk legs (700,000 defaulted + 450,000
+      performing = 1,150,000 original exposure, 1,725,000 RWEA at 150%): the open
+      P3.7(a) stranding, not a property of the book.
     - Source: PS1/26 Annex II §3.2.5, pp. 95–96 of
       `docs/assets/ps1-26-annex-ii-reporting-instructions.pdf`.
 

@@ -37,13 +37,16 @@ Two books:
    ``corep/c07_sheet_scope.py``).
 2. A three-loan book this file owns, SA config: a performing corporate
    (5,000,000), a defaulted corporate (1,000,000 at 150%) and a defaulted
-   high-risk obligor (2,000,000 at 150%). No registered portfolio emits a
-   high-risk sheet, so without this book the surviving leg — the one that tells
-   a scoped row from a row blanked everywhere — would be asserted nowhere
-   (LESSONS B5). Under CRR the high-risk class does not exist (Art. 128 was
-   omitted from the onshored CRR; the classifier folds it to "other", then to
-   default), so both defaulted legs land on the default sheet and row 0015 is
-   blank everywhere.
+   high-risk obligor (2,000,000 at 150%). When this was written no registered
+   portfolio emitted a high-risk sheet, so without this book the surviving leg —
+   the one that tells a scoped row from a row blanked everywhere — was asserted
+   nowhere (LESSONS B5). Since P5.80 the registered ``default-populations`` book
+   holds a defaulted high-risk leg beside a performing one
+   (``test_default_population_coverage.py``); this book stays as the focused check
+   of the template-level and gateway engines. Under CRR the high-risk class does
+   not exist (Art. 128 was omitted from the onshored CRR; the classifier folds it
+   to "other", then to default), so both defaulted legs land on the default sheet
+   and row 0015 is blank everywhere.
 
 References:
 - CRR Art. 112(1)(j)/(k)/(p), Art. 127; PS1/26 Art. 112(2) Table A2

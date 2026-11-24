@@ -149,8 +149,11 @@ Deliberately OUT of scope:
     ``other`` instead, because UK onshored CRR omits Art. 128 (SI 2021/1078; pack
     Feature ``b31_high_risk_class_applicable``). So on the Basel 3.1 side the dark
     rules are a z0012 BINDING gap, not a data one: a row added here would emit a
-    sheet no z-code binds. That is P2.55 (with its Pillar 3 twin P3.7(a)) — an
-    estate fix, and the reason this portfolio must not pre-empt it with a row.
+    sheet no z-code binds. That was P2.55 (with its Pillar 3 twin P3.7(a), still
+    open), since closed: z0012 now binds ``("high_risk",)``, and the registered
+    high-risk legs — a defaulted one beside a performing one — live in
+    ``reporting_default_populations_portfolio.py`` (P5.80), so this portfolio still
+    carries none.
   * (o) has no ``ExposureClass`` member, but CIUs are NOT absent from the
     estate: they are modelled as ``equity_type="ciu"`` through the equity
     calculator, and they reach C 07.00 in BOTH regimes — on the (p) ``equity``

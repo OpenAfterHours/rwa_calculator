@@ -22,11 +22,13 @@ What is asserted, and the text it is asserted from:
   "in default" sheet 0011 has no cell, because the Total's data point already IS the
   "exposures in default" figure.
 
-``RP-LN-DEFAULT`` (1,000,000 drawn, no provision, no guarantee) is the matrix's one
-defaulted standardised exposure. Before this fix its row 0320 sat on our "in default"
-sheet, where table OF07.00.01.03 has no cell (five unplaced figures, which on their
-own stop the default filing export), and was absent from the corporates sheet 0008,
-which the template does publish.
+``RP-LN-DEFAULT`` (1,000,000 drawn, no provision, no guarantee) is ``rich``'s one
+defaulted standardised exposure. (The provisioned, guaranteed, non-corporate and
+real-estate-origin defaults are registered in ``default-populations`` since P5.80 and
+asserted in ``test_default_population_coverage.py``.) Before this fix its row 0320 sat
+on our "in default" sheet, where table OF07.00.01.03 has no cell (five unplaced
+figures, which on their own stop the default filing export), and was absent from the
+corporates sheet 0008, which the template does publish.
 
 References:
 - PS1/26 Art. 112(1)(g)/(j), Art. 127; Annex II §3.2.5 ¶52-55 (pp.78-79), rows

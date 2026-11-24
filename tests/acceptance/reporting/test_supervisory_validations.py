@@ -283,14 +283,14 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     both side inputs, so no register rule sees either cell populated.
 
 Cost, and why every run is load-bearing:
-    This file is the most expensive test in the suite: eighteen portfolios x two
+    This file is the most expensive test in the suite: nineteen portfolios x two
     regimes plus three single-regime runs (``equity-transitional`` and
     ``slotting-maturity-elected`` under Basel 3.1, ``irb-mdb`` under CRR) is
-    thirty-nine runs, twenty of them Basel 3.1, plus a prior-period run for each
-    of the twenty IRB ones: FIFTY-NINE full pipeline runs, plus two for leg (m)'s
+    forty-one runs, twenty-one of them Basel 3.1, plus a prior-period run for each
+    of the twenty IRB ones: SIXTY-ONE full pipeline runs, plus two for leg (m)'s
     probe (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not
     this prose. The gateway leg adds one canonical return and one
-    ``validate_return`` per Basel 3.1 run (twenty) and no pipeline run: the pack is loaded once per
+    ``validate_return`` per Basel 3.1 run (twenty-one) and no pipeline run: the pack is loaded once per
     process and the COREP bundle is the one the template leg already generated.
     Timed directly (2026-11-16, 4-core box, when the matrix held fifteen Basel 3.1
     runs): 0.6 s to load the pack plus 5.4 s for the fifteen filings (0.2-1.0 s
@@ -348,6 +348,10 @@ Cost, and why every run is load-bearing:
                            (Basel 3.1 15/25/40/45/65/80/105/130/135%, CRR
                            250/1250%), and so to the rung identities written
                            over them.
+    - ``default-populations`` the ONLY provisioned, guaranteed or non-corporate
+                           defaulted standardised legs, so the only route to
+                           C 07.00 / OF 07.00 row 0300, a figure in c0030 of the
+                           memo rows, and (Basel 3.1) the high-risk sheet 0012.
 
     Measured: ``sa-classes`` and ``irb-classes`` together move 53 CRR and 32
     Basel 3.1 rules out of NOT_EVALUATED. The ten prior-period runs exist
@@ -451,6 +455,9 @@ from tests.fixtures.reporting_crm_substitution_portfolio import (
 from tests.fixtures.reporting_crr_irb_mdb_portfolio import build_reporting_crr_irb_mdb_bundle
 from tests.fixtures.reporting_declined_guarantee_portfolio import (
     build_reporting_declined_guarantee_bundle,
+)
+from tests.fixtures.reporting_default_populations_portfolio import (
+    build_reporting_default_populations_bundle,
 )
 from tests.fixtures.reporting_equity_transitional_portfolio import (
     build_reporting_equity_transitional_bundle,
@@ -1475,6 +1482,46 @@ RUNS: tuple[GateInput, ...] = (
         partial(build_reporting_slotting_maturity_bundle, SLOTTING_MATURITY_DATE["BASEL_3_1"]),
         lambda: slotting_maturity_config("BASEL_3_1", elected=True),
         lambda: slotting_maturity_prior_config("BASEL_3_1", elected=True),
+    ),
+    # Defaulted standardised populations — LESSONS B5, P5.80. Until this book the
+    # matrix's ONE defaulted SA leg was ``rich``'s unprovisioned, unguaranteed
+    # corporate at 150%, so C 07.00 / OF 07.00 row 0320 carried that one leg, row
+    # 0300 was null estate-wide, c0030 on both was never a figure (``boe_b0733_1``
+    # and its CRR twin ``v2040_s`` VACUOUS everywhere), no non-corporate memo sheet
+    # was reached, and no registered run emitted the Basel 3.1 high-risk sheet
+    # (``boe_b0264`` and every sheet-0012 rule unevaluated). This book holds
+    # provisioned defaults either side of the Art. 127(1) 20% threshold on the
+    # CGCB / RGLA / PSE / institution / retail sheets, a guaranteed default (the
+    # ``63c3b5c`` memorandum composition), a real-estate-origin default at 100%
+    # under Art. 127(3) despite a 5% provision (Basel 3.1: on the Total only, known
+    # issue #27) and, under Basel 3.1 only, a defaulted high-risk leg beside a
+    # performing one and a guaranteed Art. 124F loan split (the ``rw_parts``
+    # substituted route). The guaranteed default's protector is a
+    # CQS 2 institution, at a non-zero weight in both regimes, so the RWEA crossing
+    # to it is a figure (LESSONS C2). Registering it added NO Error-severity break;
+    # its one new rule break is ``boe_b0350`` (WARNING), publisher issue PI-28 — read
+    # the register, not this comment, for what each is now.
+    #
+    # The builder takes the framework: CRR has no high-risk class and no loan split,
+    # so its book leaves those legs out (the fixture's docstring). It does hold the
+    # real-estate-origin default, which CRR Art. 127(3) weights at exactly 100% (the
+    # loan is secured whole within Art. 125's 80%). ``functools.partial`` keeps the
+    # builder's name for the registration check. Under CRR the memo rows are still
+    # keyed on the APPLIED class (the open CRR half of P1.377), so the CRR run lights
+    # the "in default" sheet and the Total only. SA-only, no prior frame.
+    GateInput(
+        "crr",
+        "CRR",
+        "default-populations",
+        partial(build_reporting_default_populations_bundle, "CRR"),
+        lambda: _sa_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "default-populations",
+        partial(build_reporting_default_populations_bundle, "BASEL_3_1"),
+        lambda: _sa_config("BASEL_3_1"),
     ),
 )
 

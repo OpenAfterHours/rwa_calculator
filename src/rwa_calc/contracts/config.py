@@ -15,11 +15,14 @@ configuration that automatically sets correct values for each framework.
 
 from __future__ import annotations
 
+import dataclasses
+import inspect
+import warnings
 from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from watchfire import cites
 
@@ -34,8 +37,24 @@ from rwa_calc.domain.enums import (
     ReportingBasis,
 )
 
+if TYPE_CHECKING:
+    from types import CodeType
+
 # Type alias for Polars collection engine
 PolarsEngine = Literal["cpu", "gpu", "streaming"]
+
+# The two PS1/26 Art. 122 investment-grade elections the deprecated
+# ``use_investment_grade_assessment`` alias stands in for when left unstated
+# (P1.475): the Art. 122(6) SA permission and the Art. 122(8)(b) floor election.
+_INVESTMENT_GRADE_ELECTIONS: tuple[str, str] = (
+    "sa_investment_grade_permission",
+    "output_floor_investment_grade_election",
+)
+
+# Source files of the frames that build a config — this module (factories,
+# ``__post_init__``, ``with_fx_rate``) and ``dataclasses`` (``replace``) — which a
+# construction-time warning skips to land on the caller's own line.
+_CONSTRUCTION_FILES: frozenset[str] = frozenset({__file__, dataclasses.__file__})
 
 # Regime identifier ("crr" | "b31") → the legacy RegulatoryFramework enum. The
 # regime is carried on RunConfig as the ``regime_id`` string (Phase 5 S11e); the
@@ -77,11 +96,13 @@ class OutputFloorConfig:
         may voluntarily apply the full 72.5% from day one.
 
     Art. 122(8) corporate SA treatment for S-TREA:
-        IRB institutions must choose between 100% flat (Art. 122(2)) or
-        65%/135% IG assessment (Art. 122(6)) for unrated corporate exposures
-        in the output floor S-TREA computation. This choice is configured via
-        ``CalculationConfig.use_investment_grade_assessment`` and flows to the
-        SA calculator's unified path, which produces ``sa_rwa`` for the floor.
+        For the unrated corporates an IRB institution weights under the IRB
+        Approach, S-TREA uses either Art. 122(8)(a) 100% or Art. 122(8)(b) the
+        Art. 122(6) 65% / 135% split from the firm's own investment-grade
+        assessment ((b) needs notice to the PRA, not permission). The choice is
+        ``CalculationConfig.output_floor_investment_grade_election`` — separate
+        from the Art. 122(6) SA permission — and flows to the SA calculator's
+        unified path, which produces ``sa_rwa`` for the floor.
     """
 
     enabled: bool = False
@@ -635,9 +656,17 @@ class CalculationConfig:
         output_floor: Output floor configuration
         post_model_adjustments: Post-model adjustments (Basel 3.1 only)
         permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
-        use_investment_grade_assessment: Art. 122(6) election — IG=65% / non-IG=135%
         slotting_short_maturity_election: PS1/26 Art. 153(5)(d) election — slotting
             column A/C (instead of the default B/D) where < 2.5 years remain
+        sa_investment_grade_permission: Art. 122(6) PRA permission — SA-branch
+            unrated non-SME corporates take IG=65% / non-IG=135% (else 100%).
+            ``None`` = not stated; read ``resolved_sa_investment_grade_permission``.
+        output_floor_investment_grade_election: Art. 122(8)(b) notice — the
+            S-TREA weight of unrated non-SME corporates on the IRB Approach is
+            IG=65% / non-IG=135% (else Art. 122(8)(a) 100%). ``None`` = not
+            stated; read ``resolved_output_floor_investment_grade_election``.
+        use_investment_grade_assessment: DEPRECATED alias standing in for each
+            election left unstated
         collect_engine: Polars engine for .collect() - 'cpu' (default) for
             in-memory processing, 'streaming' for batched lower-memory execution.
         spill_dir: Directory for temp parquet files during streaming materialization.
@@ -741,11 +770,32 @@ class CalculationConfig:
     # election can RAISE the floored TREA (a binding pre-operational PF case
     # pinned in the P1.204 acceptance test goes 7,300,000 -> 7,800,000).
     slotting_short_maturity_election: bool = False
-    use_investment_grade_assessment: bool = False  # Art. 122(6)/(8): IG=65% / non-IG=135%
-    # Art. 122(8): IRB institutions must choose between para 2 (100% flat)
-    # or para 6 (65%/135% IG assessment) for unrated corporates. This choice
-    # applies to both regular SA calculations and the output floor S-TREA
-    # computation (Art. 92 para 2A). The choice must be declared to the PRA.
+    # PS1/26 Art. 122 holds TWO investment-grade elections for unrated non-SME
+    # corporates, and neither implies the other (P1.475):
+    #   - Art. 122(6) is a PRA PERMISSION for the Standardised Approach: with it
+    #     an unrated corporate the firm assesses as investment grade takes 65%,
+    #     one assessed as not investment grade 135%; without it Art. 122(5)
+    #     gives 100%. It governs SA-branch rows only.
+    #   - Art. 122(8) is an output-floor choice for the corporates the firm
+    #     weights under the IRB Approach: (a) 100%, or (b) the paragraph 6
+    #     weights. (b) needs NOTICE to the PRA, not permission. Art. 92(3A)(b)(ii)
+    #     routes S-TREA to it, so it governs ``sa_rwa`` on IRB rows only.
+    # Para 11 (non-retail SME, 85%) overrides both. Firm facts, so they live on
+    # the config; the regime gate is the ``sa_revised_risk_weight_overrides``
+    # pack Feature (CRR Art. 122 has no investment-grade approach), never a
+    # ``config.is_crr`` branch (arch_check check 17).
+    #
+    # The fields hold what the caller STATED; ``None`` means "not stated" and is
+    # kept as ``None`` — never resolved in place — so that ``dataclasses.replace``
+    # of the deprecated alias still reaches an unstated election, in both
+    # directions. The engine reads ``resolved_sa_investment_grade_permission`` /
+    # ``resolved_output_floor_investment_grade_election``: a stated election
+    # wins, an unstated one follows the alias (default False, i.e. not held).
+    sa_investment_grade_permission: bool | None = None
+    output_floor_investment_grade_election: bool | None = None
+    # DEPRECATED (P1.475): one flag that drove both elections above. True stands
+    # in for each election left unstated (and warns); False for neither.
+    use_investment_grade_assessment: bool = False
     crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE
     # Art. 191A: Firm-wide election for financial collateral recognition.
     # COMPREHENSIVE (default): EAD reduction via supervisory haircuts (Art. 223-224).
@@ -802,6 +852,7 @@ class CalculationConfig:
         if self.reporting_entity is not None and self.reporting_basis is None:
             msg = "reporting_entity requires reporting_basis to be set"
             raise ValueError(msg)
+        self._warn_deprecated_investment_grade_alias()
         if self.irb_permissions is not None:
             return
         if self.permission_mode == PermissionMode.IRB:
@@ -811,6 +862,55 @@ class CalculationConfig:
                 object.__setattr__(self, "irb_permissions", IRBPermissions.full_irb())
         else:
             object.__setattr__(self, "irb_permissions", IRBPermissions.sa_only())
+
+    def _warn_deprecated_investment_grade_alias(self) -> None:
+        """Warn that ``use_investment_grade_assessment`` is deprecated, saying what it set.
+
+        The alias sets each Art. 122 election the caller left unstated, so the
+        message names exactly those — or says it had no effect when both are
+        stated. Fires on every construction that carries the alias, including
+        ``dataclasses.replace``, and is attributed to the caller's own line
+        (``_caller_stacklevel``) so Python's default filter shows it in a script.
+        """
+        if not self.use_investment_grade_assessment:
+            return
+        unstated = [name for name in _INVESTMENT_GRADE_ELECTIONS if getattr(self, name) is None]
+        if unstated:
+            effect = "here it sets " + " and ".join(f"{name} to True" for name in unstated)
+        else:
+            effect = "it has no effect here, because both elections are stated explicitly"
+        warnings.warn(
+            f"CalculationConfig.use_investment_grade_assessment is deprecated; {effect}. "
+            "State the election the firm holds instead: sa_investment_grade_permission "
+            "(the PS1/26 Art. 122(6) permission) and/or "
+            "output_floor_investment_grade_election (the Art. 122(8)(b) notice).",
+            DeprecationWarning,
+            stacklevel=_caller_stacklevel(type(self).__init__.__code__),
+        )
+
+    @property
+    def resolved_sa_investment_grade_permission(self) -> bool:
+        """Whether the firm holds the PS1/26 Art. 122(6) SA investment-grade permission.
+
+        The stated ``sa_investment_grade_permission``, or — when it was not stated —
+        the deprecated ``use_investment_grade_assessment`` alias. The engine reads
+        this, never the raw field (``engine/sa/investment_grade.py``).
+        """
+        if self.sa_investment_grade_permission is None:
+            return self.use_investment_grade_assessment
+        return self.sa_investment_grade_permission
+
+    @property
+    def resolved_output_floor_investment_grade_election(self) -> bool:
+        """Whether the firm has made the PS1/26 Art. 122(8)(b) output-floor election.
+
+        The stated ``output_floor_investment_grade_election``, or — when it was not
+        stated — the deprecated ``use_investment_grade_assessment`` alias. ``False``
+        is Art. 122(8)(a). The engine reads this, never the raw field.
+        """
+        if self.output_floor_investment_grade_election is None:
+            return self.use_investment_grade_assessment
+        return self.output_floor_investment_grade_election
 
     @property
     def framework(self) -> RegulatoryFramework:
@@ -965,6 +1065,8 @@ class CalculationConfig:
         permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         base_currency: str = "GBP",
         post_model_adjustments: PostModelAdjustmentConfig | None = None,
+        sa_investment_grade_permission: bool | None = None,
+        output_floor_investment_grade_election: bool | None = None,
         use_investment_grade_assessment: bool = False,
         institution_type: InstitutionType | None = None,
         reporting_basis: ReportingBasis | None = None,
@@ -1006,12 +1108,19 @@ class CalculationConfig:
             reporting_date: As-of date for calculation
             permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing)
             post_model_adjustments: PMA configuration (optional, defaults to B3.1)
-            use_investment_grade_assessment: Art. 122(6)/(8) election — when True,
-                unrated IG corporates get 65% and non-IG get 135%. When False
-                (default), all unrated corporates get 100%. Under Art. 122(8),
-                this choice also determines the SA-equivalent risk weight used
-                for the output floor S-TREA computation (Art. 92 para 2A).
-                Must be declared to the PRA.
+            sa_investment_grade_permission: Art. 122(6) PRA permission — when
+                True, unrated non-SME corporates on the SA branch take 65% if the
+                firm assesses them investment grade and 135% if not; otherwise
+                (default) Art. 122(5) 100%. Needs prior PRA permission.
+            output_floor_investment_grade_election: Art. 122(8)(b) — when True,
+                the S-TREA (output floor) weight of unrated non-SME corporates the
+                firm weights under F-IRB / A-IRB is 65% / 135% from its own
+                investment-grade assessment; otherwise (default) Art. 122(8)(a)
+                100%. Needs notice to the PRA, not permission, and is independent
+                of ``sa_investment_grade_permission``.
+            use_investment_grade_assessment: DEPRECATED — True stands in for each
+                election above left unstated (``None``), also through
+                ``dataclasses.replace``; a stated election wins. DeprecationWarning.
             institution_type: Entity type per Art. 92 para 2A for output floor
                 applicability. When None, floor is assumed applicable. Also
                 propagated into the OutputFloorConfig (see below).
@@ -1092,6 +1201,8 @@ class CalculationConfig:
             permission_mode=permission_mode,
             equity_transitional=EquityTransitionalConfig.basel_3_1(),
             eur_gbp_rate=Decimal("0.8732"),  # Used only to derive sme_balance_sheet_threshold
+            sa_investment_grade_permission=sa_investment_grade_permission,
+            output_floor_investment_grade_election=output_floor_investment_grade_election,
             use_investment_grade_assessment=use_investment_grade_assessment,
             crm_collateral_method=crm_collateral_method,
             airb_collateral_method=airb_collateral_method,
@@ -1119,3 +1230,25 @@ RunConfig = CalculationConfig
 
 # Parallel-run reconciliation configuration (ComponentMapping / LegacyColumnMapping)
 # moved to rwa_calc.analysis.recon_registry (migration Phase 6 - analysis layer).
+
+
+def _caller_stacklevel(init_code: CodeType) -> int:
+    """The ``warnings.warn`` stacklevel of the first frame outside config construction.
+
+    Counted from the function that calls this helper (level 1). It skips this
+    module's frames (``__post_init__``, the factories, ``with_fx_rate``), the
+    dataclass-generated ``__init__`` (``init_code``) and ``dataclasses.replace``.
+    Their depth differs by path — direct construction, a factory, ``replace`` — so
+    no fixed stacklevel lands on the caller from all three, and a warning that
+    lands inside this module is hidden by Python's default filter, which shows a
+    ``DeprecationWarning`` only when attributed to ``__main__``.
+    """
+    frame = inspect.currentframe()
+    frame = frame.f_back if frame is not None else None
+    level = 1
+    while frame is not None and (
+        frame.f_code is init_code or frame.f_code.co_filename in _CONSTRUCTION_FILES
+    ):
+        frame = frame.f_back
+        level += 1
+    return level

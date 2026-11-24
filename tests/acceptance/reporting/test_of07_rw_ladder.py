@@ -270,7 +270,7 @@ def test_the_ladder_is_registered_in_the_supervisory_gate_with_its_own_config(
     assert registered[0].portfolio == "rw-ladder"
     assert registered[0].build_prior_config is None, "SA-only: a prior frame buys nothing"
     assert config is not None
-    assert config.use_investment_grade_assessment is (framework == "BASEL_3_1")
+    assert config.resolved_sa_investment_grade_permission is (framework == "BASEL_3_1")
 
 
 # ---------------------------------------------------------------------------

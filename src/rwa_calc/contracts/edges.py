@@ -72,6 +72,14 @@ LOAN_SPLIT_CARRIERS: tuple[str, str, str] = (
     LOAN_SPLIT_RESIDUAL_RW_COL,
 )
 
+# The firm's Basel 3.1 investment-grade assessment of an unrated non-SME corporate,
+# where it sets the row's exposure-class weight (P1.475), named once for its three
+# sites: the SA dispatcher writes it (``engine/sa/investment_grade.py``), the
+# calculation edges below declare it, and OF 08.01 row 0200 reads it
+# (``reporting/corep/c08.py``). Art. 122(6) on SA-branch rows, Art. 122(8)(b) on
+# IRB-approach rows.
+INVESTMENT_GRADE_ASSESSED_COL: str = "sa_investment_grade_assessed"
+
 # The applied exposure class an exposure would have had were it not in default,
 # named once for its two sites: the aggregator writes it beside the applied class
 # (``engine/aggregator/aggregator.py::_add_exposure_class_applied``) and OF 07.00
@@ -1889,6 +1897,25 @@ def _calc_output_common_columns() -> dict[str, EdgeColumn]:
         ),
         "risk_weight_pre_currency_mismatch": EdgeColumn(
             dtype=pl.Float64, required=False, inject=False
+        ),
+        # OF 08.01 row 0200 reads this so the row holds the legs whose output-floor
+        # weight is the Art. 122(6)(a) 65% under the Art. 122(8)(b) election, not
+        # every leg with a raw ``cp_is_investment_grade``, as PS1/26 Annex II
+        # requires ("consistent with approach used for the purpose of calculating
+        # the output floor"). True = 65%, False = 135%, both set by paragraph 6.
+        # CONDITIONAL like the loan-split carriers below: the Basel 3.1 SA
+        # risk-weight step writes it on every row its unified pass weights (IRB
+        # rows carry the Art. 122(8) outcome), never under CRR; undeclared, the
+        # seal strips it.
+        INVESTMENT_GRADE_ASSESSED_COL: EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            inject=False,
+            citation="PS1/26 Art. 122(6), 122(8)(b)",
+            null_meaning="the paragraph 6 weight is not the row's exposure-class weight: "
+            "governing election not held, rated, not a corporate, or another rule sets "
+            "the weight (Art. 122(11) SME, Art. 133 subordinated, Art. 127 defaulted, "
+            "Art. 140(2), CCR trade / default-fund weights); absent = CRR run",
         ),
         # The Basel 3.1 loan-split carriers (``engine/sa/b31_risk_weight_tables.py::
         # with_b31_loan_split_parts``): the secured share and the two part weights of

@@ -106,8 +106,13 @@ REPORTING_DATE_B31 = date(2027, 6, 30)
 #: Config *elections* an oracle may set. These are firm-level permissions the
 #: regulation makes conditional (e.g. PS1/26 Art. 122(6) needs PRA permission
 #: before the 65% / 135% investment-grade weights become available), so they
-#: belong on the config rather than on the exposure row.
+#: belong on the config rather than on the exposure row. The Art. 122(6)
+#: permission and the Art. 122(8)(b) output-floor election are separate fields
+#: (P1.475); ``use_investment_grade_assessment`` is their deprecated one-flag
+#: alias, kept here because human-reviewed oracle cases still state it.
 _CONFIG_ELECTIONS = (
+    "sa_investment_grade_permission",
+    "output_floor_investment_grade_election",
     "use_investment_grade_assessment",
     "slotting_short_maturity_election",  # PS1/26 Art. 153(5)(d), Basel 3.1 only
 )

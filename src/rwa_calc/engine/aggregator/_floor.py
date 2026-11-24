@@ -52,8 +52,10 @@ References:
 - PRA PS1/26 Art. 62(d): IRB T2 credit (excess provisions, capped at 0.6% of IRB RWA)
 - PRA PS1/26 Art. 36(1)(d), Art. 40: IRB CET1 deductions (EL shortfall)
 - PRA PS1/26 Art. 62(c): SA T2 credit (general credit risk adjustments)
-- PRA PS1/26 Art. 122(8): IRB institutions choose 100% flat or 65%/135%
-  IG assessment for unrated corporates in S-TREA (via use_investment_grade_assessment)
+- PRA PS1/26 Art. 122(8): for unrated corporates on the IRB Approach, S-TREA
+  takes (a) 100% or (b) 65%/135% from the firm's IG assessment — chosen by
+  ``output_floor_investment_grade_election`` and already applied to ``sa_rwa``
+  upstream (engine/sa/investment_grade.py); this module never reads it
 - CRE99.1-8: Output floor (Basel 3.1)
 - PS1/26 Ch.12: PRA output floor implementation
 

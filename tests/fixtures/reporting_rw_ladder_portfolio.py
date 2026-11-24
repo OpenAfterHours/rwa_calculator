@@ -49,11 +49,12 @@ Both regimes run the same book. Every sheet that gains a Basel 3.1 rung also
 carries a CRR figure, so a defect that dropped one regime's legs shows up as a
 changed cell, not as a dark sheet.
 
-Basel 3.1 lights the two corporate rungs only under the Art. 122(6) election, so
-the portfolio has its own config: ``rw_ladder_config`` sets
-``use_investment_grade_assessment``. Registered against the gate's plain
-``_sa_config``, the two corporates would take the Art. 122(5) flat 100% and the
-65% / 135% rows would go dark again. That is the third form of LESSONS B5:
+Basel 3.1 lights the two corporate rungs only under the Art. 122(6) permission,
+so the portfolio has its own config: ``rw_ladder_config`` sets
+``sa_investment_grade_permission`` (P1.475 split it from the Art. 122(8)(b)
+output-floor election; an SA-only book needs only the permission). Registered
+against the gate's plain ``_sa_config``, the two corporates would take the
+Art. 122(5) flat 100% and the 65% / 135% rows would go dark again. That is the third form of LESSONS B5:
 registered, wrong config, dead cell.
 
 ``RWL-LN-RE-105`` under CRR is a row PAST the Art. 125 80% clamp, and that is
@@ -254,14 +255,15 @@ def build_reporting_rw_ladder_bundle() -> RawDataBundle:
 
 
 def rw_ladder_config(framework: str) -> CalculationConfig:
-    """The ladder's run config: STANDARDISED, plus the Art. 122(6) election under Basel 3.1.
+    """The ladder's run config: STANDARDISED, plus the Art. 122(6) permission under Basel 3.1.
 
     PS1/26 Art. 122(6) gives 65% to an unrated corporate the firm assesses as
     investment grade and 135% to one it does not, if the firm "has obtained the
-    prior permission from the PRA". Without the election Art. 122(5) gives both
-    100%, and the two corporate legs light no new row. The ``crr`` factory takes
-    no such keyword: the election does not exist under CRR, and the dataclass
-    default (False) is the only reading.
+    prior permission from the PRA". Without the permission Art. 122(5) gives both
+    100%, and the two corporate legs light no new row. Every leg is SA, so the
+    Art. 122(8)(b) output-floor election would decide nothing and is not stated.
+    The CRR config states neither: CRR Art. 122 has no investment-grade approach,
+    and the unstated default (not held) is the only reading.
 
     Args:
         framework: ``"CRR"`` or ``"BASEL_3_1"``.
@@ -277,7 +279,7 @@ def rw_ladder_config(framework: str) -> CalculationConfig:
     return CalculationConfig.basel_3_1(
         reporting_date=REPORTING_DATE[framework],
         permission_mode=PermissionMode.STANDARDISED,
-        use_investment_grade_assessment=True,
+        sa_investment_grade_permission=True,
     )
 
 

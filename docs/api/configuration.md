@@ -32,7 +32,12 @@ class CalculationConfig:
         output_floor: Output floor configuration.
         post_model_adjustments: Post-model adjustments (Basel 3.1 only).
         permission_mode: STANDARDISED (all SA) or IRB (model permissions drive routing).
-        use_investment_grade_assessment: Art. 122(6) election — IG=65% / non-IG=135%.
+        sa_investment_grade_permission: Art. 122(6) PRA permission — SA-branch
+            unrated non-SME corporates take IG=65% / non-IG=135% (else 100%).
+        output_floor_investment_grade_election: Art. 122(8)(b) notice — S-TREA
+            weight of unrated non-SME IRB corporates is IG=65% / non-IG=135%
+            (else Art. 122(8)(a) 100%).
+        use_investment_grade_assessment: DEPRECATED alias for each election left unstated.
         eur_gbp_rate: EUR/GBP exchange rate for monetary-threshold conversion.
         collect_engine: Polars engine for .collect() — "cpu" (default).
     """
@@ -52,7 +57,9 @@ class CalculationConfig:
     eur_gbp_rate: Decimal = Decimal("0.8732")
     enable_double_default: bool = False
     equity_pd_lgd: bool = False
-    use_investment_grade_assessment: bool = False
+    sa_investment_grade_permission: bool | None = None          # None = not stated
+    output_floor_investment_grade_election: bool | None = None  # None = not stated
+    use_investment_grade_assessment: bool = False               # DEPRECATED alias
     crm_collateral_method: CRMCollateralMethod = CRMCollateralMethod.COMPREHENSIVE
     airb_collateral_method: AIRBCollateralMethod | None = None
     collect_engine: PolarsEngine = "cpu"
@@ -126,7 +133,9 @@ class CalculationConfig:
         reporting_date: date,
         permission_mode: PermissionMode = PermissionMode.STANDARDISED,
         post_model_adjustments: PostModelAdjustmentConfig | None = None,
-        use_investment_grade_assessment: bool = False,
+        sa_investment_grade_permission: bool | None = None,
+        output_floor_investment_grade_election: bool | None = None,
+        use_investment_grade_assessment: bool = False,  # DEPRECATED alias
         institution_type: InstitutionType | None = None,
         reporting_basis: ReportingBasis | None = None,
         gcra_amount: float = 0.0,
@@ -161,7 +170,9 @@ The full keyword list for each factory:
 | `eur_gbp_rate` | yes | n/a (GBP-native) | CRR EUR-threshold FX |
 | `enable_double_default` | yes | n/a (Art. 153(3) blanked) | CRR Art. 153(3) — see [`enable_double_default`](#enable_double_default) |
 | `equity_pd_lgd` | yes | n/a (Art. 155 blanked; legacy-method input to rule 4.6 not yet implemented) | CRR Art. 155(3) PD/LGD equity — see [`equity_pd_lgd`](#equity_pd_lgd) |
-| `use_investment_grade_assessment` | n/a | yes | Art. 122(6)/(8) — see [`use_investment_grade_assessment`](#use_investment_grade_assessment) |
+| `sa_investment_grade_permission` | n/a | yes | Art. 122(6) SA permission — see [the investment-grade elections](#sa_investment_grade_permission-and-output_floor_investment_grade_election) |
+| `output_floor_investment_grade_election` | n/a | yes | Art. 122(8)(b) output-floor election — see [the investment-grade elections](#sa_investment_grade_permission-and-output_floor_investment_grade_election) |
+| `use_investment_grade_assessment` | n/a | yes | DEPRECATED alias standing in for each of the above left unstated |
 | `crm_collateral_method` | yes | yes | Art. 191A SA financial collateral — see [`crm_collateral_method`](#crm_collateral_method) |
 | `airb_collateral_method` | n/a | yes | Art. 169A/169B A-IRB collateral — see [`airb_collateral_method`](#airb_collateral_method) |
 | `post_model_adjustments` | n/a | yes | Art. 153(5A)/154(4A)/158(6A) PMAs |
@@ -210,7 +221,7 @@ See the per-knob sections for regulatory derivation:
 [`enable_double_default`](#enable_double_default),
 [`crm_collateral_method`](#crm_collateral_method).
 
-##### Basel 3.1 — Art. 122(6)/(8) IG assessment + Foundation A-IRB collateral + skip-transitional floor
+##### Basel 3.1 — Art. 122(8)(b) IG election + Foundation A-IRB collateral + skip-transitional floor
 
 ```python
 from datetime import date
@@ -224,7 +235,8 @@ from rwa_calc.domain.enums import (
 )
 
 # Stand-alone UK IRB firm, individual basis, electing:
-# - Art. 122(6)(b)/(8)(b) IG vs non-IG split for unrated corporates
+# - Art. 122(8)(b) IG vs non-IG split for unrated IRB corporates in
+#   S-TREA (notice to the PRA; no Art. 122(6) SA permission held)
 # - Art. 191A Part 2 / Art. 169A election to use the Foundation
 #   Collateral Method on the A-IRB book
 # - Art. 222 Simple Method on the SA financial collateral book
@@ -233,7 +245,7 @@ from rwa_calc.domain.enums import (
 config = CalculationConfig.basel_3_1(
     reporting_date=date(2027, 6, 30),
     permission_mode=PermissionMode.IRB,
-    use_investment_grade_assessment=True,                          # Art. 122(6)/(8)
+    output_floor_investment_grade_election=True,                   # Art. 122(8)(b)
     airb_collateral_method=AIRBCollateralMethod.FOUNDATION,        # Art. 169A
     crm_collateral_method=CRMCollateralMethod.SIMPLE,              # Art. 222
     institution_type=InstitutionType.STANDALONE_UK,                # Art. 92 para 2A(a)(i)
@@ -242,7 +254,8 @@ config = CalculationConfig.basel_3_1(
 )
 
 assert config.is_basel_3_1
-assert config.use_investment_grade_assessment is True
+assert config.resolved_output_floor_investment_grade_election is True
+assert config.resolved_sa_investment_grade_permission is False  # not stated -> not held
 assert config.airb_collateral_method is AIRBCollateralMethod.FOUNDATION
 assert config.crm_collateral_method is CRMCollateralMethod.SIMPLE
 assert config.output_floor.is_floor_applicable() is True
@@ -250,7 +263,7 @@ assert config.get_output_floor_percentage() == Decimal("0.725")    # phased-in f
 ```
 
 See the per-knob sections for regulatory derivation:
-[`use_investment_grade_assessment`](#use_investment_grade_assessment),
+[the investment-grade elections](#sa_investment_grade_permission-and-output_floor_investment_grade_election),
 [`airb_collateral_method`](#airb_collateral_method),
 [`crm_collateral_method`](#crm_collateral_method).
 
@@ -519,60 +532,104 @@ assert config.equity_pd_lgd is True
 For the formula, the Art. 165 parameters and a worked example, see the
 [CRR Equity Approach Specification](../specifications/crr/equity-approach.md).
 
-### `use_investment_grade_assessment`
+### `sa_investment_grade_permission` and `output_floor_investment_grade_election`
 
 | Field | Type | Default | Defined on |
 |-------|------|---------|-----------|
-| `use_investment_grade_assessment` | `bool` | `False` | `CalculationConfig` (`contracts/config.py:833`) |
+| `sa_investment_grade_permission` | `bool \| None` | `None` (not stated → not held) | `CalculationConfig` (`contracts/config.py`) |
+| `output_floor_investment_grade_election` | `bool \| None` | `None` (not stated → not made) | `CalculationConfig` (`contracts/config.py`) |
+| `use_investment_grade_assessment` | `bool` | `False` | DEPRECATED alias — stands in for each of the above left unstated |
 
-Enables the PRA PS1/26 **Art. 122(6)** investment-grade / non-investment-grade
-split for unrated non-SME corporate exposures under the Basel 3.1 SA. When
-`True`, an unrated corporate that the firm has internally assessed as
-investment grade (`cp_is_investment_grade = True` on the counterparty input
-table) attracts a **65%** risk weight (Art. 122(6)(a)); an unrated corporate
-assessed as non-investment grade attracts **135%** (Art. 122(6)(b)). When
-`False` (default) every unrated non-SME corporate attracts the Art. 122(5)
-default of **100%**.
+The two fields record what the caller **stated**. Read the elections that apply through
+`config.resolved_sa_investment_grade_permission` and
+`config.resolved_output_floor_investment_grade_election`: a stated value wins, an unstated
+one follows the deprecated alias (default `False`). The engine reads only these.
 
-Under **Art. 122(8)** the same election also drives the SA-equivalent risk
-weight used in the *S-TREA leg* of the Art. 92(2A) output floor. An IRB
-firm that has set `use_investment_grade_assessment=True` automatically uses
-the 65%/135% split in S-TREA (Art. 122(8)(b)); an IRB firm that has left it
-`False` uses the flat 100% S-TREA treatment (Art. 122(8)(a)). The Art. 122(11)
-SME carve-out (85%) overrides both branches regardless of the flag.
+PRA PS1/26 Art. 122 holds **two separate investment-grade elections** for unrated
+non-SME corporates, and neither implies the other. In both, an unrated corporate the
+firm has internally assessed as investment grade (`cp_is_investment_grade = True` on
+the counterparty input table, Art. 122(9)–(10)) attracts **65%** and one assessed as
+not investment grade attracts **135%** (Art. 122(6)(a)/(b)). What differs is which
+exposures each election reaches:
 
-!!! warning "Basel 3.1 only — flag absent from `CalculationConfig.crr()`"
-    The factory `CalculationConfig.crr(...)` does **not** expose
-    `use_investment_grade_assessment`; the Art. 122(6)/(8) sub-categories are
-    Basel 3.1 additions that have no analogue in the CRR Art. 122 corporate
-    table (CQS-only, with unrated = 100%). The field exists on the underlying
-    `CalculationConfig` dataclass for both frameworks, but is silently inert
-    under the CRR SA path — only the Basel 3.1 SA path consumes it
-    (`engine/sa/risk_weights.py`).
+| Field | Rule | Governs | When not held (default) | Needs |
+|-------|------|---------|------------------------|-------|
+| `sa_investment_grade_permission` | Art. 122(6) | the risk weight of rows the firm weights under the **Standardised Approach** — SA-branch rows, including SA-CCR legs (`approach = standardised`) | Art. 122(5) **100%** | **prior PRA permission** (Art. 122(6), sound processes under Art. 122(7)) |
+| `output_floor_investment_grade_election` | Art. 122(8)(b) | the SA-equivalent weight, so `sa_rwa` and **S-TREA** (Art. 92(3A)(b)(ii)), of rows the firm weights under the **IRB Approach** (`foundation_irb` / `advanced_irb`), including the guaranteed leg of such an exposure substituted onto an SA guarantor (it keeps its IRB `approach` at the SA stage); each such row's own IRB RWEA is untouched — but see the facility-share note below | Art. 122(8)(a) **100%** | **notice to the PRA** on adoption and on cessation — no permission |
 
-!!! note "PRA permission and notification obligations"
-    Branch (b) — i.e. setting this flag to `True` — requires **prior PRA
-    permission** under Art. 122(6) plus the sound-processes obligation in
-    Art. 122(7). For an IRB firm the additional Art. 122(8)(b) final sentence
-    requires the firm to **give notice to the PRA** both when it starts and
-    when it ceases applying the (b) treatment to S-TREA. The calculator does
-    not enforce either obligation — it is the operator's responsibility to
-    confirm permission before flipping the flag.
+So a firm can hold the Art. 122(6) permission and keep the floor on Art. 122(8)(a), or
+give the Art. 122(8)(b) notice without holding the permission; the engine computes
+either in one run.
 
-The factory method `CalculationConfig.basel_3_1()` accepts this knob directly:
+!!! warning "The floor election can move U-TREA through the facility-share resolver"
+    The election never changes a row's own IRB risk weight, but it is not confined to
+    S-TREA. Under the Basel 3.1 default `facility_share_metric="floor_aware"`, the
+    facility-share resolver (`engine/aggregator/_facility_share.py`) chooses which
+    member of a shared facility carries the undrawn headroom by comparing whole-book
+    totals that include `x · S-TREA`, so a change in `sa_rwa` can hand the headroom to
+    a different member — and a different approach. Measured on the registered
+    `facility-share-binding` book with every obligor assessed investment grade:
+    turning the election on moves `FS-FAC-SHARE_UNDRAWN` from F-IRB to SA, U-TREA from
+    1,245,491.29 to 1,299,247.42 and post-floor TREA from 1,643,200.00 to 1,299,247.42
+    (the floor stops binding). The single flag this election replaced had the same
+    effect.
+
+Neither election reaches an exposure whose weight another rule sets: the Art. 122(11)
+SME carve-out (85%) overrides both, rated and specialised-lending exposures are outside
+both, and so are an unrated corporate's subordinated instruments (Art. 133(5) 150%,
+Art. 112(1)(p)) and its exposures in default (Art. 127, Art. 112(1)(j)) — Art. 122(8)
+reaches only "the exposure class set out in point (g) of Article 112(1)".
+
+OF 08.01 row 0200 ("of which: investment grade") follows the output-floor election, as
+PS1/26 Annex II requires ("consistent with approach used for the purpose of calculating
+the output floor"). The reading the engine applies is the weight-governing one: row 0200
+holds the unrated IRB corporate legs whose output-floor weight the investment-grade
+assessment sets — the Art. 122(6)(a) 65% under Art. 122(8)(b). It leaves out, alike, a leg
+assessed investment grade whose weight Art. 122(11) (SME, 85%), Art. 133 (subordinated,
+150%) or Art. 127 (default) sets instead; row 0190 still holds the SME leg (on the SME
+sheet) and the subordinated one. Under Art. 122(8)(a) no leg's weight is set by the
+assessment and row 0200 is left unreported (an empty cell, not a zero). The engine records this on every row in the sealed column
+`sa_investment_grade_assessed`: True where the paragraph 6(a) 65% is the row's
+exposure-class weight, False where the 6(b) 135% is, null everywhere else (election not
+held, rated, not a corporate, or another rule sets the weight). Row 0200 reads that
+column, never the raw `cp_is_investment_grade` input.
+
+!!! warning "Basel 3.1 only — absent from `CalculationConfig.crr()`"
+    The factory `CalculationConfig.crr(...)` exposes none of the three keywords. CRR
+    Art. 122 has no investment-grade approach (CQS-only, with unrated = 100%) and CRR
+    has no output floor. The fields exist on the dataclass for both frameworks but are
+    inert under CRR: only the Basel 3.1 SA risk-weight step reads them, behind the
+    `sa_revised_risk_weight_overrides` pack Feature.
+
+!!! note "The deprecated alias"
+    `use_investment_grade_assessment=True` used to drive both elections from one flag.
+    It still stands in for each election left unstated, so an existing configuration
+    reproduces its numbers; an election stated explicitly wins over it. Because an
+    unstated election is kept as `None` rather than resolved in place,
+    `dataclasses.replace(config, use_investment_grade_assessment=...)` still reaches
+    it, in both directions, exactly as replacing the old flag did. Every construction
+    that carries the alias — the factory, the constructor, `replace` — raises a
+    `DeprecationWarning` attributed to the caller's own line, naming the elections the
+    alias set (or saying it had no effect, when both are stated). The calculator does
+    not check the permission or the notice; confirming them is the operator's
+    responsibility.
+
+The factory method `CalculationConfig.basel_3_1()` accepts both knobs directly:
 
 ```python
 from datetime import date
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 
+# Art. 122(6) permission held; the floor stays on Art. 122(8)(a) 100%.
 config = CalculationConfig.basel_3_1(
     reporting_date=date(2027, 6, 30),
     permission_mode=PermissionMode.IRB,
-    use_investment_grade_assessment=True,  # Art. 122(6)/(8) IG=65% / non-IG=135%
+    sa_investment_grade_permission=True,
 )
 
-assert config.use_investment_grade_assessment is True
+assert config.resolved_sa_investment_grade_permission is True
+assert config.resolved_output_floor_investment_grade_election is False  # not stated
 ```
 
 For the regulatory derivation, S-TREA interaction, scope of the election,

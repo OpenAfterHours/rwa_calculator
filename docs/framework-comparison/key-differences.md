@@ -491,11 +491,13 @@ additional detail and the [F-IRB specifications](../specifications/crr/firb-calc
     the firm chooses between:
 
     - **(a)** flat **100%** (mirrors Art. 122(5)) — no notification; or
-    - **(b)** the Art. 122(6)(a)/(b) **65%/135% IG/non-IG split** — requires the
-      underlying Art. 122(6) PRA permission *and* **notification to the PRA on both
-      adoption and cessation** (Art. 122(8)(b) final sentence).
+    - **(b)** the Art. 122(6)(a)/(b) **65%/135% IG/non-IG split** — requires
+      **notification to the PRA on both adoption and cessation** (Art. 122(8)(b)
+      final sentence), not the Art. 122(6) permission: (b) borrows the weights, and
+      Art. 122(9)–(10) apply the IG criteria to paragraph 6 and point (b) of
+      paragraph 8 separately.
 
-    Art. 122(7) retains the permission-holder's obligation to maintain "sound,
+    Art. 122(7) retains the Art. 122(6) permission-holder's obligation to maintain "sound,
     effective and comprehensive strategies, processes, systems and risk management
     practices". The notification obligation is symmetric — dropping back to (a) is
     equally a notifiable event. The election is portfolio-wide within the

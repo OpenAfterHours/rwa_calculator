@@ -252,12 +252,13 @@ def facility_share_config(
     dead cell. No number moves either way on this portfolio, which is exactly what
     makes the conflict worth closing now rather than after it starts mattering.
 
-    ``use_investment_grade_assessment`` is False in both regimes, which selects the
-    Art. 122(2) flat 100% for an unrated corporate rather than the Art. 122(6)
-    65% / 135% split. Under Basel 3.1 that is passed explicitly. Under CRR the
-    ``crr`` factory takes no such keyword — the dataclass field's own default is
-    False and the Art. 122(6) election is Basel 3.1 only — so there is nothing to
-    pass and the CRR arm relies on that default.
+    Neither PS1/26 investment-grade election is held: ``sa_investment_grade_permission``
+    and ``output_floor_investment_grade_election`` are False, so an unrated corporate
+    takes the Art. 122(5) 100% on the SA branch and the Art. 122(8)(a) 100% in S-TREA
+    rather than the Art. 122(6) 65% / 135% split. Under Basel 3.1 both are passed
+    explicitly. Under CRR the ``crr`` factory takes neither keyword — CRR Art. 122
+    has no investment-grade approach (unrated is 100%) — so there is nothing to pass
+    and the CRR arm relies on the dataclass defaults.
 
     Args:
         framework: ``"CRR"`` or ``"BASEL_3_1"``.
@@ -547,7 +548,8 @@ def _b31_config(reporting_date: date) -> CalculationConfig:
     return CalculationConfig.basel_3_1(
         reporting_date=reporting_date,
         permission_mode=PermissionMode.IRB,
-        use_investment_grade_assessment=False,
+        sa_investment_grade_permission=False,
+        output_floor_investment_grade_election=False,
         # This portfolio has no retail obligor, so the optional 0.2% granularity
         # test decides nothing and the run must sit on the production default
         # (off since RE-04). Stated rather than inherited — see facility_share_config.

@@ -283,15 +283,15 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     both side inputs, so no register rule sees either cell populated.
 
 Cost, and why every run is load-bearing:
-    This file is the most expensive test in the suite: nineteen portfolios x two
-    regimes plus three single-regime runs (``equity-transitional`` and
-    ``slotting-maturity-elected`` under Basel 3.1, ``irb-mdb`` under CRR) is
-    forty-one runs, twenty-one of them Basel 3.1, plus a prior-period run for each
-    of the twenty IRB ones: SIXTY-ONE full pipeline runs, plus two for leg (m)'s
+    This file is the most expensive test in the suite: one full pipeline run per
+    entry of ``RUNS`` (most portfolios under both regimes, a few under one only),
+    one more for each IRB-permissioned entry's prior period, and two for leg (m)'s
     probe (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not
-    this prose. The gateway leg adds one canonical return and one
-    ``validate_return`` per Basel 3.1 run (twenty-one) and no pipeline run: the pack is loaded once per
-    process and the COREP bundle is the one the template leg already generated.
+    this prose — on 2026-11-24 it held forty-two runs, twenty-two of them Basel
+    3.1 and twenty-one with a prior period. The gateway leg adds one canonical
+    return and one ``validate_return`` per Basel 3.1 run and no pipeline run: the
+    pack is loaded once per process and the COREP bundle is the one the template
+    leg already generated.
     Timed directly (2026-11-16, 4-core box, when the matrix held fifteen Basel 3.1
     runs): 0.6 s to load the pack plus 5.4 s for the fifteen filings (0.2-1.0 s
     each) of a 39.4 s gate, about 15%. That is a standing temptation to trim the run set, so
@@ -464,6 +464,11 @@ from tests.fixtures.reporting_equity_transitional_portfolio import (
 )
 from tests.fixtures.reporting_funded_protection_portfolio import (
     build_reporting_art199_bundle,
+)
+from tests.fixtures.reporting_ig_election_portfolio import (
+    build_reporting_ig_election_bundle,
+    ig_election_config,
+    ig_election_prior_config,
 )
 from tests.fixtures.reporting_irb_classes_portfolio import build_reporting_irb_classes_bundle
 from tests.fixtures.reporting_irb_shapes_portfolio import build_reporting_irb_shapes_bundle
@@ -1522,6 +1527,27 @@ RUNS: tuple[GateInput, ...] = (
         "default-populations",
         partial(build_reporting_default_populations_bundle, "BASEL_3_1"),
         lambda: _sa_config("BASEL_3_1"),
+    ),
+    # The PS1/26 Art. 122(8)(b) output-floor election WITHOUT the Art. 122(6) SA
+    # permission (P1.475) — LESSONS B5. The first registered book with an IRB leg
+    # assessed investment grade: the only other book assessing an obligor
+    # investment grade, ``rw-ladder``, is SA-only, so OF 08.01 row 0200 "Of
+    # which: investment grade" was dead on every run. Two unrated F-IRB legs (one assessed IG, one not: row 0190 holds
+    # both, row 0200 only the first), two IG-assessed F-IRB legs whose weight
+    # another rule sets (an Art. 122(11) SME, an Art. 133(5) subordinated loan:
+    # row 0200 must leave both out), and an IG-assessed SA leg that must stay at
+    # the Art. 122(5) 100%. It takes its OWN config — the election is not a
+    # parameter of ``_irb_config``, and registered against it the book would be
+    # in the gate with the feature it exists for switched off (B5's third form).
+    # IRB-permissioned, so it takes a prior frame. Basel 3.1 only: CRR Art. 122
+    # has no investment-grade approach.
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "ig-election",
+        build_reporting_ig_election_bundle,
+        ig_election_config,
+        ig_election_prior_config,
     ),
 )
 

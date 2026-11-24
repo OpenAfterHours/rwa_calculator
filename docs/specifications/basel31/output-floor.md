@@ -16,7 +16,7 @@ Basel 3.1 output floor mechanism limiting the benefit of internal models relativ
 | FR-6.3 | OF-ADJ own funds adjustment | P1 | Done |
 | FR-6.4 | Entity-type carve-outs (Art. 92(2A)(b)–(d)) | P2 | Done |
 | FR-6.5 | GCRA qualifying criteria (Art. 110, Reg (EU) 183/2014) documented | P1 | Done (documentation — institution-supplied input) |
-| FR-6.6 | Unrated corporate S-TREA election — flat 100% vs IG/non-IG split with PRA notification (Art. 122(7)–(8)) | P2 | Done (documentation — firm governance upstream; no dedicated engine switch — S-TREA inherits the firm's Art. 122(5)/(6) branch) |
+| FR-6.6 | Unrated corporate S-TREA election — flat 100% vs IG/non-IG split with PRA notification (Art. 122(8)) | P2 | Done — its own engine switch, `output_floor_investment_grade_election` (Art. 122(8)(b); default = branch (a)), independent of the Art. 122(6) SA permission (P1.475); the PRA notification is firm governance upstream of the calculator |
 
 ---
 
@@ -510,7 +510,13 @@ for `U-TREA` (IRB) or for SA firms' regular SA capital.
 | Branch | S-TREA weight for unrated non-SME corporates | Requires Art. 122(6) permission? | PRA notification |
 |--------|----------------------------------------------|----------------------------------|------------------|
 | Art. 122(8)(a) | Flat **100%** (mirrors Art. 122(5) default) | No | Not required |
-| Art. 122(8)(b) | **65%** IG / **135%** non-IG (Art. 122(6)(a)/(b) split) | Yes | **Required on adoption *and* on cessation** |
+| Art. 122(8)(b) | **65%** IG / **135%** non-IG (Art. 122(6)(a)/(b) split) | **No** — it borrows the weights, not the permission | **Required on adoption *and* on cessation** |
+
+The branch is independent of the firm's Art. 122(6) SA permission in both directions: a
+permission holder that has given no (b) notice is on branch (a) for S-TREA, and a firm
+without the permission may give the (b) notice. Art. 122(9)–(10) apply the same
+investment-grade criteria "for the purposes of paragraph 6 and point (b) of paragraph
+8".
 
 Art. 122(11) SME corporates (turnover ≤ GBP 44m) retain the 85% weight under both
 branches — the (a)/(b) election only governs the unrated non-SME population.
@@ -518,9 +524,10 @@ branches — the (a)/(b) election only governs the unrated non-SME population.
 ### Notification Obligation
 
 Art. 122(8)(b)'s final sentence requires a notification to the PRA whenever the firm
-**starts or stops** applying the IG/non-IG split in S-TREA. This is in addition to the
-Art. 122(6) prior-permission requirement and the Art. 122(7) sound-processes
-obligation. Because the notification is symmetric, the firm must keep a record of
+**starts or stops** applying the IG/non-IG split in S-TREA. It is the only formality
+branch (b) carries — the Art. 122(6) prior permission and the Art. 122(7)
+sound-processes obligation attach to the SA permission, not to this election. Because
+the notification is symmetric, the firm must keep a record of
 every branch switch — for example, a firm that elects branch (b) for 2027 and
 reverts to branch (a) for 2028 owes the PRA two notifications (one at adoption, one
 at cessation). This is a firm-governance step upstream of the calculator; the
@@ -530,10 +537,9 @@ engine does not emit or record the notification.
 
 Both Art. 122(8)(a) and (b) apply to "**all** exposures for which a credit assessment
 by a nominated ECAI is not available". The election is portfolio-wide within the
-output-floor corporate population. A firm that has Art. 122(6) permission but
-assesses no obligor as IG still applies 135% to every unrated non-SME corporate
-under branch (b) — it cannot cherry-pick branch (a) for non-IG obligors while using
-branch (b) for IG obligors.
+output-floor corporate population. A firm on branch (b) that assesses no obligor as IG
+still applies 135% to every unrated non-SME corporate in S-TREA — it cannot
+cherry-pick branch (a) for non-IG obligors while using branch (b) for IG obligors.
 
 ### Why This Matters for Floor-Binding IRB Firms
 
@@ -545,17 +551,32 @@ IG-heavy portfolio. Branch (b) lets the firm recognise its internal IG assessmen
 should compare the portfolio-weighted 100% against the portfolio-weighted
 `w_IG × 65% + w_nonIG × 135%` before electing.
 
-!!! note "Implementation — no dedicated engine switch"
-    The engine derives S-TREA by running the SA calculator over the IRB population
-    and honouring the firm's Art. 122(5)/(6) branch choice. Firms that already apply
-    the IG/non-IG split to their regular SA exposures (i.e., hold Art. 122(6)
-    permission and assess internal IG status) automatically get branch (b) in
-    S-TREA; firms on Art. 122(5) flat 100% get branch (a). The Art. 122(8) drafting
-    permits a firm to elect branch (b) **only** for S-TREA while retaining flat 100%
-    for its regular SA unrated corporates, but this split is not supported by a
-    single pipeline run — it would require two runs combined externally. See the
+!!! note "Implementation — `output_floor_investment_grade_election`"
+    Branch (b) is the `CalculationConfig.output_floor_investment_grade_election` field
+    (not stated = branch (a)), separate from the Art. 122(6)
+    `sa_investment_grade_permission` (P1.475; the deprecated
+    `use_investment_grade_assessment` stands in for whichever of the two is left
+    unstated, and the engine reads the `resolved_*` properties). The engine derives
+    S-TREA by running
+    the SA risk-weight chain over every row, and `engine/sa/investment_grade.py` applies
+    the election only to rows the firm weights under F-IRB / A-IRB, so it moves their
+    `sa_rwa` and never an SA-branch row's weight — SA-CCR legs, whose `approach` stays
+    `standardised` although the floor counts them, follow the permission. The
+    guaranteed leg of an F-IRB / A-IRB exposure substituted onto an SA guarantor keeps
+    its IRB `approach` at that stage, so it follows the election, although it is
+    reported under the SA. The S-TREA sum never reads the election: it adds up the
+    `sa_rwa` the election has already set. The election can still move U-TREA,
+    through the floor-aware facility-share resolver, which picks a shared facility's
+    member on whole-book totals that include `x · S-TREA` (see
+    [`configuration.md`](../../api/configuration.md#sa_investment_grade_permission-and-output_floor_investment_grade_election)).
+    OF 08.01 row 0200 ("of which: investment grade") follows the election, as Annex II
+    requires, and holds only the legs whose output-floor weight the assessment sets —
+    not an SME (Art. 122(11)), subordinated (Art. 133(5)) or defaulted (Art. 127) leg
+    assessed investment grade (see the
+    [COREP OF 08.01 notes](../../features/corep-reporting.md)). See the
     [B31 SA spec](sa-risk-weights.md#output-floor-election-for-unrated-corporates-art-12278)
-    for the full treatment including Art. 122(7) sound-processes obligation.
+    for the full treatment, including the Art. 122(7) sound-processes obligation of an
+    Art. 122(6) permission holder.
 
 ## SA Specialised Lending in S-TREA (Art. 122A–122B, Art. 139(2B))
 

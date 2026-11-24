@@ -234,7 +234,11 @@ from rwa_calc.analysis.recon_registry import (
     LEDGER_CARRIERS_BY_NAME,
     RECONCILABLE_COMPONENTS_BY_NAME,
 )
-from rwa_calc.contracts.edges import LOAN_SPLIT_CARRIERS, REPORTING_CLASS_PRE_DEFAULT_COL
+from rwa_calc.contracts.edges import (
+    INVESTMENT_GRADE_ASSESSED_COL,
+    LOAN_SPLIT_CARRIERS,
+    REPORTING_CLASS_PRE_DEFAULT_COL,
+)
 from rwa_calc.data.schemas import (
     VALID_PROTECTION_TYPES,
     VALID_SL_TYPES,
@@ -839,9 +843,11 @@ LEDGER_ROW_AXIS: Mapping[str, tuple[RowAxisRequirement, ...]] = {
             "graded vs slotting",
         ),
         RowAxisRequirement(("0190",), _needs("exposure_class"), "unrated-corporate memo (B31)"),
+        # Row 0200 reads the engine's Art. 122(8)(b) assessment carrier, not the
+        # raw counterparty flag (reporting/corep/c08.py, P1.475).
         RowAxisRequirement(
             ("0200",),
-            _both(_needs("exposure_class"), _any_of("cp_is_investment_grade", "pd_floored")),
+            _needs("exposure_class", INVESTMENT_GRADE_ASSESSED_COL),
             "unrated investment-grade memo (B31)",
         ),
     ),

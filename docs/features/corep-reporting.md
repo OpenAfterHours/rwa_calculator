@@ -1364,8 +1364,8 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
         exposures within the corporate exposure class without an ECAI assessment, **either**:
 
         - **(a)** assign a flat **100%** SA risk weight (the Art. 122(5) default), or
-        - **(b)** apply the Art. 122(6) split — provided the firm has the prior PRA permission
-          required by Art. 122(6) and gives notice to the PRA before electing this option:
+        - **(b)** apply the Art. 122(6) *weights* — on notice to the PRA; the Art. 122(6)
+          SA permission is not required (`output_floor_investment_grade_election`):
             - **65%** for exposures the firm has assessed as *investment grade*
               (Art. 122(6)(a), conditions in Art. 122(9)–(10))
             - **135%** for exposures assessed as *not investment grade* (Art. 122(6)(b))
@@ -1374,6 +1374,19 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
         into the SA leg of the floor; row **0200** ("of which: investment grade") isolates
         the 65%-weighted subset so supervisors can verify the `0.65 × IG + 1.35 × non-IG`
         split versus the flat-100% alternative.
+
+        Annex II requires row 0200 to be "consistent with approach used for the purpose of
+        calculating the output floor", so the generator reads the engine's sealed
+        `sa_investment_grade_assessed` column, never the raw `cp_is_investment_grade`
+        input. The reading is the weight-governing one: row 0200 holds a leg only where
+        the investment-grade assessment sets its output-floor weight — the 65% under
+        branch (b). A leg assessed investment grade whose weight another rule sets is left
+        out, alike: an SME (Art. 122(11), 85%), a subordinated instrument (Art. 133(5),
+        150% — Art. 112(1)(p), and Art. 122(8) reaches only point (g)) and an exposure in
+        default (Art. 127). Row 0190 still holds the SME leg (on the SME sheet) and the
+        subordinated leg. Under branch (a) no leg's weight is set by the assessment and
+        row 0200 is **left unreported** (an empty cell, not a zero); row 0190 is populated
+        under either branch (P1.475).
 
         These rows feed the S-TREA term in the output floor formula
         `max(U-TREA, x · S-TREA + OF-ADJ)` (see

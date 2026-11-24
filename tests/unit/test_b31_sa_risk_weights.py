@@ -2702,8 +2702,10 @@ class TestInstitutionShortTermOriginalMaturity:
 class TestB31InvestmentGradeCorporate:
     """Basel 3.1 investment-grade corporate risk weight: 65%.
 
-    Qualifying: publicly traded + investment grade external rating.
-    Requires Art. 122(6) IG assessment election (use_investment_grade_assessment=True).
+    Qualifying: unrated corporate the firm assesses as investment grade
+    (Art. 122(9)-(10)). Requires the Art. 122(6) PRA permission
+    (``sa_investment_grade_permission=True``) — these are SA-branch rows, so the
+    Art. 122(8)(b) output-floor election does not reach them.
 
     Why this matters:
         The 65% weight (vs 100% unrated default) significantly reduces SA RWA
@@ -2715,10 +2717,10 @@ class TestB31InvestmentGradeCorporate:
 
     @pytest.fixture
     def ig_config(self) -> CalculationConfig:
-        """B31 config with investment-grade assessment elected."""
+        """B31 config holding the Art. 122(6) investment-grade permission."""
         return CalculationConfig.basel_3_1(
             reporting_date=date(2027, 6, 30),
-            use_investment_grade_assessment=True,
+            sa_investment_grade_permission=True,
         )
 
     def test_investment_grade_65pct(
@@ -2818,10 +2820,10 @@ class TestB31NonInvestmentGradeCorporate:
 
     @pytest.fixture
     def ig_config(self) -> CalculationConfig:
-        """B31 config with investment-grade assessment elected."""
+        """B31 config holding the Art. 122(6) investment-grade permission."""
         return CalculationConfig.basel_3_1(
             reporting_date=date(2027, 6, 30),
-            use_investment_grade_assessment=True,
+            sa_investment_grade_permission=True,
         )
 
     def test_non_ig_corporate_135pct(
@@ -2865,7 +2867,7 @@ class TestB31NonInvestmentGradeCorporate:
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """IG flag is ignored when assessment is not active — gets 100%."""
+        """IG flag is ignored without the Art. 122(6) permission — gets 100%."""
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("2000000"),
@@ -2875,8 +2877,37 @@ class TestB31NonInvestmentGradeCorporate:
             config=b31_config,
         )
 
-        # Without use_investment_grade_assessment=True, all unrated corporates → 100%
+        # Without the Art. 122(6) permission, all unrated corporates → 100% (Art. 122(5))
         assert float(result["risk_weight"]) == pytest.approx(1.00)
+
+    def test_floor_election_alone_leaves_sa_rows_at_100pct(
+        self,
+        sa_calculator: SACalculator,
+    ) -> None:
+        """The Art. 122(8)(b) floor election is not the Art. 122(6) permission.
+
+        An SA-branch row of a firm that has given the (8)(b) notice but holds no
+        (6) permission takes the Art. 122(5) 100%, IG-assessed or not (P1.475).
+        """
+        config = CalculationConfig.basel_3_1(
+            reporting_date=date(2027, 6, 30),
+            output_floor_investment_grade_election=True,
+        )
+        weights = [
+            float(
+                calculate_single_sa_exposure(
+                    sa_calculator,
+                    ead=Decimal("2000000"),
+                    exposure_class="corporate",
+                    cqs=None,
+                    is_investment_grade=is_ig,
+                    config=config,
+                )["risk_weight"]
+            )
+            for is_ig in (True, False)
+        ]
+
+        assert weights == pytest.approx([1.00, 1.00])
 
     def test_non_ig_gets_100pct_without_assessment(
         self,

@@ -71,11 +71,9 @@ Cell semantics (recorded decisions, this slice):
   rather than an oversight: it is a number-changing change to a template whose
   dependents are the ``boe_b0752`` / ``boe_b0814`` families, which reach every
   column C 08.01 moves (measured — see the C 08.02 bullet below).
-  MATURITY IS THE ONE THAT HAS NOT CHANGED: ``irb_maturity_m`` has no post-CRM
-  twin, because substitution does not substitute M, so col 0250 and C 08.03
-  col 0080 both carry the OBLIGOR's maturity on whichever sheet the leg lands.
-  Cost, on the record: a fully-outflowed sheet reports a real LGD and maturity
-  against ``0110 = 0``.
+  MATURITY HAS NOT CHANGED: ``irb_maturity_m`` has no post-CRM twin (substitution
+  does not substitute M), so col 0250 and C 08.03 col 0080 carry the OBLIGOR's M
+  wherever the leg lands; a fully-outflowed sheet reports LGD and M against 0110 = 0.
   Expected-loss cols 0280-0282 are different: the engine seals their post-CRM
   amounts after guarantee substitution, so they follow the POST population and
   tie to C 08.03 col 0100 (``boe_b0739`` / ``v09777_m``). EBA Q&A 2017_3509
@@ -369,6 +367,7 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.contracts.edges import INVESTMENT_GRADE_ASSESSED_COL
 from rwa_calc.reporting.cellspec import (
     CellSpec,
     Count,
@@ -612,11 +611,11 @@ def _prepare(data: pl.DataFrame, cols: set[str]) -> pl.DataFrame:
         )
         unrated = pl.col("sa_cqs").is_null() if "sa_cqs" in cols else pl.lit(value=True)
         exprs.append((corp & unrated).alias("c08_unrated_corp"))
-        if "cp_is_investment_grade" in cols:
-            ig = pl.col("cp_is_investment_grade").fill_null(value=False) == True  # noqa: E712
+        # Row 0200: legs Art. 122(8)(b) weights at the para 6(a) 65% (Annex II: "consistent
+        # with" the floor approach); never where para 11, Art. 133 or Art. 127 sets the weight.
+        if INVESTMENT_GRADE_ASSESSED_COL in cols:
+            ig = pl.col(INVESTMENT_GRADE_ASSESSED_COL).fill_null(value=False)
             exprs.append((corp & unrated & ig).alias("c08_unrated_ig"))
-        elif "pd_floored" in cols:
-            exprs.append((corp & unrated & (pl.col("pd_floored") <= 0.005)).alias("c08_unrated_ig"))
 
     # Col 0280/0282 expected-loss coalesce (R10a). The formula-IRB post-model-
     # adjustment EL columns (``el_pre_adjustment`` / ``el_after_adjustment``,

@@ -43,13 +43,14 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.contracts.edges import INVESTMENT_GRADE_ASSESSED_COL
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import (
     CLASSIFIER_OUTPUT_SCHEMA,
     CRM_OUTPUT_SCHEMA,
     HIERARCHY_OUTPUT_SCHEMA,
 )
-from rwa_calc.domain.enums import CQS, EquityType
+from rwa_calc.domain.enums import CQS, ApproachType, EquityType
 from rwa_calc.engine.crm.own_funds_lines import own_funds_line_expr
 from rwa_calc.engine.eu_sovereign import (
     build_eu_domestic_currency_expr,
@@ -119,6 +120,10 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     get_combined_cqs_risk_weights,
 )
 from rwa_calc.engine.sa.guarantor_rw import build_institution_guarantor_rw_expr
+from rwa_calc.engine.sa.investment_grade import (
+    investment_grade_assessment_expr,
+    investment_grade_weight_governed_expr,
+)
 from rwa_calc.engine.sa.issuer_rating_seniority import (
     apply_issuer_rating_seniority_test,
     crr_sme_managed_as_retail_expr,
@@ -207,6 +212,11 @@ SA_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     # threshold must supply it explicitly.
     "ead_gross": ColumnSpec(pl.Float64, required=False),
     "risk_type": ColumnSpec(pl.String, required=False),  # CCR failed-trade tag (P8.43)
+    # A frame with no ``approach`` reaches here only from ``calculate_branch`` on
+    # pre-filtered SA rows (production frames always carry it), so it IS SA. The
+    # investment-grade step reads it to tell an Art. 122(6) row from an
+    # Art. 122(8) one (engine/sa/investment_grade.py, P1.475).
+    "approach": ColumnSpec(pl.String, default=ApproachType.SA.value, required=False),
 }
 
 
@@ -410,6 +420,16 @@ def apply_risk_weights(
     # the base RW when-chain so defaulted exposures have their non-defaulted
     # base RW available for blending with collateral coverage.
     exposures = _apply_defaulted_risk_weight(exposures, config, pack=resolved_pack)
+
+    # The Basel 3.1 investment-grade carrier records the weight paragraph 6 set,
+    # so it is narrowed only now that Art. 140(2) and Art. 127 have run: a
+    # subordinated, defaulted or contaminated leg carries null (P1.475).
+    if resolved_pack.feature("sa_revised_risk_weight_overrides"):
+        exposures = exposures.with_columns(
+            investment_grade_weight_governed_expr(
+                _SA_B31_RW["corporate_ig"], _SA_B31_RW["corporate_nig"]
+            ).alias(INVESTMENT_GRADE_ASSESSED_COL)
+        )
 
     # Drop temporary columns used only during risk-weight application.
     schema_names = exposures.collect_schema().names()
@@ -1174,21 +1194,20 @@ def _apply_b31_risk_weight_overrides(
         & ~uc.str.contains("SME", literal=True)
         & (pl.col("cqs").is_null() | (pl.col("cqs") <= 0))
     )
+    # Investment-grade assessment: Art. 122(6) permission on SA-branch rows,
+    # Art. 122(8)(b) floor election on IRB-approach rows (P1.475) — see
+    # engine/sa/investment_grade.py. IG -> 65%, non-IG -> 135%, null -> neither.
+    # An earlier branch above may still win; apply_risk_weights then nulls it.
+    exposures = exposures.with_columns(
+        investment_grade_assessment_expr(config, is_unrated_corporate).alias(
+            INVESTMENT_GRADE_ASSESSED_COL
+        )
+    )
+    ig_assessed = pl.col(INVESTMENT_GRADE_ASSESSED_COL)
     chain = (
-        chain
-        # Investment-grade assessment (Art. 122(6)/(8)) — only active under
-        # use_investment_grade_assessment. IG -> 65%, non-IG -> 135%.
-        .when(
-            pl.lit(config.use_investment_grade_assessment)
-            & is_unrated_corporate
-            & (pl.col("cp_is_investment_grade").fill_null(False) == True)  # noqa: E712
-        )
+        chain.when(ig_assessed == True)  # noqa: E712
         .then(pl.lit(_SA_B31_RW["corporate_ig"]))
-        .when(
-            pl.lit(config.use_investment_grade_assessment)
-            & is_unrated_corporate
-            & (pl.col("cp_is_investment_grade").fill_null(False) != True)  # noqa: E712
-        )
+        .when(ig_assessed == False)  # noqa: E712
         .then(pl.lit(_SA_B31_RW["corporate_nig"]))
         # SME managed as retail: 75% (Art. 123, aggregated <= EUR 1m).
         .when(

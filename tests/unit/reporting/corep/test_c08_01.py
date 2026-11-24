@@ -206,6 +206,11 @@ def _irb_results_b31_unrated_corporates() -> pl.LazyFrame:
 
     Corporate class: 4 rows — 2 rated (sa_cqs present), 2 unrated (sa_cqs null)
     Of the 2 unrated: 1 investment grade, 1 non-investment grade
+
+    ``sa_investment_grade_assessed`` is what an Art. 122(8)(b) run seals on the
+    two unrated legs (True / False); row 0200 reads it, not the raw
+    ``cp_is_investment_grade`` input (P1.475,
+    ``test_c08_01_investment_grade_row.py``).
     """
     return pl.LazyFrame(
         {
@@ -245,6 +250,7 @@ def _irb_results_b31_unrated_corporates() -> pl.LazyFrame:
             "counterparty_reference": ["CP_A", "CP_B", "CP_C", "CP_D"],
             "sa_cqs": [2, 3, None, None],
             "cp_is_investment_grade": [None, None, True, False],
+            "sa_investment_grade_assessed": [None, None, True, False],
         }
     )
 

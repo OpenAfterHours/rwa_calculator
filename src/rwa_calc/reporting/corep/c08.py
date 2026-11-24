@@ -1781,15 +1781,13 @@ def _c08_06_row_defs(framework: str) -> list[tuple[str, str, bool | None, str]]:
 def _c08_06_row_preds(
     row_defs: list[tuple[str, str, bool | None, str]], cols: set[str]
 ) -> dict[str, RowPredicate]:
-    """Each row's category x maturity subset predicate (the asymmetric
-    maturity fallback preserved).
+    """Each row's category x maturity subset predicate (asymmetric fallback kept).
 
-    The maturity band is ``kernel.slotting_maturity_band``: a Basel 3.1
-    short-dated 'Strong' / 'Good' leg without the Art. 153(5)(d) election is
-    weighted on column B / D and belongs on the long-band row (70% / 90%), not
-    the 50% / 70% one; every other short-dated leg — CRR, the election, or a
-    'Satisfactory' / 'Weak' / 'Default' grade, whose Table A column is the same
-    on both rows — sits on its < 2.5-year row."""
+    The band is ``kernel.slotting_maturity_band``: a Basel 3.1 short-dated
+    'Strong' / 'Good' leg without the Art. 153(5)(d) election is weighted on
+    column B / D and sits on the long-band row; every other short-dated leg (CRR,
+    the election, or a grade whose Table A column is the same on both rows) sits
+    on its < 2.5-year row."""
     band_col = slotting_maturity_band(cols)
     return {
         row_def[0]: _c08_06_row_pred(row_def[1], row_def[2], band_col=band_col)

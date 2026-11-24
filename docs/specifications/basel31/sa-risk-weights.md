@@ -303,8 +303,10 @@ The trigger for the 20% PSE risk weight is therefore **"sovereign RW = 0%" (i.e.
 !!! info "Framework delta vs CRR"
     CRR Art. 116(5) (crr.pdf p. 115) already permitted third-country PSE treatment under paragraph 1 or 2 where competent-authority equivalence applied, with the same Table 2 sovereign-CQS structure (CQS 1 -> 20%). PS1/26 Art. 116(3A) is therefore a **clarification of the redirection mechanism** rather than a new floor: the 20%-when-sovereign-RW-is-0% outcome is structurally identical, but PS1/26 makes the cross-reference explicit by spelling out the substitution of "central government of the UK" -> "central government of the third country" and "UK public sector entities" -> "third country public sector entities". The CRR-side text is documented in the [CRR PSE spec — Sub-treatment 4](../crr/sa-risk-weights.md#sub-treatment-4-third-country-pse-equivalence-art-1165); do not edit it without re-reading CRR Art. 116(5) verbatim.
 
-!!! warning "Art. 116(4)/(5) Not Implemented"
-    Neither the CRR Art. 116(4) guarantee-backed equivalence nor the CRR Art. 116(5) / PS1/26 Art. 116(3A) third-country equivalence is implemented in the SA calculator. PSE exposures are routed solely through Art. 116(1)/(2) Tables 2/2A and the Art. 116(3) short-term preferential. Firms relying on guarantee-backed substitution or third-country equivalence must apply the determination upstream of the engine.
+!!! info "Art. 116(5) implemented — direct and guarantor paths; Art. 116(4) not"
+    The CRR Art. 116(5) / PS1/26 Art. 116(3A) third-country equivalence gate is implemented, regime-invariant, on both paths that weight a PSE: a **direct** exposure (`engine/sa/risk_weights.py`, P1.252) and a PSE **guarantor** (`engine/sa/guarantor_rw.py::build_guarantor_rw_expr`, P1.298), because PS1/26 Art. 235(1)(a) prices the covered part at "the risk weight of a comparable direct exposure to the protection provider". Each reads the PSE's own `country_code` / `is_equivalent_jurisdiction`: a non-GB (or no-country) PSE whose flag is not `True` takes the flat 100% whatever its rating. A null flag raises the **SA011** warning. See the [CRR PSE spec — Sub-treatment 4](../crr/sa-risk-weights.md#sub-treatment-4-third-country-pse-equivalence-art-1165) for the predicates, the guarantor table and the null semantics.
+
+    The CRR Art. 116(4) guarantee-backed equivalence is not implemented, and has no PS1/26 successor (Art. 116(4) is `[Note: Provision left blank]`).
 
 ---
 

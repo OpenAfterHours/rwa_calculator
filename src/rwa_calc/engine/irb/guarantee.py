@@ -45,7 +45,7 @@ from rwa_calc.engine.irb.formulas import (
     _pd_floor_expression,
     firb_supervisory_lgd_values,
 )
-from rwa_calc.engine.sa.guarantor_rw import build_guarantor_rw_expr
+from rwa_calc.engine.sa.guarantor_rw import build_guarantor_rw_expr, ensure_guarantor_rw_columns
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import scalar_value
@@ -352,7 +352,11 @@ def _compute_guarantor_rw_sa(
     the IRB chain's column names — the same branch chain and order as the
     SA-side twin (engine/sa/namespace.py::_build_guarantor_rw_expr). This
     closes the IRB-guarantor PSE / RGLA substitution gap (the recorded
-    Phase 4 fix) plus the IO 0%, named-MDB 0% and MDB Table 2B closures.
+    Phase 4 fix) plus the IO 0%, named-MDB 0% and MDB Table 2B closures, and
+    carries the CRR Art. 116(5) gate on a third-country PSE guarantor's own
+    jurisdiction. ``pse`` is an IRB class in neither shipped permission set (CRR
+    ``full_irb`` has no entry; Basel 3.1 ``full_irb_b31`` pins it to SA), so with
+    them a PSE guarantor always takes this RWSM path.
     """
 
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
@@ -367,15 +371,6 @@ def _compute_guarantor_rw_sa(
             .fill_null("")
             .replace_strict(entity_type_to_sa_class(resolved_pack), default="")
             .alias("guarantor_exposure_class"),
-        )
-    # B31 SCRA dispatch fallback: ensure ``guarantor_scra_grade`` is referenceable
-    # by ``build_institution_guarantor_rw_expr``. The CRM processor populates this
-    # column from counterparties.scra_grade (engine/crm/guarantees.py); fall back
-    # to null for unit tests that construct LazyFrames directly without going
-    # through the CRM join.
-    if "guarantor_scra_grade" not in cols:
-        lf = lf.with_columns(
-            pl.lit(None).cast(pl.String).alias("guarantor_scra_grade"),
         )
 
     _gec = pl.col("guarantor_exposure_class").fill_null("")
@@ -414,14 +409,12 @@ def _compute_guarantor_rw_sa(
         else pl.lit(False)
     )
 
-    # The shared expression's unrated PSE/RGLA fallback reads the guarantor
-    # country column; ensure it is referenceable for direct (non-pipeline)
-    # invocation, mirroring the scra fallback above. The pipeline
-    # always carries it (joined by engine/crm/guarantees.py).
-    if not _has_country:
-        lf = lf.with_columns(
-            pl.lit(None).cast(pl.String).alias("guarantor_country_code"),
-        )
+    # The shared expression reads the guarantor's country (the Art. 116(5) PSE
+    # gate and the unrated PSE/RGLA fallback), equivalence flag (Art. 116(5))
+    # and SCRA grade (B31 unrated institutions). The
+    # CRM guarantee join (engine/crm/guarantees.py) always carries them; inject
+    # typed nulls for a direct (non-pipeline) invocation that skipped it.
+    lf = ensure_guarantor_rw_columns(lf, _irb_schema_names)
 
     return lf.with_columns(
         build_guarantor_rw_expr(
@@ -429,6 +422,7 @@ def _compute_guarantor_rw_sa(
             entity_type_col="guarantor_entity_type",
             cqs_col="guarantor_cqs",
             country_code_col="guarantor_country_code",
+            equivalence_col="guarantor_is_equivalent_jurisdiction",
             scra_grade_col="guarantor_scra_grade",
             is_basel_3_1=resolved_pack.feature("sa_revised_risk_weight_tables"),
             domestic_cgcb_expr=_is_domestic_guarantor,

@@ -639,6 +639,17 @@ ERROR_CIU_HOLDING_CLASS_UNSUPPORTED = "SA008"
 # 123B(1) obliges the institution to know the income currency. One WARNING per
 # run with the count, split by value date.
 ERROR_INCOME_CURRENCY_UNKNOWN = "SA010"
+# A PSE counterparty that is not definitely UK (non-GB, or no country_code) with
+# a NULL is_equivalent_jurisdiction. Null means NOT equivalent, so CRR
+# Art. 116(5)'s "Otherwise ... 100 %" weights every exposure to it AND every
+# guarantee it provides (Art. 235(1) prices the covered part at the guarantor's
+# direct weight) at 100% — for a PSE in an equivalent jurisdiction that left the
+# column unpopulated, a 20% Table 2 / 2A weight becomes 100%. The weight is right
+# on the data supplied; the warning makes the data-migration hazard visible. One
+# WARNING per run with the count, from the classifier's counterparty census
+# (engine/classify/audit.py::collect_input_warnings). An explicit False is a
+# determination, not a gap, and does not count.
+ERROR_PSE_EQUIVALENCE_UNASSERTED = "SA011"
 
 # Supporting factor error codes
 ERROR_SME_MISSING_COUNTERPARTY_REF = "SF001"
@@ -1217,6 +1228,35 @@ def beel_on_non_defaulted_exposure_warning(*, n: int) -> CalculationError:
         ),
         regulatory_reference="PS1/26 Art. 181(1)(h)(ii); CRR Art. 158(5)",
         field_name="beel",
+    )
+
+
+def pse_equivalence_unasserted_warning(*, n: int) -> CalculationError:
+    """Create the SA011 warning for PSE counterparties with no equivalence flag.
+
+    CRR Art. 116(5): a third-country PSE may take the Art. 116(1)/(2) weights
+    only where the Treasury has determined its jurisdiction equivalent;
+    "Otherwise the institutions shall apply a risk weight of 100 %". PS1/26
+    Art. 116(3A) keeps that gate under Basel 3.1. ``is_equivalent_jurisdiction``
+    has no default (null means not equivalent), so the engine applies the 100% to
+    these counterparties as obligors and as guarantors. One aggregate warning
+    carries the count of counterparty rows.
+    """
+    return CalculationError(
+        code=ERROR_PSE_EQUIVALENCE_UNASSERTED,
+        severity=ErrorSeverity.WARNING,
+        category=ErrorCategory.DATA_QUALITY,
+        message=(
+            f"{n} public sector entity counterparty row(s) outside the UK (or with no "
+            "country_code) carry no is_equivalent_jurisdiction. A null flag means no "
+            "Treasury equivalence determination, so CRR Art. 116(5) weights every "
+            "exposure to them, and every guarantee they provide, at 100% (in place of "
+            "the Art. 116(1)/(2) Table 2 / 2A weight). Set is_equivalent_jurisdiction "
+            "to True for PSEs in an equivalent jurisdiction, or to False to confirm "
+            "the 100%."
+        ),
+        regulatory_reference="CRR Art. 116(5) / PRA PS1/26 Art. 116(3A)",
+        field_name="is_equivalent_jurisdiction",
     )
 
 

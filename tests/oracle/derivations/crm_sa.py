@@ -423,8 +423,14 @@ def _guaranteed(
     guarantor_rw: float | None,
     amount_covered: float,
     currency: str = "GBP",
+    guarantor_country_code: str | None = None,
 ) -> dict[str, Any]:
     """One Art. 235(1) risk-weight substitution oracle.
+
+    ``guarantor_country_code`` is recorded on the guarantor only when given. It
+    is load-bearing for a public sector entity: Art. 116(5) weights a
+    third-country PSE with no equivalence determination at 100%, and the engine
+    reads a missing country as not UK.
 
     ``guarantor_rw`` of None means the protection is not recognised -- either the
     provider is outside the Art. 201(1) list, or Art. 193(1) declines a
@@ -455,7 +461,7 @@ def _guaranteed(
         risk_weight=rwea / E,
         inputs=_obligor(
             guarantees=[{"amount_covered": amount_covered, "currency": currency}],
-            guarantors=[{"ref": "GTOR001", "entity_type": entity_type, "cqs": guarantor_cqs}],
+            guarantors=[_guarantor(entity_type, guarantor_cqs, guarantor_country_code)],
         ),
         intermediate={
             "protection_value_after_fx_G_star": g_star,
@@ -465,6 +471,14 @@ def _guaranteed(
         rwa=rwea,
         extra_expected={"ead": E},
     )
+
+
+def _guarantor(entity_type: str, cqs: int | None, country_code: str | None) -> dict[str, Any]:
+    """The one protection provider of a ``_guaranteed`` oracle."""
+    guarantor: dict[str, Any] = {"ref": "GTOR001", "entity_type": entity_type, "cqs": cqs}
+    if country_code is not None:
+        guarantor["country_code"] = country_code
+    return guarantor
 
 
 # -----------------------------------------------------------------------------
@@ -1059,11 +1073,14 @@ def guarantees() -> list[dict[str, Any]]:
             "ORC-265",
             "CRR Art. 201(1)(e): a public sector entity whose claims are treated "
             "under Art. 116 is an eligible protection provider; Art. 116(2) "
-            "weights it as an institution, so CQS 1 carries 20%",
+            "weights a UK one as an institution, so CQS 1 carries 20%. The "
+            "guarantor is UK: Art. 116(5) would weight a third-country PSE with "
+            "no equivalence determination at 100%",
             entity_type="pse_sovereign",
             guarantor_cqs=1,
             guarantor_rw=_INSTITUTION_RW[1],
             amount_covered=G,
+            guarantor_country_code="GB",
         ),
         _guaranteed(
             "ORC-266",

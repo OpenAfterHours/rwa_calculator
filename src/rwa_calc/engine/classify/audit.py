@@ -12,9 +12,10 @@ Key responsibilities:
   status decided by the consolidated group), CLS015 (Basel 3.1 SME turnover
   unknown), CLS008 (null corporate group annual_revenue under Basel 3.1,
   Art. 147A(1)(d) conservatism), CLS011 (a group-revenue roll-up that forces
-  F-IRB, Art. 147(4C)(b)(ii)) and CLS013 (a null counterparty ``entity_type``,
-  Art. 112 class undeterminable — RC-12) — one collect over the counterparty
-  lookup.
+  F-IRB, Art. 147(4C)(b)(ii)), CLS013 (a null counterparty ``entity_type``,
+  Art. 112 class undeterminable — RC-12) and SA011 (a non-UK PSE with no
+  ``is_equivalent_jurisdiction``, weighted at the Art. 116(5) 100% as obligor
+  and as guarantor) — one collect over the counterparty lookup.
 - ``collect_classified_frame_warnings``: the row-count roll-ups over the
   materialised classified frame, from ONE collect — DQ008 for
   ``is_defaulted=False ∧ beel>0`` rows, CLS010 for revolving retail rows a
@@ -48,6 +49,7 @@ References:
 - PRA PS1/26 Art. 122B(2)(c)/(3): project-finance phase not demonstrated (SA006)
 - CRR / PS1/26 Art. 153(5): slotting weight by the assigned grade (CLS012)
 - CRR Art. 112 / PS1/26 Art. 112(2) Table A2: exposure-class assignment (CLS013)
+- CRR Art. 116(5) / PS1/26 Art. 116(3A): third-country PSE equivalence (SA011)
 """
 
 from __future__ import annotations
@@ -75,6 +77,7 @@ from rwa_calc.contracts.errors import (
     ltv_derived_warning,
     no_property_evidence_warning,
     pf_phase_unevidenced_warning,
+    pse_equivalence_unasserted_warning,
     slotting_category_missing_warning,
 )
 from rwa_calc.domain.enums import ApproachType, ExposureClass, SlottingCategory
@@ -89,6 +92,8 @@ from rwa_calc.engine.classify.subtypes import (
     qrre_undrawn_cancellable_expr,
     qrre_unsecured_expr,
 )
+from rwa_calc.engine.entity_class_maps import entity_types_by_sa_class
+from rwa_calc.engine.sa.jurisdiction import pse_equivalence_unasserted_expr
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.rulebook import RulepackV0
 
@@ -144,6 +149,16 @@ def collect_input_warnings(
       exposure class; its exposures fall to OTHER (100% SA) and its rating is
       not read. The warning names the first few counterparties; the fallback
       class is unchanged.
+    - **Third-country PSE equivalence unasserted** (SA011, CRR Art. 116(5),
+      BOTH regimes): a PSE counterparty that is not definitely UK and whose
+      ``is_equivalent_jurisdiction`` is null. The engine weights it at the
+      Art. 116(5) 100% wherever it appears — as an obligor
+      (``sa/risk_weights.py``) and as a guarantor (``sa/guarantor_rw.py``) —
+      which is right on the data supplied but turns a 20% Table 2 / 2A weight
+      into 100% for an equivalent jurisdiction whose flag was never populated.
+      Counted on the counterparty lookup because the guarantor IS a
+      counterparty row, so one census covers both uses; an explicit False is a
+      determination and does not count.
 
     Column-absence warnings (the historical CLS005 / CLS007) are gone: the
     counterparty lookup is sealed against ``CP_LOOKUP_COUNTERPARTIES_EDGE``, so
@@ -159,9 +174,16 @@ def collect_input_warnings(
     # CLS013 rides the same select: its count plus the first few references,
     # so the message can name rows without a second collect.
     is_null_entity_type = pl.col("entity_type").is_null()
+    # SA011 rides it too: PSE rows (the run pack's SA class map) whose
+    # Art. 116(5) gate binds only because no equivalence flag was supplied.
+    pse_types = list(entity_types_by_sa_class(resolved_pack).get(ExposureClass.PSE.value, ()))
+    pse_unasserted = pl.col("entity_type").str.to_lowercase().is_in(
+        pse_types
+    ) & pse_equivalence_unasserted_expr("country_code", "is_equivalent_jurisdiction")
     counts = (
         counterparties.select(
             *[flag.sum().alias(code) for code, flag in filters.items()],
+            pse_unasserted.sum().alias("_pse_equivalence_unasserted"),
             is_null_entity_type.sum().alias("_null_entity_type"),
             pl.col("counterparty_reference")
             .filter(is_null_entity_type)
@@ -175,6 +197,9 @@ def collect_input_warnings(
     errors = _null_entity_type_warnings(
         counts.pop("_null_entity_type"), list(counts.pop("_null_entity_type_refs"))
     )
+    pse_unasserted_count = counts.pop("_pse_equivalence_unasserted")
+    if pse_unasserted_count:
+        errors.append(pse_equivalence_unasserted_warning(n=pse_unasserted_count))
     errors.extend(
         _input_warning(code, count, config, resolved_pack)
         for code, count in counts.items()

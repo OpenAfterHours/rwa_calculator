@@ -17,12 +17,16 @@ Key responsibilities:
   truth and this module declares zero new regulatory literals.
 - Delegate institution and corporate pricing to
   ``build_institution_guarantor_rw_expr`` / ``build_corporate_guarantor_rw_expr``.
+- Name the optional guarantor carriers the chain reads, and inject them as typed
+  nulls for a frame that skipped the CRM guarantee join
+  (``ensure_guarantor_rw_columns``).
 
 References:
 - CRR Art. 114: central govt / central bank risk weights (incl. 114(4)/(7)
   domestic-currency 0% and the unconditional, regime-invariant 114(3) ECB 0%)
 - CRR Art. 115: RGLA risk weights (115(1)(b) Table 1B own-rating)
-- CRR Art. 116: PSE risk weights (116(2) Table 2A own-rating)
+- CRR Art. 116: PSE risk weights (116(2) Table 2A own-rating), gated by the
+  116(5) third-country equivalence test on the GUARANTOR's own jurisdiction
 - CRR Art. 117: MDB risk weights — 117(1) non-named MDBs take the institution
   treatment (Art. 120/121, no short-term preferential); 117(2) named MDBs 0%.
   The dedicated MDB Table 2B is PRA PS1/26 Art. 117(1)(a)/(b) only.
@@ -51,11 +55,14 @@ from typing import TYPE_CHECKING, cast
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.domain.enums import CQS
 from rwa_calc.engine.sa.central_bank import ecb_rw_expr, is_ecb_expr
+from rwa_calc.engine.sa.jurisdiction import pse_jurisdiction_not_permitted_expr
 from rwa_calc.rulebook.resolve import resolve
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
     from decimal import Decimal
 
 # =============================================================================
@@ -111,7 +118,21 @@ _IO_ZERO_RW: Decimal = _CRR_PACK.scalar_param("io_zero_rw").value
 _MDB_NAMED_ZERO_RW: Decimal = _CRR_PACK.scalar_param("mdb_named_zero_rw").value
 _MDB_UNRATED_RW: Decimal = _CRR_PACK.scalar_param("mdb_unrated_rw").value
 _PSE_UNRATED_DEFAULT_RW: Decimal = _CRR_PACK.scalar_param("pse_unrated_default_rw").value
+_PSE_NON_EQUIVALENT_JURISDICTION_RW: Decimal = _CRR_PACK.scalar_param(
+    "pse_non_equivalent_jurisdiction_rw"
+).value
 _RGLA_DOMESTIC_CURRENCY_RW: Decimal = _CRR_PACK.scalar_param("rgla_domestic_currency_rw").value
+
+# The optional guarantor carriers the builder reads, injected as typed nulls by
+# ``ensure_guarantor_rw_columns`` on a frame that skipped the CRM guarantee join
+# (a hand-built unit frame). Null is the conservative reading of each: no country
+# cannot prove UK-ness; no equivalence flag is NOT equivalent (CRR Art. 116(5)
+# 100% for a non-GB PSE guarantor); no SCRA grade is Grade C.
+_GUARANTOR_RW_OPTIONAL_COLUMNS: dict[str, ColumnSpec] = {
+    "guarantor_country_code": ColumnSpec(pl.String, required=False),
+    "guarantor_is_equivalent_jurisdiction": ColumnSpec(pl.Boolean, required=False),
+    "guarantor_scra_grade": ColumnSpec(pl.String, required=False),
+}
 
 
 @cites("CRR Art. 114")
@@ -119,6 +140,7 @@ _RGLA_DOMESTIC_CURRENCY_RW: Decimal = _CRR_PACK.scalar_param("rgla_domestic_curr
 @cites("PS1/26, paragraph 114")
 @cites("CRR Art. 115")
 @cites("CRR Art. 116")
+@cites("CRR Art. 116(5)")
 @cites("CRR Art. 117")
 @cites("PS1/26, paragraph 117")
 @cites("CRR Art. 118")
@@ -130,6 +152,7 @@ def build_guarantor_rw_expr(
     entity_type_col: str,
     cqs_col: str,
     country_code_col: str,
+    equivalence_col: str,
     scra_grade_col: str,
     is_basel_3_1: bool,
     domestic_cgcb_expr: pl.Expr | None = None,
@@ -157,6 +180,7 @@ def build_guarantor_rw_expr(
         Institution (ECRA / SCRA via build_institution_guarantor_rw_expr —
             short-term Art. 120(2) Table 4 when ``short_term_flag_col``
             evaluates True, otherwise long-term Table 3)
+        Third-country PSE without equivalence (Art. 116(5)) -> 100%
         PSE (Art. 116(2) Table 2A, sovereign-derived for unrated)
         RGLA (Art. 115(1)(b) Table 1B, sovereign-derived for unrated)
         Corporate (Art. 122 corporate CQS table)
@@ -187,6 +211,22 @@ def build_guarantor_rw_expr(
     trade-exposure weights apply to SA-CCR / FCCM trade rows only
     (``engine/sa/ccp_exposures.py``) (P1.396).
 
+    The Art. 116(5) gate leads the PSE branches, as it leads the direct PSE
+    chain in ``sa/risk_weights.py``: CRR Art. 235(1) prices the covered part at
+    "the risk weight of exposures to the protection provider as specified under
+    Chapter 2" and PS1/26 Art. 235(1)(a) at "the risk weight of a comparable
+    direct exposure to the protection provider", and a direct exposure to a
+    third-country PSE with no equivalence determination is weighted "Otherwise
+    ... 100 %" (CRR Art. 116(5), which survives Basel 3.1 — PS1/26 Art. 116(3A)
+    cross-refers to it and Art. 116(5) reads "[Note: Provision not in PRA
+    Rulebook]"). The flat 100% suppresses Table 2A whatever the rating, so it
+    raises a CQS1-3 guarantor to 100% and lowers a CQS6 one from 150%. It tests
+    the GUARANTOR's own ``country_code_col`` / ``equivalence_col``, with the
+    direct path's null rules: a null country cannot prove UK-ness and a null
+    flag is not an assertion. It is PSE-only — Art. 115 has no equivalent
+    residual, so the RGLA branch below, which shares Table 2A's values and the
+    unrated fallback, is deliberately ungated.
+
     The unrated PSE / RGLA fallback is the documented SA-side approximation
     (no guarantor sovereign-CQS join exists in the CRM column production):
     a GB guarantor receives the 20% RGLA / PSE domestic-currency treatment,
@@ -201,7 +241,11 @@ def build_guarantor_rw_expr(
             (``mdb_named``) carve-out.
         cqs_col: Name of the integer guarantor CQS column.
         country_code_col: Name of the guarantor country-code column — drives
-            the unrated PSE / RGLA GB-vs-other approximation.
+            the Art. 116(5) gate and the unrated PSE / RGLA GB-vs-other
+            approximation.
+        equivalence_col: Name of the guarantor's Boolean
+            ``is_equivalent_jurisdiction`` carrier (null = not equivalent),
+            read by the Art. 116(5) PSE gate only.
         scra_grade_col: Name of the guarantor SCRA-grade column threaded
             into ``build_institution_guarantor_rw_expr`` for the B31 unrated
             institution dispatch.
@@ -298,6 +342,14 @@ def build_guarantor_rw_expr(
                 scra_grade_col=scra_grade_col,
             )
         )
+        # Art. 116(5): a third-country PSE guarantor with no equivalence
+        # determination is a 100% direct exposure, so it substitutes at 100%
+        # whatever its rating. Must precede the Table 2A branch below; keyed on
+        # the GUARANTOR's jurisdiction columns, never the obligor's cp_* ones.
+        .when(
+            (gec == "pse") & pse_jurisdiction_not_permitted_expr(country_code_col, equivalence_col)
+        )
+        .then(pl.lit(float(_PSE_NON_EQUIVALENT_JURISDICTION_RW)))
         # PSE guarantors — Art. 116(2) Table 2A for rated, sovereign-derived for unrated.
         .when(gec == "pse")
         .then(
@@ -325,6 +377,20 @@ def build_guarantor_rw_expr(
         .then(build_corporate_guarantor_rw_expr(cqs_col, is_basel_3_1))
         .otherwise(pl.lit(None).cast(pl.Float64))
     )
+
+
+def ensure_guarantor_rw_columns(lf: pl.LazyFrame, present: Collection[str]) -> pl.LazyFrame:
+    """Inject, as typed nulls, the optional guarantor carriers the builder reads.
+
+    The CRM guarantee join (``engine/crm/guarantees.py``) emits every one of them
+    on a production frame; a frame that skipped it — a unit test's hand-built
+    frame, a direct calculator invocation — may lack them. Both callers of
+    ``build_guarantor_rw_expr`` (the SA and the IRB substitution paths) call this
+    first so the chain never references a missing column, and an ABSENT carrier
+    reads exactly like a NULL one. ``present`` is the caller's already-resolved
+    column list.
+    """
+    return ensure_columns(lf, _GUARANTOR_RW_OPTIONAL_COLUMNS, present=present)
 
 
 @cites("CRR Art. 119")

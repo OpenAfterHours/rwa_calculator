@@ -405,9 +405,10 @@ def run_crm_sa(
 
     ``collateral`` / ``guarantees`` are lists of partial rows merged onto
     ``_COLLATERAL_DEFAULTS`` / ``_GUARANTEE_DEFAULTS``. ``guarantors`` describes
-    the protection providers (``ref``, ``entity_type``, ``cqs``) and becomes the
+    the protection providers (``ref``, ``entity_type``, ``cqs``, and optionally
+    ``country_code`` / ``is_equivalent_jurisdiction``) and becomes the
     ``CounterpartyLookup`` the guarantee substitution resolves the guarantor's
-    class and CQS through.
+    class, CQS and jurisdiction through.
 
     ``exposure_maturity_years`` is a driver-level parameter, not a column: the
     articles speak in maturities and the engine's Art. 238 gate reads a Date, so
@@ -930,19 +931,37 @@ def _guarantor_lookup(guarantors: list[dict[str, Any]] | None) -> Any:
 
     The obligor is always the unrated corporate ``CP001``; each guarantor
     contributes its ``entity_type`` (which Art. 201 eligibility and the
-    guarantor risk-weight lookup both key on) and its ``cqs``.
+    guarantor risk-weight lookup both key on), its ``cqs``, and optionally its
+    ``country_code`` and ``is_equivalent_jurisdiction`` — the jurisdiction the
+    CRR Art. 116(5) gate tests for a PSE guarantor. Both default to null, which
+    that gate reads as a third-country PSE with no equivalence determination
+    (100%), so a PSE oracle that means a UK guarantor must say ``"GB"``.
     """
     refs = ["CP001"]
     types = ["corporate"]
     cqs: list[int | None] = [None]
+    countries: list[str | None] = [None]
+    equivalent: list[bool | None] = [None]
     for guarantor in guarantors or []:
         refs.append(guarantor["ref"])
         types.append(guarantor["entity_type"])
         cqs.append(guarantor.get("cqs"))
+        countries.append(guarantor.get("country_code"))
+        equivalent.append(guarantor.get("is_equivalent_jurisdiction"))
     return make_counterparty_lookup(
         counterparties=pl.LazyFrame(
-            {"counterparty_reference": refs, "entity_type": types},
-            schema={"counterparty_reference": pl.String(), "entity_type": pl.String()},
+            {
+                "counterparty_reference": refs,
+                "entity_type": types,
+                "country_code": countries,
+                "is_equivalent_jurisdiction": equivalent,
+            },
+            schema={
+                "counterparty_reference": pl.String(),
+                "entity_type": pl.String(),
+                "country_code": pl.String(),
+                "is_equivalent_jurisdiction": pl.Boolean(),
+            },
         ),
         parent_mappings=pl.LazyFrame(
             schema={

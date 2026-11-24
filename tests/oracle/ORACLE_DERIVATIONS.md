@@ -2391,6 +2391,13 @@ eligible; Art. 115(1) weights it as an institution, so CQS 1 → 20%.
 
 **Regulation:** Art. 201(1)(e) makes a public sector entity treated under
 Art. 116 eligible; Art. 116(2) weights it as an institution, so CQS 1 → 20%.
+The guarantor is a **UK** PSE (`country_code = "GB"`). A third-country PSE is
+weighted that way only where its jurisdiction has an equivalence determination:
+"Otherwise the institutions shall apply a risk weight of 100 %" (Art. 116(5)), and
+Art. 235(1) takes "the risk weight of exposures to the protection provider as
+specified under Chapter 2". The input was a guarantor with no country, which
+cannot be shown to be UK; it was corrected (P1.298) because the case means to
+pin Table 2A, not Art. 116(5). The derived value is unchanged.
 **Arithmetic:** `RWEA = 980,000.00`; `RW = 0.98`.
 
 ## ORC-266 — Art. 235(1), named multilateral development bank guarantor (CRR)

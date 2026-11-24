@@ -193,8 +193,11 @@ same population — a 20% displacing a Table 2/2A weight of 50%, 100% or 150%.
     Art. 116(5)'s own residual (100%) governs; a null `country_code` likewise
     cannot prove UK-ness. Only an explicit `True` opens the Art. 116(1)/(2)/(3)
     limbs for a non-GB PSE. UK PSEs never consult the flag, so an entirely UK book
-    needs no data migration — but firms holding third-country PSEs must populate
-    the flag or those exposures will be weighted at 100%.
+    needs no data migration — but firms holding third-country PSEs, as obligors
+    **or as guarantors** (see below), must populate the flag or those exposures
+    and guarantees will be weighted at 100%. Each run that holds such a
+    counterparty raises one **SA011** warning with the count (an explicit `False`
+    is a determination and does not count).
 
 !!! warning "Art. 116(4) Not Implemented — and it has no PS1/26 successor"
     Art. 116(4) competent-authority (guarantee-backed) equivalence — treating a
@@ -213,15 +216,51 @@ same population — a 20% displacing a Table 2/2A weight of 50%, 100% or 150%.
 
     Art. 116(**5**) is now implemented — see the two predicates above.
 
-!!! warning "Guarantor-side Art. 116(5) gate outstanding"
-    The **guarantor** PSE branch (`engine/sa/guarantor_rw.py::build_guarantor_rw_expr`)
-    prices PSE guarantors from Table 2A with a sovereign-derived unrated fallback
-    and does **not** yet apply the Art. 116(5) jurisdiction gate, so a
-    non-equivalent third-country PSE *guarantor* can still confer a 20%/50%
-    substituted weight. Deferred from P1.252: unlike the direct path there is no
-    guarantor-side equivalence column, so the mirror needs a new input threaded
-    through the guarantee join. The Art. 116(3) short-term limb does not arise
-    there (the guarantor branch has no short-term treatment).
+#### Art. 116(5) on a PSE guarantor (P1.298)
+
+A guarantee substitutes the protection provider's **direct** weight for the
+covered part, and that direct weight includes Art. 116(5):
+
+> CRR Art. 235(1): "g the risk weight of exposures to the protection provider as
+> specified under Chapter 2 of this Regulation …"
+>
+> PS1/26 Art. 235(1)(a): "rg = the risk weight of a comparable direct exposure to
+> the protection provider as specified under the Credit Risk: Standardised
+> Approach (CRR) Part and Chapter 2 of Title II of Part Three of CRR."
+
+Art. 201(1)(e) makes a PSE an eligible provider at its Art. 116 weight (PS1/26
+Art. 201(1)(e) lists "public sector entities" unqualified). So the guarantor PSE
+branch of `engine/sa/guarantor_rw.py::build_guarantor_rw_expr` opens with the same
+gate as the direct chain — `pse_jurisdiction_not_permitted_expr`, called on the
+**guarantor's own** `guarantor_country_code` / `guarantor_is_equivalent_jurisdiction`
+— and prices a third-country PSE guarantor with no equivalence determination at
+the flat **100%** before Table 2A is reached. The flag is the guarantor's
+counterparty-row `is_equivalent_jurisdiction`, joined by the CRM guarantee step
+(`engine/crm/guarantees.py::_join_guarantor_counterparty`) and carried on the
+`crm_exit` / `re_split_exit` and calculator edges; no new input column exists.
+
+| Guarantor | Before P1.298 | Now |
+|---|---|---|
+| GB PSE, any CQS | Table 2A | Table 2A (unchanged — flag never consulted) |
+| Non-GB PSE, flag `True` | Table 2A | Table 2A (unchanged) |
+| Non-GB or no-country PSE, flag null / `False`, CQS 1 / 2 / 3 | 20% / 50% / 50% | **100%** |
+| Same, CQS 6 | 150% | **100%** (the rule's "Otherwise … 100 %" is flat) |
+| Same, CQS 4 / 5 / unrated | 100% | 100% |
+
+Both directions follow: a CQS 1-3 guarantee loses its relief, and over an obligor
+weighted 100% or less the strict-`<` benefit test now declines it; a CQS 6
+guarantee becomes beneficial over an obligor weighted above 100%. One gate binds
+both regimes (no pack Feature), and it reaches the IRB path too: `pse` is an IRB
+class in neither shipped permission set (CRR `full_irb` has no entry; Basel 3.1
+`full_irb_b31` pins it to SA), so a PSE guarantor of an IRB exposure is priced on
+the RWSM leg (`engine/irb/guarantee.py::_compute_guarantor_rw_sa`), which
+compiles the same builder — as does the Basel 3.1 output-floor SA-equivalent.
+
+The gate is **PSE-only**. The RGLA branch shares Table 2A's values (Table 1B) and
+the unrated fallback, but Art. 115 has no "Otherwise 100%" residual, so a
+third-country RGLA guarantor keeps its Table 1B weight. The Art. 116(3)
+short-term limb does not arise on the guarantor path, which has no short-term
+treatment.
 
 ## MDB Exposures (CRR Art. 117)
 

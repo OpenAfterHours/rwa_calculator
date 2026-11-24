@@ -98,11 +98,13 @@ def _evaluate_guarantor_rw(
             "guarantor_entity_type": [entity_type],
             "guarantor_cqs": [cqs],
             "guarantor_country_code": ["US"],
+            "guarantor_is_equivalent_jurisdiction": [None],
             "guarantor_scra_grade": [None],
             "guarantor_is_short_term": [short_term],
         },
         schema_overrides={
             "guarantor_cqs": pl.Int8,
+            "guarantor_is_equivalent_jurisdiction": pl.Boolean,
             "guarantor_scra_grade": pl.String,
         },
     )
@@ -111,6 +113,7 @@ def _evaluate_guarantor_rw(
         entity_type_col="guarantor_entity_type",
         cqs_col="guarantor_cqs",
         country_code_col="guarantor_country_code",
+        equivalence_col="guarantor_is_equivalent_jurisdiction",
         scra_grade_col="guarantor_scra_grade",
         is_basel_3_1=is_basel_3_1,
         short_term_flag_col="guarantor_is_short_term",

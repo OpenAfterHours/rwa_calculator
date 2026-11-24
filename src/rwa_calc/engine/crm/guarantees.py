@@ -268,7 +268,7 @@ def _prepare_guarantees(
 def _join_guarantor_counterparty(
     exposures: pl.LazyFrame, counterparty_lookup: pl.LazyFrame
 ) -> tuple[pl.LazyFrame, list[str]]:
-    """Join guarantor entity/country/QCCP/SCRA; also returns the joined column names.
+    """Join guarantor entity/country/equivalence/QCCP/SCRA; also returns the joined names.
 
     ``guarantor_is_natural_person`` and ``guarantor_is_qccp`` are always joined: the
     Art. 201 gate (``guarantor_eligibility``) declines a guarantor whose own
@@ -276,11 +276,23 @@ def _join_guarantor_counterparty(
     books a ``ccp`` guarantor not flagged qualifying as a corporate (Art. 107(2)(b)).
     A lookup without either column (a direct caller's) reads as the schema default,
     False; an unmatched guarantor is null, which the gate reads as not flagged.
+
+    ``guarantor_is_equivalent_jurisdiction`` is always joined too: it is the
+    guarantor's OWN ``is_equivalent_jurisdiction``, which the CRR Art. 116(5)
+    gate in the guarantor PSE branch (``engine/sa/guarantor_rw.py``) reads —
+    Art. 235(1) prices the covered part at the weight of a comparable direct
+    exposure to the protection provider, so the jurisdiction tested is the
+    guarantor's, not the obligor's ``cp_is_equivalent_jurisdiction``. The schema
+    has no default (null means NOT equivalent), so a lookup without the column
+    and an unmatched guarantor both carry a null, never a filled value.
     """
     cp_names = counterparty_lookup.collect_schema().names()
     counterparty_lookup = ensure_columns(
         counterparty_lookup,
-        {name: COUNTERPARTY_SCHEMA[name] for name in ("is_natural_person", "is_qccp")},
+        {
+            name: COUNTERPARTY_SCHEMA[name]
+            for name in ("is_natural_person", "is_qccp", "is_equivalent_jurisdiction")
+        },
         present=cp_names,
     )
     cp_select_cols = [
@@ -288,6 +300,7 @@ def _join_guarantor_counterparty(
         pl.col("entity_type").str.to_lowercase().alias("guarantor_entity_type"),
         pl.col("is_natural_person").alias("guarantor_is_natural_person"),
         pl.col("is_qccp").alias("guarantor_is_qccp"),
+        pl.col("is_equivalent_jurisdiction").alias("guarantor_is_equivalent_jurisdiction"),
     ]
     if "country_code" in cp_names:
         cp_select_cols.append(pl.col("country_code").alias("guarantor_country_code"))

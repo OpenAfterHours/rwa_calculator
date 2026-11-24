@@ -488,15 +488,20 @@ class TestClearedGuarantorClassPricesNoRiskWeight:
                 "guarantor_entity_type": [entity_type],
                 "guarantor_cqs": [1],
                 "guarantor_country_code": ["GB"],
+                "guarantor_is_equivalent_jurisdiction": [None],
                 "guarantor_scra_grade": ["A"],
             },
-            schema_overrides={"guarantor_cqs": pl.Int8},
+            schema_overrides={
+                "guarantor_cqs": pl.Int8,
+                "guarantor_is_equivalent_jurisdiction": pl.Boolean,
+            },
         )
         expr = build_guarantor_rw_expr(
             exposure_class_col="guarantor_exposure_class",
             entity_type_col="guarantor_entity_type",
             cqs_col="guarantor_cqs",
             country_code_col="guarantor_country_code",
+            equivalence_col="guarantor_is_equivalent_jurisdiction",
             scra_grade_col="guarantor_scra_grade",
             is_basel_3_1=is_basel_3_1,
             domestic_cgcb_expr=pl.lit(True),

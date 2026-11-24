@@ -12,7 +12,14 @@ Pipeline position:
 
 Key responsibilities:
 - CRR Art. 116(5): third-country PSE supervisory-equivalence gate, whose
-  residual is a flat 100% risk weight.
+  residual is a flat 100% risk weight. Parameterised on the jurisdiction
+  columns, so the same predicate gates a PSE *obligor* (the ``cp_*`` columns,
+  ``engine/sa/risk_weights.py``) and a PSE *guarantor* (the ``guarantor_*``
+  columns, ``engine/sa/guarantor_rw.py``) — CRR Art. 235(1) / PS1/26
+  Art. 235(1)(a) price the covered part at the weight of a comparable direct
+  exposure to the protection provider, which includes Art. 116(5).
+- The data-quality census behind the SA011 warning: a PSE counterparty whose
+  equivalence the gate denies only because the flag was never supplied.
 - CRR Art. 116(3) / PS1/26 Art. 116(3): the short-term 20% PSE preferential,
   which is available to UK PSEs only.
 
@@ -43,6 +50,7 @@ References:
 - CRR Art. 116(5): third-country PSE equivalence + 100% residual
 - PRA PS1/26 Art. 116(1)-(3) (UK-scoped) and Art. 116(3A) (third-country
   redirect "for the purpose of Article 116(5) of CRR")
+- CRR Art. 235(1) / PRA PS1/26 Art. 235(1)(a): the guarantor's direct weight
 """
 
 from __future__ import annotations
@@ -57,7 +65,10 @@ logger = logging.getLogger(__name__)
 
 @cites("CRR Art. 116(5)")
 @cites("PS1/26, paragraph 116")
-def pse_jurisdiction_not_permitted_expr() -> pl.Expr:
+def pse_jurisdiction_not_permitted_expr(
+    country_col: str = "cp_country_code",
+    equivalence_col: str = "cp_is_equivalent_jurisdiction",
+) -> pl.Expr:
     """Art. 116(5) third-country PSE jurisdiction gate (True = blocked).
 
     CRR Art. 116(5): a third-country PSE may take the Art. 116(1)/(2)
@@ -69,13 +80,25 @@ def pse_jurisdiction_not_permitted_expr() -> pl.Expr:
     Two limbs are permitted (predicate returns False):
       - a UK PSE — Art. 116(1)-(3) apply directly and the equivalence flag is
         never consulted, because a UK PSE is not a third-country PSE;
-      - a third-country PSE whose ``cp_is_equivalent_jurisdiction`` is True.
+      - a third-country PSE whose equivalence flag is True.
+
+    The two columns name WHOSE jurisdiction is tested. The defaults are the
+    obligor's (``cp_country_code`` / ``cp_is_equivalent_jurisdiction``); the
+    guarantor PSE branch passes ``guarantor_country_code`` /
+    ``guarantor_is_equivalent_jurisdiction``. Never let the guarantor branch
+    fall back to the defaults: an obligor and its guarantor are different
+    counterparties, and gating on the obligor would grant or deny the
+    guarantor's 20% on someone else's jurisdiction.
 
     Regime-invariant, so there is no pack Feature and no regime branch: PS1/26
     Art. 116 scopes paragraphs 1-3 to "UK public sector entities" and admits
     third-country PSEs only via Art. 116(3A) "[f]or the purpose of Article
     116(5) of CRR", recording Art. 116(5) itself as "[Note: Provision not in
     PRA Rulebook]" because the Treasury equivalence power stays in CRR.
+
+    Args:
+        country_col: Column holding the PSE's ISO country code.
+        equivalence_col: Column holding the PSE's Boolean equivalence flag.
 
     References:
         CRR Art. 116(5); PRA PS1/26 Art. 116(1)-(3) and Art. 116(3A)
@@ -92,9 +115,29 @@ def pse_jurisdiction_not_permitted_expr() -> pl.Expr:
     # both operands to their declared dtype so an all-null column degrades to a
     # clean False instead of blowing up. This is a dtype coercion, NOT a null
     # fill — the null-VALUE semantics stay with ``is_not_null()`` above.
-    equivalent = pl.col("cp_is_equivalent_jurisdiction").cast(pl.Boolean)
+    equivalent = pl.col(equivalence_col).cast(pl.Boolean)
     equivalence_asserted = equivalent.is_not_null() & equivalent
-    return ~(_is_uk_counterparty_expr() | equivalence_asserted)
+    return ~(_is_uk_counterparty_expr(country_col) | equivalence_asserted)
+
+
+@cites("CRR Art. 116(5)")
+def pse_equivalence_unasserted_expr(country_col: str, equivalence_col: str) -> pl.Expr:
+    """True where the Art. 116(5) gate binds only because no flag was supplied.
+
+    The census behind the SA011 warning. A PSE that is not definitely UK and
+    whose equivalence flag is NULL is weighted at the Art. 116(5) 100% by
+    :func:`pse_jurisdiction_not_permitted_expr` — correctly, since null means not
+    equivalent — but a firm whose PSE sits in an equivalent jurisdiction and has
+    not populated the column takes that 100% in place of a 20% Table 2 / 2A
+    weight. An explicit ``False`` is a determination, not a gap, so it does not
+    count; neither does a UK PSE, which never consults the flag. The caller
+    restricts the rows to PSE counterparties.
+
+    Args:
+        country_col: Column holding the counterparty's ISO country code.
+        equivalence_col: Column holding the counterparty's equivalence flag.
+    """
+    return ~_is_uk_counterparty_expr(country_col) & pl.col(equivalence_col).is_null()
 
 
 @cites("CRR Art. 116(3)")
@@ -134,8 +177,8 @@ def pse_short_term_eligible_expr(short_term_threshold_years: float) -> pl.Expr:
     )
 
 
-def _is_uk_counterparty_expr() -> pl.Expr:
-    """True only where ``cp_country_code`` is definitely ``GB``.
+def _is_uk_counterparty_expr(country_col: str = "cp_country_code") -> pl.Expr:
+    """True only where ``country_col`` (default ``cp_country_code``) is definitely ``GB``.
 
     A null country code cannot prove UK-ness, so ``is_not_null() &`` collapses
     it to a definite False. Do NOT "simplify" this to a bare ``== "GB"``: that
@@ -143,5 +186,5 @@ def _is_uk_counterparty_expr() -> pl.Expr:
     callers' ``|`` / ``~`` and let the enclosing ``when`` fall through to the
     preferential PSE treatments — the anti-conservative direction.
     """
-    country = pl.col("cp_country_code").cast(pl.String)
+    country = pl.col(country_col).cast(pl.String)
     return country.is_not_null() & (country == "GB")

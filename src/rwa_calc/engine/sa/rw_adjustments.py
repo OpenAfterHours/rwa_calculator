@@ -58,7 +58,7 @@ from rwa_calc.engine.eu_sovereign import (
     denomination_currency_expr,
     funding_currency_expr,
 )
-from rwa_calc.engine.sa.guarantor_rw import build_guarantor_rw_expr
+from rwa_calc.engine.sa.guarantor_rw import build_guarantor_rw_expr, ensure_guarantor_rw_columns
 from rwa_calc.engine.sa.risk_weights import _SA_B31_RW
 from rwa_calc.rulebook import RulepackV0
 from rwa_calc.rulebook.compile import scalar_value
@@ -390,9 +390,10 @@ def apply_guarantee_substitution(
         return exposures
 
     # Ensure defensive column fallbacks (guarantor_exposure_class,
-    # guarantor_country_code, guarantor_scra_grade). In
-    # production these are set by the CRM processor; this fallback covers
-    # tests that construct LazyFrames directly and skip the CRM stage.
+    # guarantor_country_code, guarantor_is_equivalent_jurisdiction,
+    # guarantor_scra_grade). In production these are set by the CRM processor;
+    # this fallback covers tests that construct LazyFrames directly and skip the
+    # CRM stage.
     exposures = _ensure_guarantee_substitution_columns(exposures, resolved_pack)
 
     # Preserve pre-CRM risk weight for regulatory reporting (pre-CRM vs
@@ -956,28 +957,24 @@ def _ensure_guarantee_substitution_columns(
     same ``pack`` the caller resolved, so the two paths read one map.
 
     Adds (if absent):
-        guarantor_exposure_class — derived from guarantor_entity_type
-        guarantor_country_code   — null String
-        guarantor_scra_grade     — null String (B31 SCRA dispatch fallback)
+        guarantor_exposure_class              — derived from guarantor_entity_type
+        guarantor_country_code                — null String
+        guarantor_is_equivalent_jurisdiction  — null Boolean (Art. 116(5): null
+                                                means NOT equivalent, so an absent
+                                                flag gates a non-GB PSE to 100%)
+        guarantor_scra_grade                  — null String (B31 SCRA dispatch fallback)
     """
     schema_names = exposures.collect_schema().names()
-    to_add: list[pl.Expr] = []
-
     if "guarantor_exposure_class" not in schema_names:
         from rwa_calc.engine.entity_class_maps import entity_type_to_sa_class
 
-        to_add.append(
+        exposures = exposures.with_columns(
             pl.col("guarantor_entity_type")
             .fill_null("")
             .replace_strict(entity_type_to_sa_class(pack), default="")
             .alias("guarantor_exposure_class")
         )
-    if "guarantor_country_code" not in schema_names:
-        to_add.append(pl.lit(None).cast(pl.String).alias("guarantor_country_code"))
-    if "guarantor_scra_grade" not in schema_names:
-        to_add.append(pl.lit(None).cast(pl.Utf8).alias("guarantor_scra_grade"))
-
-    return exposures.with_columns(to_add) if to_add else exposures
+    return ensure_guarantor_rw_columns(exposures, schema_names)
 
 
 def _build_domestic_guarantor_expr(schema_names: list[str]) -> pl.Expr:
@@ -1026,7 +1023,9 @@ def _build_guarantor_rw_expr(
     Thin wrapper over ``data/tables/guarantor_rw.build_guarantor_rw_expr`` —
     the single rulepack-compiled source for the guarantor branch chain
     (branch order, tables and the unrated PSE/RGLA approximation are
-    documented there). The SA path binds its ``guarantor_*`` column names,
+    documented there). The SA path binds its ``guarantor_*`` column names
+    (the Art. 116(5) PSE gate reads the guarantor's own
+    ``guarantor_country_code`` / ``guarantor_is_equivalent_jurisdiction``),
     the Art. 114(4)/(7) domestic-CGCB currency test, the Art. 120(2)
     short-term institution scratch flag, and the ``guaranteed_portion``
     no-guarantee guard.
@@ -1036,6 +1035,7 @@ def _build_guarantor_rw_expr(
         entity_type_col="guarantor_entity_type",
         cqs_col="guarantor_cqs",
         country_code_col="guarantor_country_code",
+        equivalence_col="guarantor_is_equivalent_jurisdiction",
         scra_grade_col="guarantor_scra_grade",
         is_basel_3_1=is_basel_3_1,
         domestic_cgcb_expr=is_domestic_guarantor,

@@ -36,7 +36,6 @@ from rwa_calc.engine.slotting.transforms import (
     prepare_columns,
 )
 from rwa_calc.rulebook.resolve import resolve
-from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 from tests.fixtures.contract_columns import pad_slotting_branch_defaults as _pad_slotting
 
 _CRR_PACK = resolve("crr", date(2026, 1, 1))
@@ -230,7 +229,7 @@ class TestSlottingTransformsELRateLookup:
     ) -> None:
         """CRR non-HVCRE >= 2.5yr: Strong=0.4%, Good=0.8%, Satisfactory=2.8%, Weak=8%, Default=50%."""
         result = (
-            _pad(basic_slotting_frame)
+            _pad_slotting(basic_slotting_frame)
             .pipe(prepare_columns, crr_config)
             .pipe(apply_slotting_weights, crr_config)
             .pipe(calculate_rwa)
@@ -252,7 +251,7 @@ class TestSlottingTransformsELRateLookup:
             }
         )
         result = (
-            _pad(lf)
+            _pad_slotting(lf)
             .pipe(prepare_columns, crr_config)
             .pipe(apply_slotting_weights, crr_config)
             .pipe(calculate_rwa)
@@ -280,7 +279,7 @@ class TestSlottingTransformsELRateLookup:
             }
         )
         result = (
-            _pad(lf)
+            _pad_slotting(lf)
             .pipe(prepare_columns, crr_config)
             .pipe(apply_slotting_weights, crr_config)
             .pipe(calculate_rwa)
@@ -321,7 +320,7 @@ class TestSlottingTransformsELRateLookup:
             }
         )
         result = (
-            _pad(lf)
+            _pad_slotting(lf)
             .pipe(prepare_columns, b31_config)
             .pipe(apply_slotting_weights, b31_config)
             .pipe(calculate_rwa)
@@ -346,7 +345,7 @@ class TestSlottingELComputation:
     ) -> None:
         """EL = el_rate × EAD for each exposure."""
         result = (
-            _pad(basic_slotting_frame)
+            _pad_slotting(basic_slotting_frame)
             .pipe(prepare_columns, crr_config)
             .pipe(apply_slotting_weights, crr_config)
             .pipe(calculate_rwa)
@@ -373,7 +372,7 @@ class TestSlottingELComputation:
             }
         )
         result = (
-            _pad(lf)
+            _pad_slotting(lf)
             .pipe(prepare_columns, crr_config)
             .pipe(apply_slotting_weights, crr_config)
             .pipe(calculate_rwa)
@@ -395,7 +394,7 @@ class TestSlottingELComputation:
             }
         )
         result = (
-            _pad(lf)
+            _pad_slotting(lf)
             .pipe(prepare_columns, crr_config)
             .pipe(apply_slotting_weights, crr_config)
             .pipe(calculate_rwa)
@@ -427,7 +426,7 @@ class TestSlottingELShortfallExcess:
             }
         )
         result = (
-            _pad(lf)
+            _pad_slotting(lf)
             .pipe(prepare_columns, crr_config)
             .pipe(apply_slotting_weights, crr_config)
             .pipe(calculate_rwa)
@@ -452,7 +451,7 @@ class TestSlottingELShortfallExcess:
             }
         )
         result = (
-            _pad(lf)
+            _pad_slotting(lf)
             .pipe(prepare_columns, crr_config)
             .pipe(apply_slotting_weights, crr_config)
             .pipe(calculate_rwa)
@@ -477,7 +476,7 @@ class TestSlottingELShortfallExcess:
             }
         )
         result = (
-            _pad(lf)
+            _pad_slotting(lf)
             .pipe(prepare_columns, crr_config)
             .pipe(apply_slotting_weights, crr_config)
             .pipe(calculate_rwa)
@@ -540,7 +539,7 @@ class TestSlottingCalculatorBranchEL:
         self, basic_slotting_frame: pl.LazyFrame, crr_config: CalculationConfig
     ) -> None:
         """apply_all() chains EL computation after RWA."""
-        result = _pad(basic_slotting_frame).pipe(apply_all, crr_config).collect()
+        result = _pad_slotting(basic_slotting_frame).pipe(apply_all, crr_config).collect()
 
         assert "expected_loss" in result.columns
         assert "el_shortfall" in result.columns
@@ -688,7 +687,7 @@ def test_crr_el_rate_parametrized(
         }
     )
     result = (
-        _pad(lf)
+        _pad_slotting(lf)
         .pipe(prepare_columns, crr_config)
         .pipe(apply_slotting_weights, crr_config)
         .pipe(calculate_rwa)

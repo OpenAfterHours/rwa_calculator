@@ -73,7 +73,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
-from rwa_calc.domain.enums import CQS
+from rwa_calc.domain.enums import CQS, ExposureClass
 from rwa_calc.engine.irb.guarantee import (
     apply_guarantee_substitution as apply_irb_guarantee_substitution,
 )
@@ -457,7 +457,7 @@ def _irb_guaranteed_row(*, regime: str, guarantor_entity_type: str) -> dict[str,
             "lgd": [0.45],
             "ead_final": [EAD],
             "maturity": [2.5],
-            "exposure_class": ["CORPORATE"],
+            "exposure_class": [ExposureClass.CORPORATE.value],
             "rwa": [IRB_BORROWER_RW * EAD],
             "risk_weight": [IRB_BORROWER_RW],
             "guaranteed_portion": [EAD],

@@ -762,14 +762,22 @@ class TestP1211ClassAxisAgainstTheEnum:
         (``fill_null("").str.to_uppercase()``). A limb written as a bare
         ``is_in`` against the lowercase enum values would be the odd one out in
         its own package, and would silently DENY the factor to an eligible
-        exposure whose class arrived in another case. The estate depends on the
-        tolerance: 273 ``exposure_class="<UPPERCASE>"`` call sites across 21
-        test files, all routed through
-        ``tests/fixtures/single_exposure.py``.
+        exposure whose class arrived in another case.
 
-        Measured: a bare lowercase ``is_in`` returned 1.0 here and broke
-        ``test_crr_sa.py::TestInfrastructureSupportingFactor`` and
-        ``::TestSupportingFactorPriority``.
+        The harness no longer leans on the tolerance: P5.69 lowered the 261
+        upper-case ``exposure_class=`` keyword sites that name an engine-derived
+        class to ``ExposureClass`` values (the other 3 of the 264 build
+        ``CIU_HOLDINGS_SCHEMA`` rows, user input the look-through upper-cases,
+        and are allowlisted), and ``tests/fixtures/single_exposure.py`` now
+        refuses anything else. The tolerance is kept for the sibling consistency above and
+        because hand-built frames still carry upper-case class literals (the
+        shrink-only residue banked in
+        ``tests/contracts/test_harness_exposure_class_domain.py``); this test
+        builds its upper-case row directly with ``member.value.upper()``.
+
+        Measured before P5.69: a bare lowercase ``is_in`` returned 1.0 here and
+        broke ``test_crr_sa.py::TestInfrastructureSupportingFactor`` and
+        ``::TestSupportingFactorPriority``, which then fed upper-case classes.
         """
         lower = _factor_for(_one_row_frame(member.value), crr_config)
         upper = _factor_for(_one_row_frame(member.value.upper()), crr_config)

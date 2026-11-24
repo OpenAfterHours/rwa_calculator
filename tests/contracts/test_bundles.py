@@ -160,7 +160,9 @@ class TestClassifiedExposuresBundle:
     def test_create_with_unified_frame(self):
         """Should create bundle around the single unified frame."""
         bundle = make_classified_bundle(
-            all_exposures=pl.LazyFrame({"ref": ["E1", "E2", "E3"]}),
+            all_exposures=pl.LazyFrame(
+                {"ref": ["E1", "E2", "E3"], "exposure_class": ["corporate"] * 3}
+            ),
         )
 
         assert bundle.all_exposures.collect().shape[0] == 3
@@ -186,7 +188,9 @@ class TestCRMAdjustedBundle:
     def test_create_with_crm_data(self):
         """Should create bundle with CRM-adjusted data."""
         bundle = make_crm_bundle(
-            exposures=pl.LazyFrame({"ref": ["E1"], "final_ead": [1000.0]}),
+            exposures=pl.LazyFrame(
+                {"ref": ["E1"], "final_ead": [1000.0], "exposure_class": ["corporate"]}
+            ),
         )
 
         assert bundle.exposures.collect().shape[0] == 1
@@ -205,7 +209,9 @@ class TestAggregatedResultBundle:
     def test_create_aggregated_results(self):
         """Should create bundle with aggregated results."""
         bundle = make_aggregated_bundle(
-            results=pl.LazyFrame({"rwa_final": [100.0, 150.0]}),
+            results=pl.LazyFrame(
+                {"rwa_final": [100.0, 150.0], "exposure_class": ["corporate", "corporate"]}
+            ),
             sa_results=pl.LazyFrame({"sa_rwa": [100.0]}),
             irb_results=pl.LazyFrame({"irb_rwa": [150.0]}),
         )

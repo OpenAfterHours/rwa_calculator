@@ -64,7 +64,7 @@ class TestCRRDefaultedBackwardCompat:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("5000"),  # 5% of 100k
             provision_deducted=Decimal("0"),
@@ -77,7 +77,7 @@ class TestCRRDefaultedBackwardCompat:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("25000"),  # 25% of 100k
             provision_deducted=Decimal("0"),
@@ -90,7 +90,7 @@ class TestCRRDefaultedBackwardCompat:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             config=crr_config,
         )
@@ -101,7 +101,7 @@ class TestCRRDefaultedBackwardCompat:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("5000"),
             config=crr_config,
@@ -133,7 +133,7 @@ class TestCRRDefaultedNonFinCollateralIgnored:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
             collateral_re_value=Decimal("60000"),
@@ -151,7 +151,7 @@ class TestCRRDefaultedNonFinCollateralIgnored:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
             collateral_re_value=Decimal("120000"),
@@ -166,7 +166,7 @@ class TestCRRDefaultedNonFinCollateralIgnored:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
             collateral_re_value=Decimal("120000"),
@@ -180,7 +180,7 @@ class TestCRRDefaultedNonFinCollateralIgnored:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
             collateral_re_value=Decimal("30000"),
@@ -199,7 +199,7 @@ class TestCRRDefaultedNonFinCollateralIgnored:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("25000"),
             provision_deducted=Decimal("10000"),
@@ -213,7 +213,7 @@ class TestCRRDefaultedNonFinCollateralIgnored:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("200000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
             collateral_re_value=Decimal("100000"),
@@ -235,7 +235,7 @@ class TestB31DefaultedBackwardCompat:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("5000"),
             config=b31_config,
@@ -246,7 +246,7 @@ class TestB31DefaultedBackwardCompat:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("25000"),
             config=b31_config,
@@ -269,7 +269,7 @@ class TestB31DefaultedNonFinCollateralIgnored:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
             collateral_re_value=Decimal("60000"),
@@ -285,7 +285,7 @@ class TestB31DefaultedNonFinCollateralIgnored:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("20000"),
             collateral_re_value=Decimal("80000"),
@@ -307,7 +307,7 @@ class TestB31DefaultedResiRE:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
             collateral_re_value=Decimal("80000"),
@@ -320,7 +320,7 @@ class TestB31DefaultedResiRE:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             is_defaulted=True,
             has_income_cover=True,
             provision_allocated=Decimal("0"),
@@ -337,7 +337,7 @@ class TestB31DefaultedResiRE:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
             config=b31_config,
@@ -365,7 +365,7 @@ class TestDefaultedEdgeCases:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="HIGH_RISK",
+            exposure_class="high_risk",
             is_defaulted=True,
             provision_allocated=Decimal("50000"),
             collateral_re_value=Decimal("80000"),
@@ -378,7 +378,7 @@ class TestDefaultedEdgeCases:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=False,
             collateral_re_value=Decimal("80000"),
             config=crr_config,
@@ -390,7 +390,7 @@ class TestDefaultedEdgeCases:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("50000"),
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
             config=crr_config,
@@ -404,7 +404,7 @@ class TestDefaultedEdgeCases:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("50000"),
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
             collateral_receivables_value=Decimal("20000"),
@@ -417,7 +417,7 @@ class TestDefaultedEdgeCases:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("0"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             collateral_re_value=Decimal("50000"),
             config=crr_config,

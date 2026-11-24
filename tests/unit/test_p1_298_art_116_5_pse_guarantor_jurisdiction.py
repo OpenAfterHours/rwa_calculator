@@ -46,6 +46,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.irb.transforms import (
     apply_guarantee_substitution as irb_apply_guarantee_substitution,
 )
@@ -108,7 +109,7 @@ def _guarantee_frame(
                 "pd": [0.02],
                 "lgd": [0.45],
                 "maturity": [5.0],
-                "exposure_class": ["CORPORATE"],
+                "exposure_class": [ExposureClass.CORPORATE.value],
                 "rwa": [1_000_000.0 * obligor_rw],
             }
         )

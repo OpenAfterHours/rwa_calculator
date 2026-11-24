@@ -416,7 +416,9 @@ def _lgd_floor_blended_expression(
     ``engine/irb/transforms.py``) guards this set. Direct callers that hand-roll
     a narrow frame must therefore supply all ten themselves; the test helpers
     ``tests/fixtures/contract_columns.py::pad_crm_exit_defaults`` and
-    ``tests/fixtures/single_exposure.py`` exist for that and pad every one.
+    ``tests/fixtures/single_exposure.py`` exist for that and pad the rest;
+    ``exposure_class`` is the exception, which ``pad_crm_exit_defaults``
+    refuses to invent (P5.69), so the caller states it.
 
     No fallback is offered deliberately: the only sensible substitute for an
     absent ``ead_for_crm`` is ``ead_gross``, which is precisely the

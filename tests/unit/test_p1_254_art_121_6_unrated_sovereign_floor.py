@@ -79,7 +79,7 @@ class TestArt1216UnratedSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=_EAD,
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=None,
@@ -101,7 +101,7 @@ class TestArt1216UnratedSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=_EAD,
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=1,
@@ -123,7 +123,7 @@ class TestArt1216UnratedSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=_EAD,
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=None,
@@ -151,7 +151,7 @@ class TestArt1216UnratedSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=_EAD,
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=None,

@@ -484,16 +484,24 @@ class TestPDFloorsBasel31:
     def test_b31_null_exposure_class_defaults_to_corporate(
         self, b31_config: CalculationConfig
     ) -> None:
-        """Null exposure_class falls back to corporate floor (0.05%)."""
-        lf = pl.LazyFrame(
-            {
-                "pd": [0.0001],
-                "lgd": [0.40],
-                "ead_final": [1_000_000.0],
-                "exposure_class": [None],
-            }
-        )
-        result = apply_irb_formulas(lf, b31_config).collect()
+        """Null exposure_class falls back to corporate floor (0.05%).
+
+        A null class is a state the classifier never writes, so the harness pad
+        refuses it (P5.69). This test pins the engine's defensive fallback for
+        it on purpose, so it pads a classed row and nulls the class AFTER the
+        pad — the intent is in code, not slipped past a pad as a default.
+        """
+        lf = _pad(
+            pl.LazyFrame(
+                {
+                    "pd": [0.0001],
+                    "lgd": [0.40],
+                    "ead_final": [1_000_000.0],
+                    "exposure_class": ["corporate"],
+                }
+            )
+        ).with_columns(pl.lit(None, dtype=pl.String).alias("exposure_class"))
+        result = _apply_irb_formulas_raw(lf, b31_config).collect()
         assert result["pd_floored"][0] == pytest.approx(0.0005, abs=1e-8)
 
     def test_b31_without_transactor_col_qrre_uses_revolver_floor(

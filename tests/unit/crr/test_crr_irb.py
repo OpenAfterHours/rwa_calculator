@@ -74,28 +74,28 @@ class TestAssetCorrelation:
     def test_corporate_correlation_at_low_pd(self) -> None:
         """Corporate correlation should approach 0.24 at low PD."""
         # At very low PD, f(PD) → 0, so R → 0.24
-        corr = calculate_correlation(pd=0.0001, exposure_class="CORPORATE")
+        corr = calculate_correlation(pd=0.0001, exposure_class="corporate")
         assert corr == pytest.approx(0.24, rel=0.05)
 
     def test_corporate_correlation_at_high_pd(self) -> None:
         """Corporate correlation should approach 0.12 at high PD."""
         # At high PD, f(PD) → 1, so R → 0.12
-        corr = calculate_correlation(pd=0.20, exposure_class="CORPORATE")
+        corr = calculate_correlation(pd=0.20, exposure_class="corporate")
         assert corr == pytest.approx(0.12, rel=0.05)
 
     def test_retail_mortgage_fixed_correlation(self) -> None:
         """Retail mortgage should have fixed 0.15 correlation."""
-        corr = calculate_correlation(pd=0.01, exposure_class="RETAIL_MORTGAGE")
+        corr = calculate_correlation(pd=0.01, exposure_class="retail_mortgage")
         assert corr == pytest.approx(0.15)
 
     def test_qrre_fixed_correlation(self) -> None:
         """QRRE should have fixed 0.04 correlation."""
-        corr = calculate_correlation(pd=0.01, exposure_class="RETAIL_QRRE")
+        corr = calculate_correlation(pd=0.01, exposure_class="retail_qrre")
         assert corr == pytest.approx(0.04)
 
     def test_other_retail_correlation_range(self) -> None:
         """Other retail correlation should be between 0.03 and 0.16."""
-        corr = calculate_correlation(pd=0.05, exposure_class="RETAIL")
+        corr = calculate_correlation(pd=0.05, exposure_class="retail_other")
         assert 0.03 <= corr <= 0.16
 
     def test_sme_correlation_adjustment(self) -> None:
@@ -104,10 +104,10 @@ class TestAssetCorrelation:
         Note: turnover_m is in GBP, converted to EUR using eur_gbp_rate.
         GBP 8.732m = EUR 10m at rate 0.8732
         """
-        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE")
+        base_corr = calculate_correlation(pd=0.01, exposure_class="corporate")
         # GBP 8.732m converts to EUR 10m at rate 0.8732
         sme_corr = calculate_correlation(
-            pd=0.01, exposure_class="CORPORATE", turnover_m=8.732, eur_gbp_rate=0.8732
+            pd=0.01, exposure_class="corporate", turnover_m=8.732, eur_gbp_rate=0.8732
         )
 
         # SME should have lower correlation
@@ -121,10 +121,10 @@ class TestAssetCorrelation:
         Note: turnover_m is in GBP, converted to EUR using eur_gbp_rate.
         GBP 4.366m = EUR 5m at rate 0.8732
         """
-        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE")
+        base_corr = calculate_correlation(pd=0.01, exposure_class="corporate")
         # GBP 4.366m converts to EUR 5m at rate 0.8732
         min_sme_corr = calculate_correlation(
-            pd=0.01, exposure_class="CORPORATE", turnover_m=4.366, eur_gbp_rate=0.8732
+            pd=0.01, exposure_class="corporate", turnover_m=4.366, eur_gbp_rate=0.8732
         )
 
         # At EUR 5m, adjustment = 0.04 * (1 - 0) = 0.04
@@ -136,10 +136,10 @@ class TestAssetCorrelation:
         Note: turnover_m is in GBP, converted to EUR using eur_gbp_rate.
         GBP 87.32m = EUR 100m at rate 0.8732
         """
-        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE")
+        base_corr = calculate_correlation(pd=0.01, exposure_class="corporate")
         # GBP 87.32m converts to EUR 100m at rate 0.8732
         large_corr = calculate_correlation(
-            pd=0.01, exposure_class="CORPORATE", turnover_m=87.32, eur_gbp_rate=0.8732
+            pd=0.01, exposure_class="corporate", turnover_m=87.32, eur_gbp_rate=0.8732
         )
 
         assert base_corr == pytest.approx(large_corr)
@@ -164,13 +164,13 @@ class TestAssetCorrelation:
         # Calculate correlation with EUR/GBP conversion
         corr = calculate_correlation(
             pd=0.01,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             turnover_m=turnover_gbp,
             eur_gbp_rate=eur_gbp_rate,
         )
 
         # Calculate base correlation (no SME adjustment)
-        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE")
+        base_corr = calculate_correlation(pd=0.01, exposure_class="corporate")
 
         # Expected SME adjustment = 0.04 × (1 - (turnover_eur - 5) / 45)
         expected_sme_adj = 0.04 * (1 - (turnover_eur - 5) / 45)
@@ -326,7 +326,7 @@ class TestFIRBSupervisoryLGD:
             ead=Decimal("1000000"),
             pd=Decimal("0.01"),
             lgd=None,  # F-IRB supervisory
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=crr_config,
         )
 
@@ -343,7 +343,7 @@ class TestFIRBSupervisoryLGD:
             ead=Decimal("1000000"),
             pd=Decimal("0.01"),
             lgd=None,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_subordinated=True,
             config=crr_config,
         )
@@ -361,7 +361,7 @@ class TestFIRBSupervisoryLGD:
             ead=Decimal("1000000"),
             pd=Decimal("0.01"),
             lgd=None,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             collateral_type="residential_re",
             config=crr_config,
         )
@@ -388,7 +388,7 @@ class TestPDFloor:
             ead=Decimal("1000000"),
             pd=Decimal("0.0001"),  # 0.01% - below floor
             lgd=Decimal("0.45"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=crr_config,
         )
 
@@ -406,7 +406,7 @@ class TestPDFloor:
             ead=Decimal("1000000"),
             pd=Decimal("0.05"),  # 5% - well above floor
             lgd=Decimal("0.45"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=crr_config,
         )
 
@@ -489,7 +489,7 @@ class TestIRBRWACalculation:
             pd=Decimal("0.02"),
             lgd=Decimal("0.30"),
             maturity=Decimal("5.0"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             config=crr_config,
         )
 
@@ -522,7 +522,7 @@ class TestExpectedLoss:
             ead=Decimal("1000000"),
             pd=Decimal("0.01"),
             lgd=Decimal("0.45"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=crr_config,
         )
 
@@ -648,7 +648,7 @@ class TestCRRVsBasel31:
             ead=Decimal("1000000"),
             pd=Decimal("0.01"),
             lgd=Decimal("0.45"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=crr_config,
         )
 
@@ -665,7 +665,7 @@ class TestCRRVsBasel31:
             ead=Decimal("1000000"),
             pd=Decimal("0.01"),
             lgd=Decimal("0.45"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=basel31_config,
         )
 
@@ -683,7 +683,7 @@ class TestCRRVsBasel31:
             ead=Decimal("1000000"),
             pd=Decimal("0.0001"),
             lgd=Decimal("0.45"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=crr_config,
         )
         result_basel = calculate_single_irb_exposure(
@@ -691,7 +691,7 @@ class TestCRRVsBasel31:
             ead=Decimal("1000000"),
             pd=Decimal("0.0001"),
             lgd=Decimal("0.45"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=basel31_config,
         )
 
@@ -764,11 +764,11 @@ class TestStatsFunctions:
     def test_scalar_correlation_matches_params(self) -> None:
         """Scalar correlation should match expected parameter behavior."""
         # Corporate at low PD should approach 0.24
-        corr_low_pd = calculate_correlation(pd=0.0001, exposure_class="CORPORATE")
+        corr_low_pd = calculate_correlation(pd=0.0001, exposure_class="corporate")
         assert corr_low_pd == pytest.approx(0.24, rel=0.05)
 
         # Retail mortgage should be fixed 0.15
-        corr_mortgage = calculate_correlation(pd=0.01, exposure_class="RETAIL_MORTGAGE")
+        corr_mortgage = calculate_correlation(pd=0.01, exposure_class="retail_mortgage")
         assert corr_mortgage == pytest.approx(0.15)
 
     def test_scalar_maturity_adjustment_consistent(self) -> None:

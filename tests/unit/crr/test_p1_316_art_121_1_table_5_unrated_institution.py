@@ -168,7 +168,7 @@ def _unrated_institution_rw(
     return calculate_single_sa_exposure(
         calculator,
         ead=_EAD,
-        exposure_class="INSTITUTION",
+        exposure_class="institution",
         config=config,
         cqs=own_cqs,
         sovereign_cqs=sovereign_cqs,

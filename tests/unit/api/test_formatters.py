@@ -106,6 +106,7 @@ def error_result_bundle() -> AggregatedResultBundle:
         results=pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
+                "exposure_class": ["corporate"],
                 "ead_final": [1000000.0],
                 "rwa_final": [500000.0],
             }
@@ -238,6 +239,7 @@ class TestResultFormatterFormatResponse:
             results=pl.LazyFrame(
                 {
                     "exposure_reference": ["EXP001"],
+                    "exposure_class": ["corporate"],
                     "ead_final": [1_000_000.0],
                     "rwa_final": [900_000.0],
                 }
@@ -373,6 +375,7 @@ class TestNonFiniteSanitisation:
             results=pl.LazyFrame(
                 {
                     "exposure_reference": ["GOOD", "BAD"],
+                    "exposure_class": ["corporate", "corporate"],
                     "approach_applied": ["advanced_irb", "advanced_irb"],
                     "reporting_method": ["AIRB", "AIRB"],
                     "ead_final": [1_000_000.0, 2_000_000.0],
@@ -401,6 +404,7 @@ class TestNonFiniteSanitisation:
             results=pl.LazyFrame(
                 {
                     "exposure_reference": ["GOOD", "BAD"],
+                    "exposure_class": ["corporate", "corporate"],
                     "approach_applied": ["SA", "SA"],
                     "reporting_method": ["STD", "STD"],
                     "ead_final": [1_000_000.0, float("nan")],
@@ -527,6 +531,7 @@ class TestComputeSummaryLazyApproachStats:
             results=pl.LazyFrame(
                 {
                     "exposure_reference": [f"EXP{i}" for i in range(len(methods))],
+                    "exposure_class": ["corporate"] * len(methods),
                     "reporting_method": methods,
                     "ead_final": ead,
                     "rwa_final": rwa,
@@ -650,6 +655,7 @@ class TestComputeSummaryLazyApproachStats:
             results=pl.LazyFrame(
                 {
                     "exposure_reference": ["EXP001"],
+                    "exposure_class": ["corporate"],
                     "ead_final": [100_000.0],
                     "rwa_final": [50_000.0],
                 }

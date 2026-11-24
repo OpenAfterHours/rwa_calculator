@@ -9,9 +9,29 @@ Usage:
 
     result = calculate_single_sa_exposure(
         sa_calculator, ead=Decimal("1000000"),
-        exposure_class="CORPORATE", cqs=3, config=crr_config,
+        exposure_class=ExposureClass.CORPORATE.value, cqs=3, config=crr_config,
     )
     assert result["risk_weight"] == pytest.approx(1.0)
+
+``exposure_class`` must be an ``ExposureClass`` value — what the classifier
+writes, lowercase and never null (P5.69). The SA, IRB and slotting builders run
+``require_exposure_class_values`` on the frame they hand to ``calculate_branch``
+— the frame itself, not the argument — so a class that is absent, null, an
+upper-case spelling or an invented one is refused before a calculator's
+exact-``.value`` gate can take a branch production never takes. A test that
+deliberately exercises the engine's case tolerance builds its own frame with
+``member.value.upper()``.
+
+The equity builder writes no class, because production does not: the equity
+calculator's input is the raw ``equity_exposures`` table, which carries no
+``exposure_class`` (``RAW_TABLE_EDGES["equity_exposures"]``), and the aggregator
+stamps ``equity`` / ``ciu`` from ``equity_type`` afterwards when the calculator
+has written no class (``engine/aggregator/_equity_prep.py``; the CRR PD/LGD
+branch writes ``"CORPORATE"`` itself, a known production defect declared in
+``KNOWN_PRODUCTION_CLASS_DEFECTS``). Writing one here would hand the
+calculator a state production never does.
+``tests/contracts/test_harness_exposure_class_domain.py`` records the frame each
+builder hands its calculator and holds both rules.
 """
 
 from __future__ import annotations
@@ -30,6 +50,7 @@ from rwa_calc.engine.sa.calculator import SACalculator
 from rwa_calc.engine.slotting.calculator import SlottingCalculator
 from rwa_calc.rulebook.resolve import resolve
 from rwa_calc.rulebook.v0 import RulepackV0
+from tests.fixtures.contract_columns import require_exposure_class_values
 
 
 def calculate_single_sa_exposure(
@@ -78,6 +99,9 @@ def calculate_single_sa_exposure(
     is_qualifying_re: bool | None = None,
 ) -> dict:
     """Calculate SA RWA for a single exposure via calculate_branch.
+
+    ``exposure_class`` must be an ``ExposureClass`` value: the frame handed to
+    ``calculate_branch`` is checked, and a ValueError raised otherwise.
 
     ``funding_currency`` / ``funding_currency_null`` (P1.314, CRR Art. 114(4)/
     (7)/115(5) via Art. 235(3)): "column absent" and "column present and null"
@@ -155,6 +179,7 @@ def calculate_single_sa_exposure(
         schema_overrides["funding_currency"] = pl.String
 
     df = pl.DataFrame(data, schema_overrides=schema_overrides).lazy()
+    require_exposure_class_values(df, "sa_branch")
 
     result = calculator.calculate_branch(df, config).collect().to_dicts()[0]
     # Alias rwa_post_factor as rwa for consistency with other calculators
@@ -170,12 +195,16 @@ def calculate_single_irb_exposure(
     config: CalculationConfig,
     lgd: Decimal | None = None,
     maturity: Decimal = Decimal("2.5"),
-    exposure_class: str = "CORPORATE",
+    exposure_class: str = ExposureClass.CORPORATE.value,
     turnover_m: Decimal | None = None,
     collateral_type: str | None = None,
     is_subordinated: bool = False,
 ) -> dict:
-    """Calculate IRB RWA for a single exposure via calculate_branch."""
+    """Calculate IRB RWA for a single exposure via calculate_branch.
+
+    ``exposure_class`` must be an ``ExposureClass`` value: the frame handed to
+    ``calculate_branch`` is checked, and a ValueError raised otherwise.
+    """
     seniority = "subordinated" if is_subordinated else "senior"
 
     # The IRB branch input is sealed in production (crm_exit edge) — the
@@ -241,6 +270,7 @@ def calculate_single_irb_exposure(
             "sme_size_metric_gbp": pl.Float64,
         },
     ).lazy()
+    require_exposure_class_values(df, "irb_branch")
     return calculator.calculate_branch(df, config).collect().to_dicts()[0]
 
 
@@ -259,7 +289,12 @@ def calculate_single_equity_exposure(
     ciu_look_through_rw: float | None = None,
     ciu_unrestricted_access: bool | None = None,
 ) -> dict:
-    """Calculate equity RWA for a single exposure via calculate_branch."""
+    """Calculate equity RWA for a single exposure via calculate_branch.
+
+    Writes no ``exposure_class``, as production does not: the equity
+    calculator's input is the raw ``equity_exposures`` table, which carries none
+    (see the module docstring). Do not add one.
+    """
     df = pl.DataFrame(
         {
             "exposure_reference": ["SINGLE"],
@@ -297,7 +332,11 @@ def calculate_single_slotting_exposure(
     is_infrastructure: bool | None = None,
     is_sme: bool | None = None,
 ) -> dict:
-    """Calculate slotting RWA for a single exposure via calculate_branch."""
+    """Calculate slotting RWA for a single exposure via calculate_branch.
+
+    The frame handed to ``calculate_branch`` must carry an ``ExposureClass``
+    value (ValueError otherwise) — always ``specialised_lending`` here.
+    """
     # The slotting branch input is sealed in production (crm_exit edge) —
     # contract columns are read directly, so carry them explicitly with
     # production-realistic values.
@@ -327,6 +366,7 @@ def calculate_single_slotting_exposure(
     }
 
     df = pl.DataFrame(data, schema_overrides={"maturity_date": pl.Date}).lazy()
+    require_exposure_class_values(df, "slotting_branch")
 
     return calculator.calculate_branch(df, config).collect().to_dicts()[0]
 

@@ -117,7 +117,7 @@ class TestSovereignRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=1,
             config=crr_config,
         )
@@ -134,7 +134,7 @@ class TestSovereignRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=2,
             config=crr_config,
         )
@@ -151,7 +151,7 @@ class TestSovereignRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=None,
             config=crr_config,
         )
@@ -176,7 +176,7 @@ class TestArticle114_3DomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=2,
             currency="GBP",
             country_code="GB",
@@ -195,7 +195,7 @@ class TestArticle114_3DomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=None,
             currency="GBP",
             country_code="GB",
@@ -214,7 +214,7 @@ class TestArticle114_3DomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=2,
             currency="USD",
             country_code="GB",
@@ -233,7 +233,7 @@ class TestArticle114_3DomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=2,
             currency="GBP",
             country_code="US",
@@ -252,7 +252,7 @@ class TestArticle114_3DomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=2,
             currency="GBP",
             country_code="GB",
@@ -271,7 +271,7 @@ class TestArticle114_3DomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=2,
             country_code="GB",
             config=crr_config,
@@ -288,7 +288,7 @@ class TestArticle114_3DomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=1,
             currency="GBP",
             country_code="GB",
@@ -307,7 +307,7 @@ class TestArticle114_3DomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=3,
             currency="GBP",
             country_code="GB",
@@ -330,7 +330,7 @@ class TestInstitutionRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=1,
             config=crr_config,
         )
@@ -347,7 +347,7 @@ class TestInstitutionRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=2,
             config=crr_config,
         )
@@ -364,7 +364,7 @@ class TestInstitutionRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=None,
             config=crr_config,
         )
@@ -385,7 +385,7 @@ class TestCorporateRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=1,
             config=crr_config,
         )
@@ -402,7 +402,7 @@ class TestCorporateRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=2,
             config=crr_config,
         )
@@ -419,7 +419,7 @@ class TestCorporateRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             config=crr_config,
         )
@@ -445,7 +445,7 @@ class TestRetailRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="RETAIL",
+            exposure_class="retail_other",
             config=crr_config,
         )
 
@@ -461,7 +461,7 @@ class TestRetailRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="RETAIL",
+            exposure_class="retail_other",
             cqs=1,  # Should be ignored
             config=crr_config,
         )
@@ -481,7 +481,7 @@ class TestRetailRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1500000"),
-            exposure_class="RETAIL",
+            exposure_class="retail_other",
             qualifies_as_retail=False,
             config=crr_config,
         )
@@ -573,7 +573,7 @@ class TestCommercialRERiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("600000"),
-            exposure_class="COMMERCIAL_RE",
+            exposure_class="commercial_mortgage",
             ltv=Decimal("0.40"),
             has_income_cover=False,
             config=crr_config,
@@ -593,7 +593,7 @@ class TestCommercialRERiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("600000"),
-            exposure_class="COMMERCIAL_RE",
+            exposure_class="commercial_mortgage",
             ltv=Decimal("0.40"),
             has_income_cover=True,
             config=crr_config,
@@ -873,7 +873,7 @@ class TestSMESupportingFactor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,  # 100% RW
             is_sme=True,
             config=crr_config,
@@ -894,7 +894,7 @@ class TestSMESupportingFactor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_sme=True,
             config=basel31_config,
@@ -916,7 +916,7 @@ class TestInfrastructureSupportingFactor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("10000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_infrastructure=True,
             config=crr_config,
@@ -935,7 +935,7 @@ class TestInfrastructureSupportingFactor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("10000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_infrastructure=True,
             config=basel31_config,
@@ -961,7 +961,7 @@ class TestSupportingFactorPriority:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000000"),  # £100m - SME factor close to 0.85
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_sme=True,
             is_infrastructure=True,
@@ -1244,7 +1244,7 @@ class TestDefaultedExposureRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_defaulted=True,
             # provision_allocated=250k, provision_deducted=0
@@ -1265,7 +1265,7 @@ class TestDefaultedExposureRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_defaulted=True,
             # provision_allocated=50k, provision_deducted=0
@@ -1286,7 +1286,7 @@ class TestDefaultedExposureRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_defaulted=True,
             config=crr_config,
@@ -1303,7 +1303,7 @@ class TestDefaultedExposureRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             cqs=None,
             is_defaulted=True,
             config=crr_config,
@@ -1347,7 +1347,7 @@ class TestDefaultedExposureRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             cqs=None,
             ltv=Decimal("1.00"),
             is_defaulted=True,
@@ -1368,7 +1368,7 @@ class TestDefaultedExposureRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=2,
             config=crr_config,
         )
@@ -1385,7 +1385,7 @@ class TestDefaultedExposureRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_defaulted=True,
             # provision_allocated=600k, provision_deducted=0
@@ -1406,7 +1406,7 @@ class TestDefaultedExposureRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_defaulted=True,
             # provision_allocated=100k, provision_deducted=0
@@ -1431,7 +1431,7 @@ class TestDefaultedExposureRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             cqs=None,
             is_defaulted=True,
             provision_allocated=Decimal("0"),
@@ -1450,7 +1450,7 @@ class TestDefaultedExposureRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             cqs=None,
             is_defaulted=True,
             # 25k >= 20% × 100k = 20k → 100%
@@ -1470,7 +1470,7 @@ class TestDefaultedExposureRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             cqs=None,
             is_defaulted=True,
             provision_allocated=Decimal("0"),
@@ -1489,7 +1489,7 @@ class TestDefaultedExposureRiskWeights:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             cqs=None,
             is_defaulted=True,
             provision_allocated=Decimal("20000"),
@@ -1515,7 +1515,7 @@ class TestDefaultedSMEExclusion:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_sme=True,
             is_defaulted=True,
@@ -1536,7 +1536,7 @@ class TestDefaultedSMEExclusion:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_sme=True,
             is_defaulted=False,
@@ -1569,7 +1569,7 @@ class TestArticle114_4EUDomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=2,
             currency="EUR",
             country_code="DE",
@@ -1588,7 +1588,7 @@ class TestArticle114_4EUDomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=None,
             currency="EUR",
             country_code="FR",
@@ -1607,7 +1607,7 @@ class TestArticle114_4EUDomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=3,
             currency="PLN",
             country_code="PL",
@@ -1626,7 +1626,7 @@ class TestArticle114_4EUDomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=3,
             currency="EUR",
             country_code="PL",
@@ -1644,7 +1644,7 @@ class TestArticle114_4EUDomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=2,
             currency="USD",
             country_code="DE",
@@ -1663,7 +1663,7 @@ class TestArticle114_4EUDomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=2,
             currency="EUR",
             country_code="US",
@@ -1681,7 +1681,7 @@ class TestArticle114_4EUDomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=3,
             currency="EUR",
             country_code="DE",
@@ -1700,7 +1700,7 @@ class TestArticle114_4EUDomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=2,
             currency="EUR",
             country_code="DE",
@@ -1718,7 +1718,7 @@ class TestArticle114_4EUDomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=6,
             currency="EUR",
             country_code="IT",
@@ -1737,7 +1737,7 @@ class TestArticle114_4EUDomesticCurrency:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=2,
             currency="SEK",
             country_code="SE",

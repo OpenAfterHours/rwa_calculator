@@ -54,7 +54,7 @@ class TestB31SovereignFloorSCRA:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=4,
@@ -72,7 +72,7 @@ class TestB31SovereignFloorSCRA:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="B",
             sovereign_cqs=4,
@@ -89,7 +89,7 @@ class TestB31SovereignFloorSCRA:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="C",
             sovereign_cqs=4,
@@ -106,7 +106,7 @@ class TestB31SovereignFloorSCRA:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=6,
@@ -123,7 +123,7 @@ class TestB31SovereignFloorSCRA:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=1,
@@ -141,7 +141,7 @@ class TestB31SovereignFloorSCRA:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A_ENHANCED",
             sovereign_cqs=3,
@@ -167,7 +167,7 @@ class TestDomesticCurrencyNoFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=4,  # Would be 100% if floor applied
@@ -185,7 +185,7 @@ class TestDomesticCurrencyNoFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=1,
@@ -202,7 +202,7 @@ class TestDomesticCurrencyNoFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=1,
@@ -229,7 +229,7 @@ class TestRatedInstitutionNoFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             cqs=2,  # Rated — uses ECRA
             sovereign_cqs=4,  # Would be 100% if floor applied
@@ -264,7 +264,7 @@ class TestTradeExemption:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=4,  # Would be 100% if floor applied
@@ -285,7 +285,7 @@ class TestTradeExemption:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=4,
@@ -305,7 +305,7 @@ class TestTradeExemption:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=4,
@@ -325,7 +325,7 @@ class TestTradeExemption:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=4,
@@ -350,7 +350,7 @@ class TestTradeExemption:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=4,
@@ -393,7 +393,7 @@ class TestBackwardCompatibility:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=None,  # Unrated sovereign → Art. 114(1) 100%
@@ -433,7 +433,7 @@ class TestBackwardCompatibility:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",
             sovereign_cqs=4,
@@ -478,7 +478,7 @@ class TestCRRHasNoSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=crr_config,
             sovereign_cqs=4,
             local_currency="TRY",
@@ -494,7 +494,7 @@ class TestCRRHasNoSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=crr_config,
             cqs=3,  # Rated
             sovereign_cqs=4,
@@ -511,7 +511,7 @@ class TestCRRHasNoSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=crr_config,
             sovereign_cqs=4,
             local_currency="GBP",
@@ -528,7 +528,7 @@ class TestCRRHasNoSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=crr_config,
             sovereign_cqs=None,
             currency="USD",
@@ -553,7 +553,7 @@ class TestNonInstitutionNoFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=b31_config,
             sovereign_cqs=6,  # Would be 150% if floor applied
             local_currency="TRY",
@@ -579,7 +579,7 @@ class TestRWACorrectness:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A",  # 40%
             sovereign_cqs=3,  # 50% floor
@@ -654,7 +654,7 @@ class TestSovereignCQSMapping:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             config=b31_config,
             scra_grade="A_ENHANCED",  # 30% — lowest non-zero, so floor binds for CQS 2+
             sovereign_cqs=sov_cqs,

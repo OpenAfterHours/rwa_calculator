@@ -21,7 +21,7 @@ from datetime import date
 
 import polars as pl
 import pytest
-from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
+from tests.fixtures.contract_columns import pad_slotting_branch_defaults as _pad
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.slotting.transforms import (

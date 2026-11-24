@@ -42,7 +42,7 @@ def _build_bundle(rows: list[dict[str, Any]]) -> CRMAdjustedBundle:
     base: dict[str, Any] = {
         "exposure_reference": "EXP1",
         "counterparty_reference": "CP1",
-        "exposure_class": "CORPORATE",
+        "exposure_class": "corporate",
         # Every row exiting the classifier carries a concrete approach;
         # the splitter's SA gate excludes null-approach rows. IRB
         # pass-through tests override this per row.
@@ -126,7 +126,7 @@ class TestCRRResidentialSplit:
             [
                 {
                     "exposure_reference": "RRE1",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "ead_final": 100.0,
                     "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
@@ -147,7 +147,7 @@ class TestCRRResidentialSplit:
         assert secured["exposure_class"] == "residential_mortgage"
         assert secured["ltv"] == pytest.approx(0.80)
         assert residual["ead_final"] == pytest.approx(20.0)
-        assert residual["exposure_class"] == "CORPORATE"
+        assert residual["exposure_class"] == "corporate"
         assert secured["split_parent_id"] == "RRE1"
         assert residual["split_parent_id"] == "RRE1"
 
@@ -184,7 +184,7 @@ class TestCRRCommercialSplit:
             [
                 {
                     "exposure_reference": "CRE1",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "ead_final": 100.0,
                     "re_split_target_class": "commercial_mortgage",
                     "re_split_mode": "split",
@@ -211,7 +211,7 @@ class TestCRRCommercialSplit:
             [
                 {
                     "exposure_reference": "CRE2",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "ead_final": 100.0,
                     # Classifier emits re_split_mode=None when CRR rental cov fails
                     "re_split_target_class": "commercial_mortgage",
@@ -228,7 +228,7 @@ class TestCRRCommercialSplit:
         df = result.exposures.collect()
         assert df.height == 1
         row = df.to_dicts()[0]
-        assert row["exposure_class"] == "CORPORATE"
+        assert row["exposure_class"] == "corporate"
         assert row["ead_final"] == pytest.approx(100.0)
         # The splitter emits an RE004 informational warning for this case.
         assert any(e.code == "RE004" for e in result.crm_errors)
@@ -248,7 +248,7 @@ class TestB31ResidentialSplit:
             [
                 {
                     "exposure_reference": "B31RRE1",
-                    "exposure_class": "RETAIL_OTHER",
+                    "exposure_class": "retail_other",
                     "ead_final": 100.0,
                     "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
@@ -272,7 +272,7 @@ class TestB31ResidentialSplit:
             [
                 {
                     "exposure_reference": "B31RRE2",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "ead_final": 100.0,
                     "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
@@ -289,7 +289,7 @@ class TestB31ResidentialSplit:
         assert secured["ead_final"] == pytest.approx(55.0)
         assert secured["exposure_class"] == "residential_mortgage"
         assert residual["ead_final"] == pytest.approx(45.0)
-        assert residual["exposure_class"] == "CORPORATE"
+        assert residual["exposure_class"] == "corporate"
 
     def test_art_124f2_prior_charge_reduces_threshold(self) -> None:
         """Prior charge LTV 0.10 → effective cap 0.45; secured = 45 on 100 EAD."""
@@ -297,7 +297,7 @@ class TestB31ResidentialSplit:
             [
                 {
                     "exposure_reference": "B31RRE3",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "ead_final": 100.0,
                     "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
@@ -325,7 +325,7 @@ class TestB31CommercialSplit:
             [
                 {
                     "exposure_reference": "B31CRE1",
-                    "exposure_class": "RETAIL_OTHER",
+                    "exposure_class": "retail_other",
                     "ead_final": 200.0,
                     "re_split_target_class": "commercial_mortgage",
                     "re_split_mode": "split",
@@ -343,7 +343,7 @@ class TestB31CommercialSplit:
         assert secured["ead_final"] == pytest.approx(165.0)
         assert secured["exposure_class"] == "commercial_mortgage"
         assert residual["ead_final"] == pytest.approx(35.0)
-        assert residual["exposure_class"] == "RETAIL_OTHER"
+        assert residual["exposure_class"] == "retail_other"
 
     def test_corporate_other_uses_whole_loan(self) -> None:
         """Art. 124H(3) — single COMMERCIAL_MORTGAGE row, no residual."""
@@ -351,7 +351,7 @@ class TestB31CommercialSplit:
             [
                 {
                     "exposure_reference": "B31CRE2",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "ead_final": 200.0,
                     "re_split_target_class": "commercial_mortgage",
                     "re_split_mode": "whole",
@@ -387,7 +387,7 @@ class TestSplitterPassThrough:
             [
                 {
                     "exposure_reference": "PASS1",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "ead_final": 100.0,
                     "re_split_mode": None,
                 }
@@ -397,7 +397,7 @@ class TestSplitterPassThrough:
         df = RealEstateSplitter().split(bundle, config_factory()).exposures.collect()
         assert df.height == 1
         row = df.to_dicts()[0]
-        assert row["exposure_class"] == "CORPORATE"
+        assert row["exposure_class"] == "corporate"
         assert row["ead_final"] == pytest.approx(100.0)
         assert row["re_split_role"] is None
         assert row["split_parent_id"] is None
@@ -408,7 +408,7 @@ class TestSplitterPassThrough:
             [
                 {
                     "exposure_reference": "REC1",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "ead_final": 137.5,
                     "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
@@ -418,7 +418,7 @@ class TestSplitterPassThrough:
                 },
                 {
                     "exposure_reference": "REC2",
-                    "exposure_class": "CORPORATE_SME",
+                    "exposure_class": "corporate_sme",
                     "ead_final": 250.0,
                     "re_split_target_class": "commercial_mortgage",
                     "re_split_mode": "split",
@@ -448,7 +448,7 @@ class TestSplitterPassThrough:
             [
                 {
                     "exposure_reference": "PROV1",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "ead_final": 100.0,
                     "provision_allocated": 10.0,
                     "re_split_target_class": "residential_mortgage",
@@ -478,7 +478,7 @@ class TestSplitterAuditTrail:
             [
                 {
                     "exposure_reference": "AUD1",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "ead_final": 100.0,
                     "re_split_target_class": "residential_mortgage",
                     "re_split_mode": "split",
@@ -488,7 +488,7 @@ class TestSplitterAuditTrail:
                 },
                 {
                     "exposure_reference": "AUD2",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "ead_final": 100.0,
                     "re_split_mode": None,  # untouched
                 },
@@ -526,7 +526,7 @@ class TestSplitterApproachGate:
             [
                 {
                     "exposure_reference": "IRB1",
-                    "exposure_class": "CORPORATE_SME",
+                    "exposure_class": "corporate_sme",
                     "approach": approach,
                     "ead_final": 100.0,
                     "re_split_target_class": "residential_mortgage",
@@ -543,7 +543,7 @@ class TestSplitterApproachGate:
 
         assert df.height == 1, "IRB row must not be split into secured+residual"
         row = df.to_dicts()[0]
-        assert row["exposure_class"] == "CORPORATE_SME"
+        assert row["exposure_class"] == "corporate_sme"
         assert row["ead_final"] == pytest.approx(100.0)
         assert row["exposure_reference"] == "IRB1"
         assert row["re_split_role"] is None
@@ -555,7 +555,7 @@ class TestSplitterApproachGate:
             [
                 {
                     "exposure_reference": "IRB2",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "approach": "foundation_irb",
                     "ead_final": 200.0,
                     "re_split_target_class": "commercial_mortgage",
@@ -572,7 +572,7 @@ class TestSplitterApproachGate:
         assert df.height == 1
         row = df.to_dicts()[0]
         # Not reclassified to COMMERCIAL_MORTGAGE.
-        assert row["exposure_class"] == "CORPORATE"
+        assert row["exposure_class"] == "corporate"
         assert row["ead_final"] == pytest.approx(200.0)
 
     def test_sa_row_with_approach_column_still_splits(self) -> None:
@@ -581,7 +581,7 @@ class TestSplitterApproachGate:
             [
                 {
                     "exposure_reference": "SA1",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "approach": "standardised",
                     "ead_final": 100.0,
                     "re_split_target_class": "residential_mortgage",
@@ -607,7 +607,7 @@ class TestSplitterApproachGate:
             [
                 {
                     "exposure_reference": "IRB3",
-                    "exposure_class": "CORPORATE_SME",
+                    "exposure_class": "corporate_sme",
                     "approach": "foundation_irb",
                     "ead_final": 100.0,
                     "re_split_target_class": "residential_mortgage",
@@ -629,7 +629,7 @@ class TestSplitterApproachGate:
             [
                 {
                     "exposure_reference": "SA_MIX",
-                    "exposure_class": "CORPORATE",
+                    "exposure_class": "corporate",
                     "approach": "standardised",
                     "ead_final": 100.0,
                     "re_split_target_class": "residential_mortgage",
@@ -640,7 +640,7 @@ class TestSplitterApproachGate:
                 },
                 {
                     "exposure_reference": "IRB_MIX",
-                    "exposure_class": "CORPORATE_SME",
+                    "exposure_class": "corporate_sme",
                     "approach": "foundation_irb",
                     "ead_final": 100.0,
                     "re_split_target_class": "residential_mortgage",
@@ -660,7 +660,7 @@ class TestSplitterApproachGate:
 
         assert sa_rows.height == 2  # split into _sec + _res
         assert irb_rows.height == 1  # pass-through
-        assert irb_rows.to_dicts()[0]["exposure_class"] == "CORPORATE_SME"
+        assert irb_rows.to_dicts()[0]["exposure_class"] == "corporate_sme"
 
 
 # ---------------------------------------------------------------------------
@@ -677,7 +677,7 @@ def _mixed_bundle(
     cre_rental_met: bool = True,
     is_npsme: bool = True,
     prior_charge_ltv: float = 0.0,
-    exposure_class: str = "CORPORATE",
+    exposure_class: str = "corporate",
     provision: float = 0.0,
 ) -> CRMAdjustedBundle:
     """Build a mixed RRE+CRE exposure with both per-component flags set."""
@@ -736,7 +736,7 @@ class TestCRRMixedCollateral:
         assert secured["exposure_class"] == "residential_mortgage"
         assert secured["property_type"] == "residential"
         assert residual["ead_final"] == pytest.approx(0.0)
-        assert residual["exposure_class"] == "CORPORATE"
+        assert residual["exposure_class"] == "corporate"
 
     def test_mixed_rre_first_then_cre_then_residual(self) -> None:
         """EAD 200, RRE=100 (cap 80), CRE=200 (cap 100), rental met.
@@ -762,7 +762,7 @@ class TestCRRMixedCollateral:
         assert cre["has_income_cover"] is False
         assert cre["ltv"] == pytest.approx(0.50)
         assert residual["ead_final"] == pytest.approx(20.0)
-        assert residual["exposure_class"] == "CORPORATE"
+        assert residual["exposure_class"] == "corporate"
         # Reconciles to parent EAD.
         assert (rre["ead_final"] + cre["ead_final"] + residual["ead_final"]) == pytest.approx(200.0)
 
@@ -780,7 +780,7 @@ class TestCRRMixedCollateral:
         assert secured["ead_final"] == pytest.approx(80.0)
         assert secured["exposure_class"] == "residential_mortgage"
         assert residual["ead_final"] == pytest.approx(120.0)
-        assert residual["exposure_class"] == "CORPORATE"
+        assert residual["exposure_class"] == "corporate"
 
     def test_mixed_audit_records_per_component_breakdown(self) -> None:
         bundle = _mixed_bundle(ead=200.0, rre_value=100.0, cre_value=200.0)
@@ -830,7 +830,7 @@ class TestB31MixedCollateral:
         assert cre["property_type"] == "commercial"
         assert cre["property_collateral_value"] == pytest.approx(40.0)
         assert residual["ead_final"] == pytest.approx(45.0)
-        assert residual["exposure_class"] == "CORPORATE"
+        assert residual["exposure_class"] == "corporate"
 
     def test_mixed_under_cap_emits_pro_rata_unbound(self) -> None:
         """EAD 50, RRE=200, CRE=200 → both within cap; pro-rata fills EAD."""
@@ -922,7 +922,7 @@ class TestMixedReconciliation:
             # Mixed RRE+CRE
             {
                 "exposure_reference": "M1",
-                "exposure_class": "CORPORATE",
+                "exposure_class": "corporate",
                 "ead_final": 100.0,
                 "re_split_mode": "split",
                 "re_split_property_type": "mixed",
@@ -938,7 +938,7 @@ class TestMixedReconciliation:
             # Pure RRE
             {
                 "exposure_reference": "P1",
-                "exposure_class": "CORPORATE",
+                "exposure_class": "corporate",
                 "ead_final": 100.0,
                 "re_split_target_class": "residential_mortgage",
                 "re_split_mode": "split",
@@ -976,7 +976,7 @@ class TestMixedReconciliation:
         rows = [
             {
                 "exposure_reference": "PRRE",
-                "exposure_class": "CORPORATE",
+                "exposure_class": "corporate",
                 "ead_final": 100.0,
                 "re_split_target_class": "residential_mortgage",
                 "re_split_mode": "split",

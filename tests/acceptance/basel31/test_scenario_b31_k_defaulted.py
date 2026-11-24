@@ -124,7 +124,7 @@ class TestB31K1_CorporateDefaultedHighProvision:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("25000"),
             config=b31_config,
@@ -136,7 +136,7 @@ class TestB31K1_CorporateDefaultedHighProvision:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("25000"),
             config=b31_config,
@@ -165,7 +165,7 @@ class TestB31K2_CorporateDefaultedLowProvision:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("15000"),
             config=b31_config,
@@ -177,7 +177,7 @@ class TestB31K2_CorporateDefaultedLowProvision:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("15000"),
             config=b31_config,
@@ -206,7 +206,7 @@ class TestB31K3_CorporateDefaultedZeroProvision:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
             config=b31_config,
@@ -218,7 +218,7 @@ class TestB31K3_CorporateDefaultedZeroProvision:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("0"),
             config=b31_config,
@@ -251,7 +251,7 @@ class TestB31K4_ResiREnonIncomeDefaulted:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("200000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             is_defaulted=True,
             has_income_cover=False,
             provision_allocated=Decimal("0"),
@@ -265,7 +265,7 @@ class TestB31K4_ResiREnonIncomeDefaulted:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("200000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             is_defaulted=True,
             has_income_cover=False,
             provision_allocated=Decimal("0"),
@@ -281,7 +281,7 @@ class TestB31K4_ResiREnonIncomeDefaulted:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("200000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             is_defaulted=True,
             has_income_cover=False,
             provision_allocated=Decimal("0"),
@@ -318,7 +318,7 @@ class TestB31K5_ResiREnonIncomeWithCollateral:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("200000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             is_defaulted=True,
             has_income_cover=False,
             provision_allocated=Decimal("0"),
@@ -333,7 +333,7 @@ class TestB31K5_ResiREnonIncomeWithCollateral:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("200000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             is_defaulted=True,
             has_income_cover=False,
             provision_allocated=Decimal("0"),
@@ -368,7 +368,7 @@ class TestB31K6_ResiREIncomeDefaulted:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("200000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             is_defaulted=True,
             has_income_cover=True,
             provision_allocated=Decimal("5000"),
@@ -382,7 +382,7 @@ class TestB31K6_ResiREIncomeDefaulted:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("200000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             is_defaulted=True,
             has_income_cover=True,
             provision_allocated=Decimal("5000"),
@@ -421,7 +421,7 @@ class TestB31K7_CorporateDefaultedWithCollateral:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=2,
             is_defaulted=True,
             provision_allocated=Decimal("2000"),
@@ -435,7 +435,7 @@ class TestB31K7_CorporateDefaultedWithCollateral:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=2,
             is_defaulted=True,
             provision_allocated=Decimal("2000"),
@@ -476,7 +476,7 @@ class TestB31K8_ProvisionDenominatorDifference:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("80000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("16500"),
             provision_deducted=Decimal("20000"),
@@ -490,7 +490,7 @@ class TestB31K8_ProvisionDenominatorDifference:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("80000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("16500"),
             provision_deducted=Decimal("20000"),
@@ -504,7 +504,7 @@ class TestB31K8_ProvisionDenominatorDifference:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("80000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_defaulted=True,
             provision_allocated=Decimal("16500"),
             provision_deducted=Decimal("20000"),
@@ -535,7 +535,7 @@ class TestB31K9_FIRBCorporateDefaulted:
         """B31 F-IRB defaulted corporate: K=0."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K9_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="foundation_irb",
             is_airb=False,
             lgd=0.45,
@@ -553,7 +553,7 @@ class TestB31K9_FIRBCorporateDefaulted:
         """B31 F-IRB defaulted corporate: RWA=0 and RW=0."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K9_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="foundation_irb",
             is_airb=False,
             lgd=0.45,
@@ -572,7 +572,7 @@ class TestB31K9_FIRBCorporateDefaulted:
         """B31 F-IRB defaulted corporate: EL = LGD × EAD = 225,000."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K9_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="foundation_irb",
             is_airb=False,
             lgd=0.45,
@@ -608,7 +608,7 @@ class TestB31K10_AIRBRetailDefaulted:
         """B31 A-IRB retail defaulted: K = max(0, 0.65 - 0.50) = 0.15."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K10_RTL",
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.65,
@@ -626,7 +626,7 @@ class TestB31K10_AIRBRetailDefaulted:
         """B31 A-IRB retail defaulted: RWA = K × 12.5 × 1.0 × EAD = 46,875."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K10_RTL",
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.65,
@@ -645,7 +645,7 @@ class TestB31K10_AIRBRetailDefaulted:
         """B31 A-IRB retail defaulted: EL = BEEL × EAD = 12,500."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K10_RTL",
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.65,
@@ -683,7 +683,7 @@ class TestB31K11_AIRBCorporateDefaultedNoScaling:
         """B31 A-IRB corporate defaulted: K = 0.15."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K11_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.60,
@@ -701,7 +701,7 @@ class TestB31K11_AIRBCorporateDefaultedNoScaling:
         """B31 A-IRB corporate defaulted: RWA = K × 12.5 × 1.0 × EAD = 937,500."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K11_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.60,
@@ -720,7 +720,7 @@ class TestB31K11_AIRBCorporateDefaultedNoScaling:
         """B31 and CRR produce identical defaulted RWA (no 1.06 in either)."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K11_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.60,
@@ -741,7 +741,7 @@ class TestB31K11_AIRBCorporateDefaultedNoScaling:
         """B31 A-IRB corporate defaulted: EL = BEEL × EAD = 225,000."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K11_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.60,
@@ -776,7 +776,7 @@ class TestB31K12_AIRBCorporateDefaultedBEELExceedsLGD:
         """B31 A-IRB defaulted: BEEL > LGD → K=0."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K12_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.40,
@@ -794,7 +794,7 @@ class TestB31K12_AIRBCorporateDefaultedBEELExceedsLGD:
         """B31 A-IRB defaulted: BEEL > LGD → RWA=0."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K12_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.40,
@@ -812,7 +812,7 @@ class TestB31K12_AIRBCorporateDefaultedBEELExceedsLGD:
         """B31 A-IRB defaulted: EL = BEEL × EAD = 150,000 (uses BEEL, not LGD)."""
         lf = _build_b31_defaulted_exposure(
             exposure_ref="B31_K12_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.40,

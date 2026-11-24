@@ -45,7 +45,7 @@ def _irb_corporate_frame(
     ead: float = 1_000_000.0,
     rwa: float = 500_000.0,
     sa_rwa: float = 1_000_000.0,
-    exposure_class: str = "CORPORATE",
+    exposure_class: str = "corporate",
     ref: str = "EXP1",
 ) -> pl.LazyFrame:
     """Build a minimal IRB corporate exposure with pre-baked sa_rwa."""

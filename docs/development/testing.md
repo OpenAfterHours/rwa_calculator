@@ -422,6 +422,198 @@ def both_frameworks(request, crr_config, basel31_config):
     return basel31_config
 ```
 
+### Hand-built frames: `exposure_class` takes only `ExposureClass` values
+
+`exposure_class` is engine-derived: no exposure input file carries it, and the
+classifier writes `ExposureClass.<X>.value` on every row — lowercase, never
+null. A hand-built calculator frame writes it itself, so it can hand the engine
+a class the classifier never writes (`"CORPORATE"`, an invented `"RETAIL"`, a
+typed null, or no column at all), take the wrong branch of an exact-match gate,
+and still pass. The harness therefore refuses each shape where it enters:
+
+| Shape | Where it is stopped |
+|---|---|
+| Any of the three in a single-exposure builder's frame | `tests/fixtures/single_exposure.py` — `calculate_single_sa_exposure`, `calculate_single_irb_exposure` and `calculate_single_slotting_exposure` run `contract_columns.require_exposure_class_values` on the frame they hand to `calculate_branch`, and raise `ValueError` if any row's class is absent, null or not an enum value. `calculate_single_equity_exposure` writes no class, because production's equity calculator input (the raw `equity_exposures` table) carries none — the aggregator stamps `equity` / `ciu` afterwards when the calculator wrote no class (the CRR PD/LGD branch writes `"CORPORATE"`, a known defect — below) |
+| A typed null, or no column | `pad_crm_exit_defaults`, `pad_sa_branch`, `pad_irb_branch` and `pad_slotting_branch` (`tests/fixtures/contract_columns.py`), and the stage-output seals behind `make_classified_bundle`, `make_crm_bundle` and `make_aggregated_bundle` (`tests/fixtures/resolved_bundle.py`, including its summary-frame seal) all raise `ValueError` on a non-empty frame with no `exposure_class`, or a null on any row, via `contract_columns.require_class_on_every_row` (`pad_slotting_branch_defaults` names `specialised_lending` first, so slotting frames pass). They do not check that a supplied string is an enum value |
+| A non-member string literal in a builder keyword, a parameter default or a frame dict | `tests/contracts/test_harness_exposure_class_domain.py` — see below |
+
+The contract module also reads the frame each builder actually hands its
+calculator, through a recording stand-in calculator, so a builder that drops
+or nulls the column fails there even if its own guard is deleted with it (the
+builder's callers do not notice: deleting `exposure_class` and the guard from
+the slotting builder leaves all 46 tests in `test_slotting_supporting_factors.py`
+and `crr/test_crr_slotting.py` green). An AST anchor fails on any function
+under `tests/fixtures/` that calls `calculate_branch` without a probe.
+
+A frame a test builds itself and passes **straight** to `calculate_branch` goes
+through none of these choke points: 180 such calls in 41 test files (measured
+2026-11-24 on `ab0c8c8f`) are checked only where the frame went through a pad or a seal
+first. That is a known gap, not a pass, filed as a residual of P5.69: some of
+those frames hand a calculator a class the classifier never writes today
+(`tests/unit/sa/test_payroll_transactor_precedence.py`, for one, feeds
+`"RETAIL_QRRE"` / `"RETAIL_OTHER"` through a module constant no check reads).
+
+Neither a null nor an absent class is safe to leave to the engine. A typed null
+takes the null branch of every exact-match gate. An absent column is worse than
+it looks: at least six engine readers guard on the column's presence and fall
+back *silently* when it is missing (measured 2026-11-24) —
+`engine/supporting_factors.py` (the Art. 501a(1)(a) class limb becomes
+`pl.lit(True)`, so an unclassed CRR infrastructure row collects the 0.75 factor
+that a null or an `institution` class is denied), `engine/crm/processor.py` (the
+guarantor ranking drops its SA risk-weight density),
+`engine/aggregator/_securitisation.py` (the pool breakdown drops the parent
+class), `engine/aggregator/_equity_prep.py` (stamps a class of its own), and
+`engine/aggregator/_floor.py` / `engine/aggregator/_supporting_factors.py`
+(`col_or_default`, a typed null). So the pads refuse both. A test that deliberately pins the
+engine's defensive null fallback pads (or seals) a classed row and nulls the
+class afterwards, so the intent is in code.
+
+**No lenient seal may skip the guard.** `seal_lenient` (and
+`EdgeContract.conform_lenient`) turns every missing required column into a
+typed null, so any helper that lenient-seals a classed edge reintroduces the
+null class unless it runs `require_class_on_every_row` first. Two anchors in
+the contract module read every such call under `tests/`, function by
+function:
+
+- in `tests/fixtures/resolved_bundle.py` and `tests/fixtures/contract_columns.py`
+  (the stage-output helpers), every lenient seal must call the guard on the
+  same frame earlier in the same function, or be named in `UNGUARDED_SEALS`
+  with a reason (today `seal_hierarchy_exit` and `make_counterparty_lookup`,
+  whose edges carry no class). An exempt seal's edge is resolved statically:
+  one that cannot be resolved, or that declares `exposure_class`, fails;
+- everywhere else under `tests/`, an unguarded lenient seal must resolve to
+  edges with no engine-derived `exposure_class` — the SFT tables, or the raw
+  input tables, whose `exposure_class` (CIU holdings, model permissions) is
+  user input the production loader seals the same way. An edge that cannot
+  be resolved fails unless `UNRESOLVED_SEALS` names it (the synthetic edges
+  `tests/contracts/test_edge_contracts.py` builds to test the primitive).
+
+So a new `make_*` helper that seals `crm_exit` inline, or a fixture elsewhere
+that does, fails the contract module before it can hand a calculator a null
+class. The anchors read syntax, not control flow: a guard call earlier in the
+function counts even inside a branch that never runs (`if False: ...`), and a
+seal reached through another callable — `functools.partial(seal_lenient,
+edge=CRM_EXIT_EDGE)(lf)`, or `seal_lenient` passed as a value — is not seen at
+all. Neither shape exists under `tests/` today; the anchors are a tripwire for
+the ordinary shape, not a proof. They read `exposure_class` only; the aggregator-exit seal still
+null-completes the sibling class carriers (`reporting_class`,
+`reporting_class_origin`, `exposure_class_applied`) that a hand results frame
+omits — a known gap, filed as a residual of P5.69.
+
+**What the contract scan reads, and what it does not.** It parses every module
+under `tests/` and reads three places a class literal can enter a harness
+frame:
+
+- a keyword argument named for any class-family column (`exposure_class=`,
+  `post_crm_exposure_class_guaranteed=`, `reporting_class_origin=`, …) — must
+  be in the column's harness domain, zero tolerance outside a two-entry
+  allowlist for `CIU_HOLDINGS_SCHEMA` rows. That is an enum value, or one of
+  the column's `PRODUCTION_EXTRA_VALUES` — the strings production writes there
+  **by design**: today only `guarantor_exposure_class = ""`, which the CRM
+  stage writes on every row with no eligible guarantor. The family
+  (`CLASS_COLUMNS`) is every
+  edge-contract column that holds an `ExposureClass` value; a test reads every
+  `EdgeContract` in `rwa_calc.contracts.edges` and fails on a column named for
+  a class that is neither in it nor in `CLASS_COLUMN_EXCLUSIONS` (which says
+  why each excluded column — `exposure_subclass`, `reporting_subclass`,
+  `addon_by_asset_class`, `reclassified_to_retail` — is not a class);
+- a parameter default on a class-family parameter — the same per-column domain;
+- a dict entry keyed on a class-family column whose value spells out string
+  constants (a string, a list or tuple, `[...] * n`, or `pl.Series([...])`) —
+  the literals outside the column's domain are a per-file, two-way
+  `FRAME_LITERAL_BASELINE` (441 across 65 files when it was banked: a
+  shrink-only ratchet, not a refusal).
+
+**The domain is not everything production writes.** Under CRR with IRB
+permission and `equity_pd_lgd=True`, the Art. 155(3) PD/LGD equity branch
+(`engine/equity/calculator.py`) borrows the corporate formula by setting the
+class to `"CORPORATE"` and restores `equity` only for significant investments,
+and `engine/aggregator/_equity_prep.py` restamps the class only when the column
+is absent. So every non-significant PD/LGD leg leaves the aggregator with
+`"CORPORATE"` on six class columns — `exposure_class`, `exposure_class_applied`,
+`exposure_class_post_crm`, `reporting_class`, `reporting_class_origin` and
+`reporting_class_pre_default` (measured 2026-11-24 on `ab0c8c8f`: all three of
+the `rich` book's equity-file legs, the listed holding and both CIU legs). That
+is a known production defect, owned by P1.480 (filed from P5.69): CRR
+Art. 147(2)(e) and (6) put an equity exposure in the equity class whatever the
+approach, and Art. 155(3) borrows only the Art. 153(1) formula. It is declared
+in `KNOWN_PRODUCTION_CLASS_DEFECTS` and kept **out** of every column's domain,
+so the builders, the keyword scan and the frame ratchet refuse `"CORPORATE"` on
+purpose: no test may lean on the defect. The entry carries:
+
+- an `owner` in the parked-register grammar — an `OWNER: P<n>.<n>` token
+  (`scripts/tolerated_findings.py`) naming a bullet `IMPLEMENTATION_PLAN.md`
+  holds open, checked by `test_every_known_production_defect_names_an_open_owner`
+  against `scripts/check_parked_registers.py::read_open_bullets`, so closing the
+  bullet without removing the entry fails, as it does for every other parked
+  register;
+- the writer, and the class a **fixed** writer must leave (`fixed_classes`,
+  split on `equity_type`): `equity` on the listed holding, and `equity` or `ciu`
+  on the CIU legs, whose class on the IRB path is not decided here (Art. 147(2)
+  lists no CIU class). `corporate` is admitted on none, in any case — the
+  obvious wrong fix, dropping the writer's `.upper()`, makes `"CORPORATE"`
+  vanish and leaves an enum value no other check objects to.
+
+Both declarations are measured, not assumed, by one anchor
+(`test_production_extra_values_are_what_a_real_run_writes`). It runs the `rich`
+reporting portfolio through `PipelineOrchestrator` under exactly three configs
+(`ANCHOR_LEGS`): the CRR and Basel 3.1 factory defaults, and CRR IRB with
+`equity_pd_lgd=True`. Each leg fails if a by-design extra stops appearing, or if
+a class column carries a non-enum string declared in neither place; the PD/LGD
+leg also fails if it reaches no `pd_lgd` equity row (so a lost population is not
+mistaken for a fix); if any of those rows holds, on a declared column, neither
+`"CORPORATE"` nor a class `fixed_classes` admits for it — a **wrong fix**, never
+read as a fix; if `"CORPORATE"` appears outside those rows; and **stale** only
+once a declared column holds an admitted class on every one of them, until the
+column (and, once none remain, the entry) is removed. Once the entry is gone the
+anchor no longer reads that population, so the fix that closes P1.480 must pin
+the class at the aggregator exit in a test of its own. A writer reached only by
+some other config is invisible to the anchor. The wider measurement — every config the 39 `RUNS` entries of
+`tests/acceptance/reporting/test_supervisory_validations.py` execute, 59 with
+the prior-period ones, both regimes (2026-11-24) — found `""` on
+`guarantor_exposure_class` in all 59 and no other non-enum string; but no
+`RUNS` config enables `equity_pd_lgd`, so it cannot see the defect, and it is a
+recorded measurement, not a test.
+
+The scan does **not** read a class that reaches a frame through a variable: a
+`@pytest.mark.parametrize` value list (`test_b31_sa_risk_weights.py` feeds
+`"RETAIL_SME"`, not an enum member at all, this way; `test_lgd_floor_blended.py`
+feeds `"CORPORATE"`), a helper argument, or a comprehension — 135 class-column
+dict entries in 102 files and 32 class-column keywords in 16 files take their
+value from an expression that references a name other than `pl` /
+`ExposureClass` and spells out neither a string literal nor an `ExposureClass`
+member, measured 2026-11-24 on `ab0c8c8f`. Nor does it
+read comparisons, which is deliberate: an upper-case comparison is how a test
+legitimately queries the SA risk-weight join table. Nor does it read a literal
+wrapped in an expression the frame-value reader does not unpack:
+`pl.lit("X").alias(<class col>)`, `with_columns(<class col>=pl.lit("X"))`,
+`pl.repeat("X", n)`, `dict(<class col>=[...])` (a keyword whose value is a
+list) and a conditional element (`["X" if c else "Y"]`) each score 0 (probed
+2026-11-24; the eight `pl.lit` class sites under `tests/` hold an enum member
+today, apart from one null set deliberately after a pad in
+`tests/unit/irb/test_irb_formulas.py`, but nothing holds them there). The builder refusals cover variable-fed
+strings that go through the builders; the pad and seal refusals cover only a
+missing or null class, so a variable-fed or expression-wrapped non-member
+string anywhere else is a known gap.
+
+Two kinds of dict are outside the frame scan. A row of `CIU_HOLDINGS_SCHEMA`
+(user input the look-through upper-cases) or `MODEL_PERMISSIONS_SCHEMA` is
+exempt only when **every** key is a column of that schema — `model_id` is also a
+column of every calculator-branch edge, so a marker key alone would exempt an
+IRB results frame. And a dict that maps column names rather than holding rows —
+a `.rename({...})` argument, or an assignment named in `NON_FRAME_DICTS` — is not
+a frame.
+
+Write `ExposureClass.CORPORATE.value` (or `"corporate"`), never `"CORPORATE"`.
+The SA risk-weight join tables are keyed on the upper-cased spelling of real
+enum members and are queried by comparison, which the scan does not read. A
+test that means to exercise the engine's case tolerance builds its own frame
+with `member.value.upper()`, so the intent is in code rather than in a literal.
+
+When you convert a file's frame literals, lower its entry in
+`FRAME_LITERAL_BASELINE` in the same change — the ratchet fails in both
+directions, so freed slack cannot absorb a later addition.
+
 ## Writing Effective Tests
 
 ### Test Naming

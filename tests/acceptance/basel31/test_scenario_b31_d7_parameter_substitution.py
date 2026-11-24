@@ -53,7 +53,7 @@ from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
 
 
 def _compute_expected_irb_rw(
-    pd: float, lgd: float, maturity: float, exposure_class: str = "CORPORATE"
+    pd: float, lgd: float, maturity: float, exposure_class: str = "corporate"
 ) -> float:
     """Compute expected IRB risk weight using the parametric formula helper."""
     lf = pl.LazyFrame(

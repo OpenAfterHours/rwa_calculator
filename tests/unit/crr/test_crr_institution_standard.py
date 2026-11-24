@@ -152,7 +152,7 @@ class TestSACalculatorInstitutionFramework:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=None,
             config=crr_config_eur,
         )
@@ -168,7 +168,7 @@ class TestSACalculatorInstitutionFramework:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=None,
             config=crr_config_gbp,
         )
@@ -184,7 +184,7 @@ class TestSACalculatorInstitutionFramework:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=2,
             config=crr_config_eur,
         )
@@ -200,7 +200,7 @@ class TestSACalculatorInstitutionFramework:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=2,
             config=b31_config,
         )
@@ -217,14 +217,14 @@ class TestSACalculatorInstitutionFramework:
         crr = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=1,
             config=crr_config_eur,
         )
         b31 = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=1,
             config=b31_config,
         )
@@ -359,7 +359,7 @@ class TestCRRShortTermInstitutionSACalculator:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=cqs,
             residual_maturity_years=0.25,
             original_maturity_years=0.25,
@@ -376,7 +376,7 @@ class TestCRRShortTermInstitutionSACalculator:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=2,
             residual_maturity_years=0.26,
             original_maturity_years=0.26,
@@ -393,7 +393,7 @@ class TestCRRShortTermInstitutionSACalculator:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=None,
             residual_maturity_years=0.25,
             original_maturity_years=0.25,
@@ -411,7 +411,7 @@ class TestCRRShortTermInstitutionSACalculator:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=None,
             residual_maturity_years=0.20,
             original_maturity_years=5.0,
@@ -429,7 +429,7 @@ class TestCRRShortTermInstitutionSACalculator:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=2,
             residual_maturity_years=0.20,
             original_maturity_years=5.0,
@@ -459,7 +459,7 @@ class TestCRRShortTermInstitutionSACalculator:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=None,
             residual_maturity_years=0.25,
             original_maturity_years=0.25,
@@ -480,7 +480,7 @@ class TestCRRShortTermInstitutionSACalculator:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=4,
             residual_maturity_years=0.25,
             original_maturity_years=0.25,

@@ -59,7 +59,7 @@ class TestP1255UnratedCorporateSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=_EAD,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=crr_config,
             cqs=None,
             sovereign_cqs=6,
@@ -81,7 +81,7 @@ class TestP1255UnratedCorporateSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=_EAD,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=crr_config,
             cqs=None,
             sovereign_cqs=1,
@@ -96,7 +96,7 @@ class TestP1255UnratedCorporateSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=_EAD,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=crr_config,
             cqs=None,
             sovereign_cqs=5,
@@ -115,7 +115,7 @@ class TestP1255UnratedCorporateSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=_EAD,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=crr_config,
             cqs=None,
             sovereign_cqs=None,
@@ -134,7 +134,7 @@ class TestP1255UnratedCorporateSovereignFloor:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=_EAD,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             config=crr_config,
             cqs=2,
             sovereign_cqs=6,

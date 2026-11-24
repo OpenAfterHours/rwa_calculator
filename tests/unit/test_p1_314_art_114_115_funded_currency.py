@@ -53,7 +53,7 @@ import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.branch_reasons import UNKNOWN_FALLBACK, SovereignFloorReason
-from rwa_calc.domain.enums import CQS
+from rwa_calc.domain.enums import CQS, ExposureClass
 from rwa_calc.engine.sa import SACalculator
 from rwa_calc.engine.sa.b31_risk_weight_tables import B31_SCRA_RISK_WEIGHTS
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
@@ -75,9 +75,9 @@ from tests.fixtures.single_exposure import calculate_single_sa_exposure
 EAD = Decimal("10000000")
 EAD_F = 10_000_000.0
 
-CGCB = "CENTRAL_GOVT_CENTRAL_BANK"
-RGLA = "rgla"
-INSTITUTION = "INSTITUTION"
+CGCB = ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
+RGLA = ExposureClass.RGLA.value
+INSTITUTION = ExposureClass.INSTITUTION.value
 
 # Expected risk weights. Stated as absolute literals (never as a movement
 # relative to a baseline — .claude/LESSONS.md C1), and cross-checked against the

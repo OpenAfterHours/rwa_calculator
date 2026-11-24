@@ -37,7 +37,7 @@ def _ledger(*, with_floor: bool) -> pl.LazyFrame:
     """A minimal per-leg reporting ledger the summary producers group over."""
     data: dict[str, list] = {
         "exposure_reference": ["E1", "E2"],
-        "reporting_class": ["corporate", "retail"],
+        "reporting_class": ["corporate", "retail_other"],
         "reporting_approach": ["standardised", "foundation_irb"],
         "reporting_method": ["STD", "FIRB"],
         "reporting_ead": [100.0, 200.0],

@@ -104,7 +104,7 @@ def _short_dated_unrated_institution_in_fx(
     return calculate_single_sa_exposure(
         calculator,
         ead=Decimal("1000000"),
-        exposure_class="INSTITUTION",
+        exposure_class="institution",
         cqs=None,
         residual_maturity_years=0.25,
         original_maturity_years=0.25,

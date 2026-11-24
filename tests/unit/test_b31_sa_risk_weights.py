@@ -768,7 +768,7 @@ class TestB31ADCExposures:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("2000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_adc=True,
             config=b31_config,
         )
@@ -785,7 +785,7 @@ class TestB31ADCExposures:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("2000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_adc=True,
             is_presold=True,
             property_type="residential",
@@ -804,7 +804,7 @@ class TestB31ADCExposures:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("2000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_adc=True,
             is_presold=True,
             property_type="commercial",
@@ -823,7 +823,7 @@ class TestB31ADCExposures:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("2000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             is_adc=True,
             is_presold=True,
             config=b31_config,
@@ -859,7 +859,7 @@ class TestB31ADCExposures:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_adc=True,
             config=crr_config,
@@ -1070,7 +1070,7 @@ class TestB31NonRegulatoryRetail:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1500000"),
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             qualifies_as_retail=False,
             config=b31_config,
         )
@@ -1087,7 +1087,7 @@ class TestB31NonRegulatoryRetail:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("50000"),
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             qualifies_as_retail=True,
             config=b31_config,
         )
@@ -1576,7 +1576,7 @@ class TestCRRRegression:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("600000"),
-            exposure_class="COMMERCIAL_RE",
+            exposure_class="commercial_mortgage",
             ltv=Decimal("0.40"),
             has_income_cover=False,
             config=crr_config,
@@ -1596,7 +1596,7 @@ class TestCRRRegression:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CENTRAL_GOVT_CENTRAL_BANK",
+            exposure_class="central_govt_central_bank",
             cqs=1,
             config=crr_config,
         )
@@ -1612,7 +1612,7 @@ class TestCRRRegression:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("100000"),
-            exposure_class="RETAIL",
+            exposure_class="retail_other",
             config=crr_config,
         )
 
@@ -1627,7 +1627,7 @@ class TestCRRRegression:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="INSTITUTION",
+            exposure_class="institution",
             cqs=2,
             config=crr_config,
         )
@@ -1710,7 +1710,7 @@ class TestCRRvsBasel31Comparison:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_sme=True,
             config=b31_config,
@@ -3218,7 +3218,7 @@ class TestB31SubordinatedDebt:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=1,
             seniority="subordinated",
             is_defaulted=True,
@@ -3245,7 +3245,7 @@ class TestB31SubordinatedDebt:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=1,
             seniority="senior",
             is_defaulted=True,
@@ -3280,7 +3280,7 @@ class TestB31SubordinatedDebt:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=1,
             seniority="subordinated",
             is_defaulted=True,
@@ -3738,7 +3738,7 @@ class TestDefaultedResiREBasel31:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             cqs=None,
             is_defaulted=True,
             has_income_cover=False,
@@ -3757,7 +3757,7 @@ class TestDefaultedResiREBasel31:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             cqs=None,
             is_defaulted=True,
             has_income_cover=False,
@@ -3775,7 +3775,7 @@ class TestDefaultedResiREBasel31:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             cqs=None,
             is_defaulted=True,
             has_income_cover=False,
@@ -3794,7 +3794,7 @@ class TestDefaultedResiREBasel31:
         result_low = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             cqs=None,
             is_defaulted=True,
             has_income_cover=True,  # Income-dependent
@@ -3807,7 +3807,7 @@ class TestDefaultedResiREBasel31:
         result_high = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             cqs=None,
             is_defaulted=True,
             has_income_cover=True,
@@ -3826,7 +3826,7 @@ class TestDefaultedResiREBasel31:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=ead,
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             cqs=None,
             is_defaulted=True,
             has_income_cover=False,
@@ -3841,11 +3841,17 @@ class TestDefaultedResiREBasel31:
         sa_calculator: SACalculator,
         b31_config: CalculationConfig,
     ) -> None:
-        """RESIDENTIAL_RE class also gets the always-100% treatment."""
+        """The residential_mortgage class also gets the always-100% treatment.
+
+        ``residential_mortgage`` is the residential real-estate class the
+        classifier writes beside ``retail_mortgage``. Until P5.69 this test fed
+        an invented ``RESIDENTIAL_RE`` class that reached the same branch only
+        through the RE substring predicate.
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RESIDENTIAL_RE",
+            exposure_class="residential_mortgage",
             cqs=None,
             is_defaulted=True,
             has_income_cover=False,
@@ -3890,7 +3896,7 @@ class TestDefaultedResiREBasel31:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
-            exposure_class="RETAIL_MORTGAGE",
+            exposure_class="retail_mortgage",
             cqs=None,
             is_defaulted=True,
             has_income_cover=False,
@@ -3909,7 +3915,7 @@ class TestDefaultedResiREBasel31:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             cqs=None,
             is_defaulted=True,
             provision_allocated=Decimal("50000"),  # 5% < 20%
@@ -3926,7 +3932,7 @@ class TestDefaultedResiREBasel31:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COMMERCIAL_RE",
+            exposure_class="commercial_mortgage",
             cqs=None,
             is_defaulted=True,
             has_income_cover=False,

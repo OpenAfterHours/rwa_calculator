@@ -52,7 +52,7 @@ def _ledger(scale: float = 1.0) -> pl.DataFrame:
     return pl.DataFrame(
         {
             "exposure_reference": ["A", "B", "C"],
-            "reporting_class": ["corporate", "corporate", "retail"],
+            "reporting_class": ["corporate", "corporate", "retail_other"],
             "reporting_ead": [100.0, 200.0, 300.0],
             "rwa_final": [50.0 * scale, 40.0 * scale, 300.0 * scale],
         }

@@ -46,13 +46,14 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.sa import SACalculator
 from rwa_calc.engine.sa.central_bank import lift_central_bank_cqs
 from rwa_calc.rulebook import RulepackV0
 from tests.fixtures.single_exposure import calculate_single_sa_exposure
 
 _EAD = Decimal("1000000")
-_CGCB = "CENTRAL_GOVT_CENTRAL_BANK"
+_CGCB = ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value
 
 
 @pytest.fixture

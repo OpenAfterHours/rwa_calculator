@@ -569,7 +569,7 @@ class TestBlendedFloorIntegration:
         """A-IRB corporate gets the Art. 161(5)(b) blend, not the single-type floor."""
         lf = self._make_irb_df(
             lgd=0.10,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             crm_alloc_other_physical=60_000.0,
         )
         result = lf.pipe(apply_lgd_floor, B31).collect()
@@ -579,7 +579,7 @@ class TestBlendedFloorIntegration:
 
     def test_corporate_without_collateral_keeps_flat_25pct(self):
         """Art. 161(5)(a): corporate with no recognised protection stays at 25%."""
-        lf = self._make_irb_df(lgd=0.10, exposure_class="CORPORATE", collateral_type=None)
+        lf = self._make_irb_df(lgd=0.10, exposure_class="corporate", collateral_type=None)
         result = lf.pipe(apply_lgd_floor, B31).collect()
         assert result["lgd_floored"][0] == pytest.approx(0.25)
 

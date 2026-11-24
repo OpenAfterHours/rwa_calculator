@@ -7,6 +7,24 @@ exposures frame is sealed against the ``hierarchy_exit`` edge contract
 inputs, and the seal injects the rest as typed nulls), so test bundles are
 shape-identical to the frame the classifier receives from the pipeline.
 
+``exposure_class`` is the one required column the stage-output seals do NOT
+null-complete (P5.69). It is required and injected on classifier_exit,
+crm_exit, aggregator_exit and the classed summary edges, and production writes
+it on every row and never null (the classifier writes a lowercase
+``ExposureClass`` value; the one known exception to the lowercase — the CRR
+PD/LGD equity path, which leaves ``"CORPORATE"`` at the aggregator exit — is a
+separate production defect, declared in ``KNOWN_PRODUCTION_CLASS_DEFECTS`` of
+``tests/contracts/test_harness_exposure_class_domain.py``, and is still not
+null) — so a lenient
+seal turning an unsupplied class into a typed null would hand the next stage a
+state the pipeline never produces. ``seal_classifier_exit``, ``seal_crm_exit``,
+``seal_aggregator_exit`` and the summary-frame seal therefore refuse a
+non-empty frame with no class or a null on any row
+(``contract_columns.require_class_on_every_row``); a zero-row frame seals as
+before. A new helper here that lenient-seals a classed edge must run the same
+guard first — ``tests/contracts/test_harness_exposure_class_domain.py`` reads
+every function in this module and fails one that does not.
+
 Usage:
     from tests.fixtures.resolved_bundle import make_resolved_bundle
 
@@ -44,6 +62,7 @@ from rwa_calc.contracts.edges import (
     EdgeContract,
     seal_lenient,
 )
+from tests.fixtures.contract_columns import require_class_on_every_row
 from tests.fixtures.raw_bundle import seal_raw_table
 
 
@@ -115,9 +134,14 @@ def seal_classifier_exit(frame: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
     """Seal a hand-rolled classified frame against the classifier_exit edge.
 
     Lenient by design: missing declared columns become typed nulls (the
-    CRM stage's input is always the full contract shape).
+    CRM stage's input is always the full contract shape) — except
+    ``exposure_class``, which the classifier writes on every row.
+
+    Raises:
+        ValueError: a non-empty frame has no ``exposure_class`` or a null one.
     """
     lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
+    require_class_on_every_row(lf, CLASSIFIER_EXIT_EDGE.name)
     sealed, _missing, _lossy = seal_lenient(lf, CLASSIFIER_EXIT_EDGE)
     return sealed
 
@@ -145,9 +169,14 @@ def seal_crm_exit(frame: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
     """Seal a hand-rolled CRM-adjusted frame against the crm_exit edge.
 
     Lenient by design: missing declared columns become typed nulls (the
-    calculators' branch split input is always the full contract shape).
+    calculators' branch split input is always the full contract shape) —
+    except ``exposure_class``, which every classified row carries.
+
+    Raises:
+        ValueError: a non-empty frame has no ``exposure_class`` or a null one.
     """
     lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
+    require_class_on_every_row(lf, CRM_EXIT_EDGE.name)
     sealed, _missing, _lossy = seal_lenient(lf, CRM_EXIT_EDGE)
     return sealed
 
@@ -176,9 +205,14 @@ def seal_aggregator_exit(frame: pl.LazyFrame | pl.DataFrame) -> pl.LazyFrame:
     Lenient by design: missing declared columns become typed nulls and
     CONDITIONAL (inject=False) columns are preserved only when supplied —
     test bundles are shape-identical to the frame the reporting layer
-    receives from ``OutputAggregator.aggregate``.
+    receives from ``OutputAggregator.aggregate``. ``exposure_class`` is not
+    null-completed: the aggregator exit carries it on every row.
+
+    Raises:
+        ValueError: a non-empty frame has no ``exposure_class`` or a null one.
     """
     lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
+    require_class_on_every_row(lf, AGGREGATOR_EXIT_EDGE.name)
     sealed, _missing, _lossy = seal_lenient(lf, AGGREGATOR_EXIT_EDGE)
     return sealed
 
@@ -211,8 +245,15 @@ def _seal_summary_frame(frame: pl.LazyFrame | pl.DataFrame, edge: EdgeContract) 
     must both fail loudly here rather than be silently filled with / reduced to
     typed nulls — the repo's known masking trap. Populate the real producer
     columns, with the producer's dtypes, instead of weakening these asserts.
+    On a classed edge a supplied NULL ``exposure_class`` is refused too: the
+    aggregator's summaries take their class from non-null carriers.
+
+    Raises:
+        ValueError: a classed edge's non-empty frame has a null ``exposure_class``.
     """
     lf = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
+    if "exposure_class" in edge.columns:
+        require_class_on_every_row(lf, edge.name)
     sealed, missing, lossy = seal_lenient(lf, edge)
     assert not missing, (
         f"{edge.name}: hand-rolled summary frame is missing required column(s) "

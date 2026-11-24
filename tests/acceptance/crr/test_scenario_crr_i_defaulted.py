@@ -92,7 +92,7 @@ class TestCRRI1_FIRBCorporateDefaulted:
         """F-IRB defaulted corporate: K=0."""
         lf = _build_defaulted_exposure(
             exposure_ref="CRR_I1_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="foundation_irb",
             is_airb=False,
             lgd=0.45,
@@ -110,7 +110,7 @@ class TestCRRI1_FIRBCorporateDefaulted:
         """F-IRB defaulted corporate: RWA=0."""
         lf = _build_defaulted_exposure(
             exposure_ref="CRR_I1_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="foundation_irb",
             is_airb=False,
             lgd=0.45,
@@ -129,7 +129,7 @@ class TestCRRI1_FIRBCorporateDefaulted:
         """F-IRB defaulted corporate: EL = LGD × EAD = 0.45 × 500,000 = 225,000."""
         lf = _build_defaulted_exposure(
             exposure_ref="CRR_I1_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="foundation_irb",
             is_airb=False,
             lgd=0.45,
@@ -162,7 +162,7 @@ class TestCRRI2_AIRBRetailDefaulted:
         """A-IRB retail defaulted: K = max(0, 0.65 - 0.50) = 0.15."""
         lf = _build_defaulted_exposure(
             exposure_ref="CRR_I2_RTL",
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.65,
@@ -180,7 +180,7 @@ class TestCRRI2_AIRBRetailDefaulted:
         """A-IRB retail defaulted CRR: RWA = 0.15 × 12.5 × 1.0 × 25,000 = 46,875."""
         lf = _build_defaulted_exposure(
             exposure_ref="CRR_I2_RTL",
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.65,
@@ -199,7 +199,7 @@ class TestCRRI2_AIRBRetailDefaulted:
         """A-IRB retail defaulted: EL = BEEL × EAD = 0.50 × 25,000 = 12,500."""
         lf = _build_defaulted_exposure(
             exposure_ref="CRR_I2_RTL",
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.65,
@@ -236,7 +236,7 @@ class TestCRRI3_AIRBCorporateDefaulted:
         """A-IRB corporate defaulted: K = 0.15."""
         lf = _build_defaulted_exposure(
             exposure_ref="CRR_I3_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.60,
@@ -257,7 +257,7 @@ class TestCRRI3_AIRBCorporateDefaulted:
         """
         lf = _build_defaulted_exposure(
             exposure_ref="CRR_I3_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.60,
@@ -276,7 +276,7 @@ class TestCRRI3_AIRBCorporateDefaulted:
         """A-IRB corporate defaulted: EL = BEEL × EAD = 0.45 × 500,000 = 225,000."""
         lf = _build_defaulted_exposure(
             exposure_ref="CRR_I3_CORP",
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             approach="advanced_irb",
             is_airb=True,
             lgd=0.60,

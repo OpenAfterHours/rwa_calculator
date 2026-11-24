@@ -48,7 +48,7 @@ def _ledger() -> pl.DataFrame:
     return pl.DataFrame(
         {
             "exposure_reference": ["A", "B", "C"],
-            "reporting_class": ["corporate", "corporate", "retail"],
+            "reporting_class": ["corporate", "corporate", "retail_other"],
             "reporting_class_origin": ["corporate", "corporate", "corporate"],
             "reporting_method": ["FIRB", "STD", "FIRB"],
             "reporting_approach_origin": ["foundation_irb", "standardised", "foundation_irb"],
@@ -270,7 +270,7 @@ class TestPredicates:
         )
         pred = RowPredicate(
             any_of=(
-                RowPredicate(classes=("retail",)),
+                RowPredicate(classes=("retail_other",)),
                 RowPredicate(equals=(("re_split_role", "secured"),)),
             )
         )
@@ -281,7 +281,7 @@ class TestPredicates:
         rows — the class limb still matches."""
         pred = RowPredicate(
             any_of=(
-                RowPredicate(classes=("retail",)),
+                RowPredicate(classes=("retail_other",)),
                 RowPredicate(equals=(("re_split_role", "secured"),)),
             )
         )
@@ -291,7 +291,7 @@ class TestPredicates:
         pred = RowPredicate(
             is_defaulted=False,
             any_of=(
-                RowPredicate(classes=("retail",)),
+                RowPredicate(classes=("retail_other",)),
                 RowPredicate(classes=("corporate",)),
             ),
         )

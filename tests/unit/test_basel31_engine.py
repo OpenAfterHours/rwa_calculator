@@ -2061,17 +2061,17 @@ class TestB31SMECorrelation:
         Under B31, turnover GBP 4.4m is the floor — anything at or below
         gets the full 0.04 reduction.
         """
-        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        base_corr = calculate_correlation(pd=0.01, exposure_class="corporate", is_b31=True)
         floor_corr = calculate_correlation(
-            pd=0.01, exposure_class="CORPORATE", turnover_m=4.4, is_b31=True
+            pd=0.01, exposure_class="corporate", turnover_m=4.4, is_b31=True
         )
         assert base_corr - floor_corr == pytest.approx(0.04, rel=0.01)
 
     def test_b31_sme_below_floor_also_max_adjustment(self) -> None:
         """Below GBP 4.4m, adjustment still maxes at 0.04 (clamped to floor)."""
-        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        base_corr = calculate_correlation(pd=0.01, exposure_class="corporate", is_b31=True)
         below_floor_corr = calculate_correlation(
-            pd=0.01, exposure_class="CORPORATE", turnover_m=2.0, is_b31=True
+            pd=0.01, exposure_class="corporate", turnover_m=2.0, is_b31=True
         )
         assert base_corr - below_floor_corr == pytest.approx(0.04, rel=0.01)
 
@@ -2081,9 +2081,9 @@ class TestB31SMECorrelation:
         s = max(4.4, min(44, 44)) = 44
         adjustment = 0.04 × (1 - (44 - 4.4) / 39.6) = 0.04 × 0 = 0
         """
-        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        base_corr = calculate_correlation(pd=0.01, exposure_class="corporate", is_b31=True)
         threshold_corr = calculate_correlation(
-            pd=0.01, exposure_class="CORPORATE", turnover_m=44.0, is_b31=True
+            pd=0.01, exposure_class="corporate", turnover_m=44.0, is_b31=True
         )
         assert base_corr == pytest.approx(threshold_corr, abs=1e-10)
 
@@ -2092,9 +2092,9 @@ class TestB31SMECorrelation:
 
         Large corporates with turnover >= GBP 44m get base corporate correlation.
         """
-        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        base_corr = calculate_correlation(pd=0.01, exposure_class="corporate", is_b31=True)
         large_corr = calculate_correlation(
-            pd=0.01, exposure_class="CORPORATE", turnover_m=100.0, is_b31=True
+            pd=0.01, exposure_class="corporate", turnover_m=100.0, is_b31=True
         )
         assert base_corr == pytest.approx(large_corr)
 
@@ -2104,9 +2104,9 @@ class TestB31SMECorrelation:
         s = max(4.4, min(24.2, 44)) = 24.2
         adjustment = 0.04 × (1 - (24.2 - 4.4) / 39.6) = 0.04 × 0.5 = 0.02
         """
-        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        base_corr = calculate_correlation(pd=0.01, exposure_class="corporate", is_b31=True)
         mid_corr = calculate_correlation(
-            pd=0.01, exposure_class="CORPORATE", turnover_m=24.2, is_b31=True
+            pd=0.01, exposure_class="corporate", turnover_m=24.2, is_b31=True
         )
         assert base_corr - mid_corr == pytest.approx(0.02, rel=0.01)
 
@@ -2118,14 +2118,14 @@ class TestB31SMECorrelation:
         """
         corr_default_rate = calculate_correlation(
             pd=0.01,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             turnover_m=20.0,
             eur_gbp_rate=0.8732,
             is_b31=True,
         )
         corr_different_rate = calculate_correlation(
             pd=0.01,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             turnover_m=20.0,
             eur_gbp_rate=0.5000,
             is_b31=True,
@@ -2139,14 +2139,14 @@ class TestB31SMECorrelation:
         """
         corr_rate_1 = calculate_correlation(
             pd=0.01,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             turnover_m=20.0,
             eur_gbp_rate=0.8732,
             is_b31=False,
         )
         corr_rate_2 = calculate_correlation(
             pd=0.01,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
             turnover_m=20.0,
             eur_gbp_rate=0.5000,
             is_b31=False,
@@ -2167,13 +2167,13 @@ class TestB31SMECorrelation:
         The adjustments are close but not identical.
         """
         b31_corr = calculate_correlation(
-            pd=0.01, exposure_class="CORPORATE", turnover_m=20.0, is_b31=True
+            pd=0.01, exposure_class="corporate", turnover_m=20.0, is_b31=True
         )
         crr_corr = calculate_correlation(
-            pd=0.01, exposure_class="CORPORATE", turnover_m=20.0, is_b31=False
+            pd=0.01, exposure_class="corporate", turnover_m=20.0, is_b31=False
         )
         # Both should have SME adjustment (both are SME-sized)
-        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        base_corr = calculate_correlation(pd=0.01, exposure_class="corporate", is_b31=True)
         assert b31_corr < base_corr
         assert crr_corr < base_corr
         # But they should differ slightly
@@ -2203,7 +2203,7 @@ class TestB31SMECorrelation:
         correlations = result["correlation"].to_list()
 
         # Floor turnover (4.4m) — max adjustment of 0.04
-        base = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        base = calculate_correlation(pd=0.01, exposure_class="corporate", is_b31=True)
         assert correlations[0] == pytest.approx(base - 0.04, rel=0.01)
 
         # Midpoint (24.2m) — ~0.02 adjustment
@@ -2219,9 +2219,9 @@ class TestB31SMECorrelation:
         Under B31: GBP 43.66m < GBP 44m → gets SME adjustment.
         This is the boundary case the fix corrects.
         """
-        base_corr = calculate_correlation(pd=0.01, exposure_class="CORPORATE", is_b31=True)
+        base_corr = calculate_correlation(pd=0.01, exposure_class="corporate", is_b31=True)
         boundary_corr = calculate_correlation(
-            pd=0.01, exposure_class="CORPORATE", turnover_m=43.66, is_b31=True
+            pd=0.01, exposure_class="corporate", turnover_m=43.66, is_b31=True
         )
         # Should get a small but non-zero adjustment
         # s = max(4.4, min(43.66, 44)) = 43.66

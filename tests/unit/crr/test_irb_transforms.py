@@ -209,6 +209,7 @@ class TestApplyLgdFloor:
         lf = pl.LazyFrame(
             {
                 "lgd": [0.10, 0.20, 0.45],  # All below Basel 3.1 unsecured floor
+                "exposure_class": ["corporate"] * 3,
             }
         )
         result = _pad(lf).pipe(apply_lgd_floor, crr_config).collect()
@@ -224,6 +225,9 @@ class TestApplyLgdFloor:
             {
                 "lgd": [0.10, 0.20, 0.45],  # First two below 25% floor
                 "is_airb": [True, True, True],
+                # The A-IRB LGD floor is class-keyed and the classifier never
+                # leaves the class null, so the frame names it (P5.69).
+                "exposure_class": ["corporate"] * 3,
             }
         )
         result = _pad(lf).pipe(apply_lgd_floor, basel31_config).collect()
@@ -240,6 +244,7 @@ class TestApplyLgdFloor:
             {
                 "lgd": [0.10, 0.20, 0.45],
                 "is_airb": [False, False, False],
+                "exposure_class": ["corporate"] * 3,
             }
         )
         result = _pad(lf).pipe(apply_lgd_floor, basel31_config).collect()
@@ -1109,6 +1114,7 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
+                "exposure_class": ["corporate"],
                 "expected_loss": [45_000.0],
                 "provision_allocated": [30_000.0],
             }
@@ -1123,6 +1129,7 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
+                "exposure_class": ["corporate"],
                 "expected_loss": [11_250.0],
                 "provision_allocated": [50_000.0],
             }
@@ -1137,6 +1144,7 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
+                "exposure_class": ["corporate"],
                 "expected_loss": [25_000.0],
                 "provision_allocated": [25_000.0],
             }
@@ -1151,6 +1159,7 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
+                "exposure_class": ["corporate"],
                 "expected_loss": [10_000.0],
                 "provision_allocated": [0.0],
             }
@@ -1165,6 +1174,7 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
+                "exposure_class": ["corporate"],
                 "expected_loss": [0.0],
                 "provision_allocated": [5_000.0],
             }
@@ -1179,6 +1189,7 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001", "EXP002", "EXP003"],
+                "exposure_class": ["corporate"] * 3,
                 "expected_loss": [45_000.0, 11_250.0, 20_000.0],
                 "provision_allocated": [30_000.0, 50_000.0, 20_000.0],
             }
@@ -1200,6 +1211,7 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
+                "exposure_class": ["corporate"],
                 "expected_loss": [10_000.0],
             }
         )
@@ -1213,6 +1225,7 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
+                "exposure_class": ["corporate"],
                 "provision_allocated": [10_000.0],
             }
         )
@@ -1226,11 +1239,13 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
+                "exposure_class": ["corporate"],
                 "expected_loss": [None],
                 "provision_allocated": [5_000.0],
             },
             schema={
                 "exposure_reference": pl.String,
+                "exposure_class": pl.String,
                 "expected_loss": pl.Float64,
                 "provision_allocated": pl.Float64,
             },
@@ -1245,11 +1260,13 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["EXP001"],
+                "exposure_class": ["corporate"],
                 "expected_loss": [10_000.0],
                 "provision_allocated": [None],
             },
             schema={
                 "exposure_reference": pl.String,
+                "exposure_class": pl.String,
                 "expected_loss": pl.Float64,
                 "provision_allocated": pl.Float64,
             },
@@ -1264,6 +1281,7 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["LOAN_PROV_G2"],
+                "exposure_class": ["corporate"],
                 "expected_loss": [45_000.0],
                 "provision_allocated": [30_000.0],
             }
@@ -1278,6 +1296,7 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["LOAN_PROV_G3"],
+                "exposure_class": ["corporate"],
                 "expected_loss": [11_250.0],
                 "provision_allocated": [50_000.0],
             }
@@ -1292,6 +1311,7 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["LOAN_PROV_G2"],
+                "exposure_class": ["corporate"],
                 "expected_loss": [40_000.0],
                 "provision_allocated": [30_000.0],
             }
@@ -1306,6 +1326,7 @@ class TestELShortfallExcess:
         lf = pl.LazyFrame(
             {
                 "exposure_reference": ["LOAN_PROV_G3"],
+                "exposure_class": ["corporate"],
                 "expected_loss": [10_000.0],
                 "provision_allocated": [50_000.0],
             }

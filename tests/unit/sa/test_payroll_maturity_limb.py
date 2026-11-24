@@ -41,6 +41,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.sa import SACalculator
 from rwa_calc.rulebook.resolve import resolve
 
@@ -74,7 +75,7 @@ def _payroll_row(
         {
             "exposure_reference": ["PAY_LIMB_D"],
             "ead_final": [_EAD],
-            "exposure_class": ["RETAIL_OTHER"],
+            "exposure_class": [ExposureClass.RETAIL_OTHER.value],
             "cqs": [None],
             "is_sme": [False],
             "is_infrastructure": [False],

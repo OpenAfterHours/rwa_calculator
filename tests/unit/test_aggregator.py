@@ -933,6 +933,7 @@ class TestELPortfolioSummary:
             {
                 "exposure_reference": ["EXP001", "EXP002"],
                 "approach_applied": ["FIRB", "AIRB"],
+                "exposure_class": ["corporate", "corporate"],
                 "rwa_post_factor": [5000000.0, 3000000.0],
                 "expected_loss": [50000.0, 30000.0],
                 "provision_allocated": [30000.0, 10000.0],
@@ -966,6 +967,7 @@ class TestELPortfolioSummary:
             {
                 "exposure_reference": ["EXP001", "EXP002"],
                 "approach_applied": ["FIRB", "AIRB"],
+                "exposure_class": ["corporate", "corporate"],
                 "rwa_post_factor": [5000000.0, 3000000.0],
                 "expected_loss": [20000.0, 10000.0],
                 "provision_allocated": [50000.0, 30000.0],
@@ -999,6 +1001,7 @@ class TestELPortfolioSummary:
             {
                 "exposure_reference": ["EXP001"],
                 "approach_applied": ["FIRB"],
+                "exposure_class": ["corporate"],
                 "rwa_post_factor": [10000000.0],
                 "expected_loss": [10000.0],
                 "provision_allocated": [30000.0],
@@ -1030,6 +1033,7 @@ class TestELPortfolioSummary:
             {
                 "exposure_reference": ["EXP001"],
                 "approach_applied": ["FIRB"],
+                "exposure_class": ["corporate"],
                 "rwa_post_factor": [100000000.0],
                 "el_shortfall": [0.0],
                 "el_excess": [1000000.0],
@@ -1068,6 +1072,7 @@ class TestELPortfolioSummary:
             {
                 "exposure_reference": ["EXP001", "EXP002", "EXP003"],
                 "approach_applied": ["FIRB", "AIRB", "FIRB"],
+                "exposure_class": ["corporate", "corporate", "corporate"],
                 "rwa_post_factor": [4000000.0, 3000000.0, 3000000.0],
                 "expected_loss": [50000.0, 10000.0, 20000.0],
                 "provision_allocated": [30000.0, 40000.0, 50000.0],
@@ -1167,7 +1172,7 @@ class TestReportingProjection:
                         "EXP_PLAIN",
                     ],
                     "counterparty_reference": ["B01", "B01", "B02", "B02", "B03"],
-                    "exposure_class": ["CORPORATE"] * 5,
+                    "exposure_class": ["corporate"] * 5,
                     "approach": ["FIRB"] * 5,
                     "approach_applied": ["FIRB"] * 5,
                     "ead_final": [600000.0, 400000.0, 100000.0, 900000.0, 250000.0],
@@ -1178,8 +1183,8 @@ class TestReportingProjection:
                     "unguaranteed_portion": [0.0, 400000.0, 100000.0, 900000.0, 0.0],
                     "guarantor_approach": ["sa", None, None, None, None],
                     "guarantor_reference": ["GUAR01", None, None, None, None],
-                    "pre_crm_exposure_class": ["CORPORATE"] * 5,
-                    "post_crm_exposure_class_guaranteed": ["RETAIL", None, None, None, None],
+                    "pre_crm_exposure_class": ["corporate"] * 5,
+                    "post_crm_exposure_class_guaranteed": ["retail_other", None, None, None, None],
                 }
             )
         )
@@ -1383,9 +1388,9 @@ class TestReportingProjection:
         outflow = guaranteed.group_by("reporting_class_origin").agg(pl.col("reporting_ead").sum())
         inflow = guaranteed.group_by("reporting_class").agg(pl.col("reporting_ead").sum())
         assert outflow.to_dicts() == [
-            {"reporting_class_origin": "CORPORATE", "reporting_ead": 600000.0}
+            {"reporting_class_origin": "corporate", "reporting_ead": 600000.0}
         ]
-        assert inflow.to_dicts() == [{"reporting_class": "RETAIL", "reporting_ead": 600000.0}]
+        assert inflow.to_dicts() == [{"reporting_class": "retail_other", "reporting_ead": 600000.0}]
 
     def test_reporting_method_is_post_substitution(
         self,

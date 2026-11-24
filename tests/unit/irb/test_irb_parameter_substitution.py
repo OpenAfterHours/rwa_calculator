@@ -85,7 +85,7 @@ class TestZeroEadGuaranteeStaysFinite:
 
 
 def _compute_expected_irb_rw(
-    pd: float, lgd: float, maturity: float, exposure_class: str = "CORPORATE"
+    pd: float, lgd: float, maturity: float, exposure_class: str = "corporate"
 ) -> float:
     """Compute expected IRB risk weight using the parametric formula helper.
 
@@ -472,10 +472,10 @@ class TestParametricIRBRiskWeightExpr:
     def test_retail_exposure_has_no_maturity_adjustment(self) -> None:
         """Retail exposures should have MA=1.0 (no maturity effect)."""
         rw_short = _compute_expected_irb_rw(
-            pd=0.01, lgd=0.40, maturity=1.0, exposure_class="RETAIL_MORTGAGE"
+            pd=0.01, lgd=0.40, maturity=1.0, exposure_class="retail_mortgage"
         )
         rw_long = _compute_expected_irb_rw(
-            pd=0.01, lgd=0.40, maturity=5.0, exposure_class="RETAIL_MORTGAGE"
+            pd=0.01, lgd=0.40, maturity=5.0, exposure_class="retail_mortgage"
         )
 
         # Retail: no maturity adjustment, so RW should be the same

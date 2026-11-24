@@ -260,7 +260,7 @@ class TestCoveredBondSACRR:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=cqs,
             config=crr_config,
         )
@@ -279,7 +279,7 @@ class TestCoveredBondSACRR:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=None,
             config=crr_config,
         )
@@ -310,7 +310,7 @@ class TestCoveredBondSACRR:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=None,
             config=crr_config,
             institution_cqs=institution_cqs,
@@ -330,7 +330,7 @@ class TestCoveredBondSACRR:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=None,
             config=config,
         )
@@ -349,7 +349,7 @@ class TestCoveredBondSACRR:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=1,
             config=crr_config,
             institution_cqs=6,  # Should be ignored — bond is rated
@@ -371,14 +371,14 @@ class TestCoveredBondSACRR:
         crr_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=ead,
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=None,
             config=crr_config,
         )
         b31_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=ead,
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=None,
             config=b31_config,
             scra_grade="A",
@@ -470,7 +470,7 @@ class TestCoveredBondSABasel31:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=cqs,
             config=b31_config,
         )
@@ -496,7 +496,7 @@ class TestCoveredBondSABasel31:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=None,
             scra_grade=scra_grade,
             config=b31_config,
@@ -534,7 +534,7 @@ class TestCoveredBondSABasel31:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=None,
             institution_cqs=institution_cqs,
             config=b31_config,
@@ -555,7 +555,7 @@ class TestCoveredBondSABasel31:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=None,
             institution_cqs=1,  # ECRA CQS 1 → inst 20% → CB 10%
             scra_grade="C",  # SCRA C → CB 100% (should be ignored)
@@ -577,7 +577,7 @@ class TestCoveredBondSABasel31:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=None,
             scra_grade=None,
             config=b31_config,
@@ -724,7 +724,7 @@ class TestB31CoveredBondRWACalculation:
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=None,
             scra_grade="A_ENHANCED",
             config=b31_config,
@@ -742,14 +742,14 @@ class TestB31CoveredBondRWACalculation:
         b31_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=2,
             config=b31_config,
         )
         crr_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=2,
             config=crr_config,
         )
@@ -767,14 +767,14 @@ class TestB31CoveredBondRWACalculation:
         b31_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=6,
             config=b31_config,
         )
         crr_result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("1000000"),
-            exposure_class="COVERED_BOND",
+            exposure_class="covered_bond",
             cqs=6,
             config=crr_config,
         )

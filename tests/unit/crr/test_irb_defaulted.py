@@ -48,7 +48,7 @@ def basel31_config() -> CalculationConfig:
 
 def _make_defaulted_lf(
     *,
-    exposure_class: str = "CORPORATE",
+    exposure_class: str = "corporate",
     approach: str = "foundation_irb",
     is_airb: bool = False,
     lgd: float = 0.45,
@@ -101,7 +101,7 @@ class TestDefaultedK:
             is_airb=True,
             lgd=0.65,
             beel=0.50,
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
         )
         result = (
             _pad(lf)
@@ -120,7 +120,7 @@ class TestDefaultedK:
             is_airb=True,
             lgd=0.40,
             beel=0.55,
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
         )
         result = (
             _pad(lf)
@@ -137,7 +137,7 @@ class TestDefaultedK:
             is_airb=True,
             lgd=0.60,
             beel=0.0,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
         )
         result = (
             _pad(lf)
@@ -176,7 +176,7 @@ class TestDefaultedRWA:
             lgd=0.65,
             beel=0.50,
             ead_final=25_000.0,
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
         )
         result = (
             _pad(lf)
@@ -196,7 +196,7 @@ class TestDefaultedRWA:
             lgd=0.60,
             beel=0.45,
             ead_final=500_000.0,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
         )
         result = (
             _pad(lf)
@@ -216,7 +216,7 @@ class TestDefaultedRWA:
             lgd=0.60,
             beel=0.45,
             ead_final=500_000.0,
-            exposure_class="CORPORATE",
+            exposure_class="corporate",
         )
         result = (
             _pad(lf)
@@ -284,7 +284,7 @@ class TestDefaultedExpectedLoss:
             lgd=0.65,
             beel=0.50,
             ead_final=25_000.0,
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
         )
         result = (
             _pad(lf)
@@ -433,7 +433,7 @@ class TestDefaultedAudit:
             is_airb=True,
             lgd=0.65,
             beel=0.50,
-            exposure_class="RETAIL_OTHER",
+            exposure_class="retail_other",
         )
         result = (
             _pad(lf)

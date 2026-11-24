@@ -101,6 +101,7 @@ class TestEmptyInputs:
             {
                 "exposure_reference": ["SA1"],
                 "approach_applied": ["SA"],
+                "exposure_class": ["corporate"],
                 "rwa_final": [100.0],
             }
         )
@@ -108,6 +109,7 @@ class TestEmptyInputs:
             {
                 "exposure_reference": ["IRB1"],
                 "approach_applied": ["FIRB"],
+                "exposure_class": ["corporate"],
                 "rwa_final": [200.0],
             }
         )
@@ -115,6 +117,7 @@ class TestEmptyInputs:
             {
                 "exposure_reference": ["SLOT1"],
                 "approach_applied": ["SLOTTING"],
+                "exposure_class": ["specialised_lending"],
                 "rwa_final": [300.0],
             }
         )

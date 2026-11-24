@@ -1198,9 +1198,9 @@ OF 08.05 alike (C 08.04 stays keyed by exposure class under both).
       report and what `boe_b0356` ("PD floor for these exposures is 0.05%") checks.
     - **Known limits.** `boe_b0356` (Warning) still fails on rows 0010 / 0020 / 0030 of
       sheet 0010 when they hold slotting exposure only: the rule asks for a PD the
-      exposure does not have (a limit of the published rule). A defaulted obligor is
-      averaged at the PD the ledger carries, not 100% (plan P1.381) — the same figure
-      OF 08.02, 08.03 and 09.02 report.
+      exposure does not have (a limit of the published rule). A defaulted obligor enters
+      the average at a PD of 100% (CRR / PS1/26 Art. 160(3) and 163(2), P1.381) — the
+      same figure OF 08.02, 08.03 and 09.02 report.
 
 !!! info "Not every row carries every column, and not every sheet every column"
     Two kinds of cell are left empty on purpose.
@@ -1813,6 +1813,13 @@ fall back to current-period approximations when historical inputs are absent:
   (`counterparty_reference.n_unique()`) when `prior_year_obligor_count` is not provided.
 - **Col 0030** (defaulted during year): obligor-level count from `is_defaulted`, falling
   back to PD ≥ 1.0 when the default flag is absent.
+- **Defaulted obligors sit in row 0170** ("100 (Default)"), in both regimes: the engine
+  sets a defaulted IRB leg's PD to 100% on both bases (CRR / PS1/26 Art. 160(3), 163(2)),
+  and Annex II says "All defaulted exposures shall be included in the bucket representing
+  PD of 100%". Because default status is known only at the reporting date, an obligor that
+  defaulted during the year is counted there (cols 0030 and 0040 of row 0170) rather than in
+  its start-of-year band — a recorded decision (P1.381), the same position Pillar 3 CR9
+  takes. The firm's own estimate stays on `internal_pd`.
 - **Col 0040** (observed default rate): col 0030 / col 0020.
 - **Col 0050** (historical annual default rate): falls back to col 0040 (current-period
   observed rate) when `historical_annual_default_rate` is not provided.

@@ -19,12 +19,10 @@ Cell semantics (recorded decisions, this slice):
   (Art. 92(2A)). Each class sheet's r0010 c0260 is one data point with an
   un-floored OF 02.00 class row.
 - The pre-CRM surfaces key the sealed ``reporting_class_origin`` (== raw
-  ``exposure_class`` for IRB rows — the obligor basis, number-neutral
-  convergence; no applied-class ladder and NO specialised-lending merge,
-  unlike C 07.00). C 08.01/02 and C 08.03's post-CRM value block additionally
-  key the sealed post-substitution class/approach. C 08.02/03/04/05 exclude
-  slotting per template. C 08.07 alone keeps the RAW class key (Art. 147
-  origination taxonomy over the FULL population).
+  ``exposure_class`` on IRB rows; no applied-class ladder, NO specialised-lending
+  merge). C 08.01/02 and C 08.03's post-CRM block also key the post-substitution
+  class/approach; C 08.02/03/04/05 exclude slotting; C 08.07 alone keeps the RAW
+  class key (Art. 147 origination taxonomy over the FULL population).
 - C 08.01 IS TWO POPULATIONS PER SHEET — the recorded two-basis decision,
   C 07.00's (``corep/c07.py``) on the IRB surface. A sheet's cells split by
   BASIS, the flags derived by ``kernel/bases.py``:
@@ -44,12 +42,9 @@ Cell semantics (recorded decisions, this slice):
       covered part's exposure value and RWEA must leave the obligor's sheet and
       land on the protection provider's, exactly as cols 0070/0080 already move
       it pre-conversion.
-  Binding cols 0110/0260 to the ORIGIN population was a build shortfall, not a
-  decision: a 10,000,000 slotting loan fully guaranteed by a CQS1 corporate
-  reported ``0090 = 0`` (the whole exposure had left) while simultaneously
-  reporting ``0110 = 10,000,000`` and ``0260 = 2,000,000`` as still there — and
-  since the C 07.00 fix put the same money on the guarantor's SA sheet, the
-  estate DOUBLE-COUNTED it across two templates.
+  Binding cols 0110/0260 to the ORIGIN population was a build shortfall: a fully
+  guaranteed 10,000,000 slotting loan reported 0090 = 0 beside 0110 = 10,000,000,
+  double-counting it against the guarantor's C 07.00 sheet.
   UNDER CRR THE COL 0110 CLAUSE IS ABSENT (PS1/26 added it), and the basis rests
   instead on two things Annex II states positively: col 0110 is the post-CCF
   continuation of col 0090 — itself "after taking into account outflows and
@@ -94,16 +89,12 @@ Cell semantics (recorded decisions, this slice):
   (``boe_b0752_10`` c0110, ``_11`` c0140, ``_25`` c0251, ``_26``-``_28``
   c0252-0254, ``_29`` c0260, ``_30`` c0265, ``_31`` c0270, plus the
   ``boe_b0814_09`` / ``_18`` twins). Leaving C 08.02 behind broke five of them on
-  the CRM-substitution portfolio the moment C 08.01 moved — measured, not
-  predicted: 6,000,000 vs 4,000,000 on c0110 and 4,283,321 vs 2,855,547 on
-  c0251/c0260, across three sheets.
+  the CRM-substitution portfolio (measured: c0110 6,000,000 vs 4,000,000).
   WHERE AN ARRIVED LEG LANDS ON C 08.02 IS R12'S DECISION, EXTENDED FROM THE
   SCALAR TO THE FRAME: the "Unassigned" residual row, via the derived
-  ``c08_02_key_post`` (``_c08_02_keyed``). R12's reasoning is untouched — the
-  ledger carries the OBLIGOR's grade, never the guarantor's — so an arrived leg's
-  exposure value and RWEA may not assert a grade in this sheet's scale either,
-  and the row already meaning "an exposure whose grade we do not carry" is where
-  the col 0080 scalar and the legs that make it up both belong.
+  ``c08_02_key_post`` (``_c08_02_keyed``): the ledger carries the OBLIGOR's grade,
+  never the guarantor's, so an arrived leg may not assert a grade in this sheet's
+  scale, and the row meaning "a grade we do not carry" takes it.
 - C 08.03 HAS AN EXPLICIT TWO-BASIS COLUMN MATRIX REACHING BOTH THE SHEET AND
   THE ROW AXIS. Cols 0010/0020/0030/0060/0110 read the obligor/origin
   population; cols 0040/0050/0070/0080/0090/0100 read the post-substitution
@@ -500,6 +491,7 @@ _NEGATIVE_COLS: frozenset[str] = frozenset(
 # null ``cp_internal_rating_grade``. A destination class with no unassigned-grade
 # legs of its own has the row added for the inflow (``c08_02_plans``).
 _C08_02_INFLOW_ROW: str = "Unassigned"
+_C08_02_DEFAULT_ROW: str = PD_BANDS[-1][2]  # a defaulted leg's row: the 100% band (P1.381)
 
 # C 08.04's RWEA fallback ladder, behind the own-approach carrier (``own_rwea``):
 # DELIBERATELY two-wide (no ``rwa_post_factor``) — the retired ladder. One home,
@@ -1261,7 +1253,10 @@ def _c08_02_keyed(
 
     ``c08_02_key`` (the ORIGIN axis) is the retired rule: distinct firm grades
     when the grade column has values (null grades -> "Unassigned"), else the
-    populated fixed PD bands (out-of-band/null PD -> "Unassigned").
+    populated fixed PD bands (out-of-band/null PD -> "Unassigned"). A defaulted leg
+    keys the 100% row, after every performing grade (Annex II C / OF 08.02 col
+    0005): by its 100% PD on the band path, by ``c08_defaulted`` on the grade path
+    (P1.381); an "Unassigned" row, where one exists, follows it.
 
     ``c08_02_key_post`` (the POST axis) is the same key EXCEPT on a leg that
     ARRIVED on this sheet by substitution (post-basis here, origin-basis
@@ -1288,12 +1283,18 @@ def _c08_02_keyed(
     if grade_col is not None and grade_col in class_df.columns:
         non_null = native.filter(pl.col(grade_col).is_not_null())
         if len(non_null) > 0:
-            keyed = class_df.with_columns(
-                pl.col(grade_col).fill_null(_C08_02_INFLOW_ROW).alias("c08_02_key")
+            dflt = pl.col("c08_defaulted") if "c08_defaulted" in class_df.columns else False
+            key = (
+                pl.when(dflt)
+                .then(pl.lit(_C08_02_DEFAULT_ROW))
+                .otherwise(pl.col(grade_col).fill_null(_C08_02_INFLOW_ROW))
+                .alias("c08_02_key")
             )
-            labels = non_null[grade_col].unique().sort().to_list()
-            if len(non_null) < len(native):
-                labels.append(_C08_02_INFLOW_ROW)
+            keyed = class_df.with_columns(key)
+            present = set(native.select(key)["c08_02_key"].to_list())
+            trailing = (_C08_02_DEFAULT_ROW, _C08_02_INFLOW_ROW)
+            labels = sorted(present.difference(trailing))
+            labels.extend(label for label in trailing if label in present)
             return labels, _c08_02_post_key(keyed)
     band_expr: pl.Expr = pl.lit(_C08_02_INFLOW_ROW)
     for lower, upper, label in reversed(PD_BANDS):

@@ -5,13 +5,15 @@ Pipeline position:
     IRB formulas -> Adjustments -> Guarantee substitution
 
 Key responsibilities:
-- Defaulted exposure treatment (CRR Art. 153(1)(ii) / 154(1)(i), Basel CRE31.3)
+- Defaulted exposure treatment (CRR Art. 153(1)(ii) / 154(1)(i), Basel CRE31.3),
+  including the PD of 100% for obligors in default (Art. 160(3) / 163(2))
 - Post-model adjustments for known model deficiencies (Basel 3.1 PRA PS1/26)
 - EL shortfall/excess comparison against provisions (CRR Art. 158-159), on the
   EL after any PS1/26 Art. 158(6A) post-model increase (``art_159_expected_loss``)
 
 References:
 - CRR Art. 153(1)(ii), 154(1)(i): Defaulted exposure treatment
+- CRR / PRA PS1/26 Art. 160(3), 163(2): PD of 100% for obligors in default
 - PRA PS1/26 Art. 153(5A), 154(4A), 158(6A): Post-model adjustments
 - CRR Art. 158-159: EL shortfall treatment
 - PRA PS1/26 Art. 159(1): 'A' and 'C' include the Art. 158(6A) EL increase
@@ -46,6 +48,10 @@ if TYPE_CHECKING:
 # =============================================================================
 
 
+@cites("CRR Art. 160(3)")
+@cites("CRR Art. 163(2)")
+@cites("PS1/26, paragraph 160")
+@cites("PS1/26, paragraph 163")
 def apply_defaulted_treatment(lf: pl.LazyFrame) -> pl.LazyFrame:
     """
     Apply regulatory treatment for defaulted exposures (PD=100%).
@@ -58,6 +64,24 @@ def apply_defaulted_treatment(lf: pl.LazyFrame) -> pl.LazyFrame:
     Expected loss for defaulted exposures:
     - F-IRB: EL = LGD × EAD (supervisory LGD)
     - A-IRB: EL = BEEL × EAD (best estimate)
+
+    PD of a defaulted obligor — CRR and PS1/26 Art. 160(3): "An institution
+    shall use a PD of 100% for obligors in default"; Art. 163(2) is the retail
+    twin, which also covers a default defined at facility level. It is the PD
+    itself, not a floor, so BOTH carriers read 1.0 on a defaulted row:
+    ``pd_floored`` (post-input-floor: C 08.01 c0010, C 08.03 c0050, C 09.02
+    c0080, CR6 / CR9 col f) and ``pd`` (pre-input-floor: the basis Basel 3.1's
+    OF 08.03 / 08.05 row axis is stated on). Every PD-band template therefore
+    puts the leg in its 100% row, as Annex II requires: "All defaulted exposures
+    shall be included in the bucket representing PD of 100%". The guarantee
+    stage runs after this and seals its post-CRM PD carriers from these two, so
+    a leg that is not parameter-substituted carries 100% there too. The firm's
+    own estimate stays on ``internal_pd``. The PD is set here, after the K,
+    correlation and maturity batches, so no Vasicek term is evaluated at PD 1,
+    and K, RWEA and EL here are overridden from the default flag, not the PD.
+    One later reader is order-only: the aggregator's facility-share tie-break
+    ranks PD descending (``engine/aggregator/_facility_share.py``), where a
+    defaulted leg now ranks as the worse credit. P1.381.
 
     Runs after calculate_expected_loss (so all standard columns exist)
     and before apply_guarantee_substitution.
@@ -98,6 +122,11 @@ def apply_defaulted_treatment(lf: pl.LazyFrame) -> pl.LazyFrame:
     # Override only defaulted rows
     return lf.with_columns(
         [
+            # Art. 160(3) / 163(2): PD 100%, on the pre- AND post-input-floor basis.
+            *(
+                pl.when(is_defaulted).then(pl.lit(1.0)).otherwise(pl.col(pd_col)).alias(pd_col)
+                for pd_col in ("pd", "pd_floored")
+            ),
             pl.when(is_defaulted).then(k_defaulted).otherwise(pl.col("k")).alias("k"),
             pl.when(is_defaulted)
             .then(pl.lit(0.0))

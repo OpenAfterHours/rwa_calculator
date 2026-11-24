@@ -19,10 +19,30 @@ key every row. Splitting the label into leaf and parent keeps every row a single
 equality term, which is the shape ``SheetPlan.row_terms`` and the rebuilt
 drill-down predicates both require.
 
+The 100% row (0170): "All defaulted exposures shall be included in the bucket
+representing PD of 100%" (CRR Annex II C 08.03 / C 08.05 rows; PS1/26 Annex II
+OF 08.03 / OF 08.05 rows). Nothing here reads a default flag: the engine seals a
+PD of 100% on a defaulted IRB leg on BOTH bases the axis can band on (``pd`` and
+``pd_floored``, Art. 160(3) / 163(2);
+``engine/irb/adjustments.py::apply_defaulted_treatment``), and the guarantee
+stage carries it onto the post-CRM twins of a leg it does not substitute, so
+both limbs land the leg in 0170.
+
+RECORDED DECISION (P1.381, owner sign-off) - C / OF 08.05 shares this axis, so a
+defaulted obligor is counted in row 0170 there too (col 0030 counts it as a
+default, col 0040 reads 100%), and the performing band it came from no longer
+counts it. Annex II bands C 08.05 on the PD "estimated at the beginning of the
+reporting period", and the engine carries default status at the reporting date
+only, so an obligor that defaulted DURING the year is shown in 0170 rather than
+in its start-of-year band. Pillar 3 CR9 took the same position first (defaulted
+legs forced to its row 17). The firm's own estimate survives on ``internal_pd``;
+banding C 08.05 on it instead is the reversal (``c08.py::c08_05_plans``).
+
 References:
 - Regulation (EU) 2021/451 Annex I, template C 08.03 (row axis)
 - PRA PS1/26 Annex I, template OF 08.03 (row axis; splits the first sub-band)
 - PRA PS1/26 Annex II §3.3.5, "PD RANGE (PRE-INPUT FLOOR) (%)" row instructions
+- CRR / PRA PS1/26 Art. 160(3), 163(2): PD of 100% for obligors in default
 """
 
 from __future__ import annotations

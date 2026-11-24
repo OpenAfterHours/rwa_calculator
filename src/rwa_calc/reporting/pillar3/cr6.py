@@ -285,9 +285,10 @@ def _with_alloc_pd(data: pl.DataFrame, alloc_source: str) -> pl.DataFrame:
     """Add the derived allocation column, forcing defaulted rows to 100%.
 
     "All defaulted exposures shall be included in the bucket representing
-    PD of 100%" (Annex XXII column a, both regimes) — the engine's defaulted
-    treatment overrides K/RWA but never the model PD, so the band allocation
-    must impose the 100% landing itself (recorded fix).
+    PD of 100%" (Annex XXII column a, both regimes). The engine's defaulted
+    treatment sets ``pd`` and ``pd_floored`` to 100% on a defaulted IRB leg
+    (Art. 160(3) / 163(2), P1.381), so on a sealed ledger this override agrees
+    with the carrier; it stays as the guard for a frame whose PD does not.
     """
     alloc = pl.col(alloc_source)
     if "is_defaulted" in data.columns:

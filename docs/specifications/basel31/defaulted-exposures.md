@@ -179,6 +179,46 @@ The risk weight is:
 RW = max(0, 12.5 x K)
 ```
 
+### PD of Defaulted Obligors (Art. 160(3), Art. 163(2))
+
+!!! quote "PRA PS1/26 Art. 160(3) and Art. 163(2) verbatim (ps126app1.pdf pp. 110, 115)"
+    "3. An institution shall use a PD of 100% for obligors in default."
+
+    "2. An institution shall, for retail exposures, use a PD of 100% for obligors in default
+    or, where the institution applies the definition of default at the level of an individual
+    credit facility, for exposures in default."
+
+CRR Art. 160(3) and 163(2) say the same ("The PD of obligors in default shall be 100 %"), so
+the treatment is identical in both regimes. The 100% is the PD itself, not an input floor, so
+`engine/irb/adjustments.py::apply_defaulted_treatment` sets **both** PD carriers to `1.0` on
+every IRB row with `is_defaulted = True`:
+
+| Carrier | Basis | Read by |
+|---|---|---|
+| `pd` | pre-input-floor | the Basel 3.1 C / OF 08.03 and 08.05 row axis ("PD RANGE (PRE-INPUT FLOOR)"); Basel 3.1 Pillar 3 CR6 / CR9 band allocation |
+| `pd_floored` | post-input-floor | the CRR row axis; C / OF 08.01 col 0010, 08.02 col 0010, 08.03 col 0050, 08.05 col 0010, 09.02 col 0080; CR6 / CR9 col f |
+
+The firm's own estimate is kept on `internal_pd`. The PD is set after the K, correlation and
+maturity calculations, and capital never reads a defaulted row's PD — K, RWEA and EL come from
+the default flag (above and below) — so the change moves no capital. The IRB guarantee stage
+runs afterwards and seals its post-CRM carriers (`reporting_pd_post_crm`,
+`reporting_pd_post_crm_pre_floor`) from these two, so a leg that is not parameter-substituted
+also carries 100% on the post-CRM limb; a substituted leg carries its guarantor's PD there.
+
+**Reporting consequence.** Annex II requires "All defaulted exposures shall be included in the
+bucket representing PD of 100%" (C / OF 08.03 and 08.05) and "PD of obligors in default shall be
+100%" (C / OF 08.02), so a defaulted leg reports in row 0170 of 08.03 / 08.05 and on the
+"Default (100%)" row of 08.02, after every performing grade. On the 08.02 firm-grade path the
+default flag re-keys the leg, because a defaulted obligor can still carry its last performing
+grade.
+
+!!! info "Recorded decision — C / OF 08.05 back-testing (P1.381)"
+    C / OF 08.05 bands on the PD "estimated at the beginning of the reporting period", but the
+    engine carries default status at the reporting date only. A defaulted obligor is therefore
+    counted in row 0170 (col 0030 counts it as a default, col 0040 reads 100%) rather than in its
+    start-of-year band — the position Pillar 3 CR9 already took. The firm's estimate on
+    `internal_pd` is the start-of-period proxy if this is ever reversed.
+
 ### Expected Loss for Defaulted
 
 Art. 158(5) sets a **different** EL rule for the two IRB approaches:

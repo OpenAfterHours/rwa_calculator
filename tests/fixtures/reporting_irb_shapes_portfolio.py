@@ -216,7 +216,7 @@ LIMIT_CORP_OC: float = 7_500_000.0
 #: confused with a full-cover degenerate case.
 LIFE_SURRENDER_VALUE: float = 80_000.0
 
-#: Eligible cash pledged against ``LN_FINCOLL``. Recognised — it drives the
+#: Eligible (Art. 207-attested) cash pledged against ``LN_FINCOLL``. Recognised — it drives the
 #: Art. 228 LGD* down from the 0.40 supervisory value — but it lands in
 #: ``collateral_cash_value``, NOT in the ``collateral_financial_value`` carrier
 #: CR7-A col b reads. Kept because the LGD* movement is the proof the pledge is
@@ -556,6 +556,10 @@ def _collateral() -> pl.DataFrame:
             {
                 "collateral_reference": "IRS-COLL-CASH",
                 "collateral_type": "cash",
+                # The Art. 197/207(1)-(4) attestation. Art. 207(1) binds the
+                # Foundation Collateral Method too (P1.445), so without it this
+                # pledge gives the F-IRB leg no LGD* relief and no col 0180.
+                "is_eligible_financial_collateral": True,
                 "is_eligible_irb_collateral": True,
                 "market_value": FINCOLL_VALUE,
                 "currency": "GBP",

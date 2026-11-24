@@ -207,9 +207,16 @@ Quoted verbatim from the primary sources in `docs/assets/`:
 
   The **AIRB limb stays ungated** — both regimes condition it on Art. 169A(1)/169B
   (PS1/26) and Art. 181(1)(e)-(f) (CRR), the firm's institution-level election, not
-  the FCM attestation — so the `_mv_*` carriers are untouched and RD-5 stands. The
-  financial/cash carriers are likewise untouched: col 0180's eligibility is Art. 197's
-  own `is_eligible_financial_collateral` gate (D7).
+  the FCM attestation — so the `_mv_*` carriers are untouched and RD-5 stands.
+  **Corrected 2026-11-23 (P1.445, review CL-06):** this paragraph used to say the
+  financial/cash carriers needed no gate because col 0180's eligibility was already
+  `is_eligible_financial_collateral` (D7). That was false — D7 is about
+  `collateral_market_value` / `collateral_adjusted_value`, while `_adj_fin` /
+  `_adj_cash` read the ungated adjusted value, and the Art. 231 waterfall ignored the
+  flag too. P1.445 gates both with the Art. 207 predicate
+  (`engine/crm/expressions.py::art207_unattested_expr`), next to the Art. 199 gate, so
+  the F-IRB LGD\* and col 0180 read one predicate, as RD-9 made them do for
+  cols 0190-0210.
 
   **This one moves capital, conservatively, and that is the second half of the
   defect.** `collateral_re_value` / `collateral_other_physical_value` are the C in the

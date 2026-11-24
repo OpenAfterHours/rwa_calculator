@@ -164,7 +164,7 @@ COLLATERAL_SCHEMA = {
     "property_ltv": pl.Float64,          # Loan-to-value ratio
     "is_income_producing": pl.Boolean,   # Material income dependence
     "is_adc": pl.Boolean,               # Acquisition/Development/Construction
-    "is_eligible_financial_collateral": pl.Boolean, # SA eligibility (CRR Art 197)
+    "is_eligible_financial_collateral": pl.Boolean, # Art. 197/207(1)-(4) eligibility, all methods
     "is_eligible_irb_collateral": pl.Boolean,       # IRB eligibility (CRR Art 199)
     "valuation_date": pl.Date,           # Date of last valuation
     "valuation_type": pl.String,         # market, indexed, independent

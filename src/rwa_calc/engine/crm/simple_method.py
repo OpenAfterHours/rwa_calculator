@@ -38,7 +38,11 @@ from watchfire import cites
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.domain.enums import CQS, ApproachType, CRMCollateralMethod
 from rwa_calc.engine.crm.eligibility import financial_collateral_ineligible_expr
-from rwa_calc.engine.crm.expressions import ccr_engine_row_expr, sa_fccm_type_eligible_expr
+from rwa_calc.engine.crm.expressions import (
+    art207_attested_expr,
+    ccr_engine_row_expr,
+    sa_fccm_type_eligible_expr,
+)
 from rwa_calc.engine.equity_transitional import (
     had_irb_permission_at_2026_year_end,
     standardised_transitional_weights,
@@ -571,6 +575,7 @@ def _resolve_sft_column(schema_names: list[str]) -> str | None:
 
 
 @cites("CRR Art. 197")
+@cites("CRR Art. 207")
 def _prepare_eligible_collateral(
     collateral: pl.LazyFrame, is_b31: bool, equity_rw: float
 ) -> pl.LazyFrame:
@@ -578,14 +583,15 @@ def _prepare_eligible_collateral(
 
     Art. 197 is headed "Eligibility of collateral under ALL approaches and
     methods", and Art. 222(2) recognises only "the market value of eligible
-    collateral" — so the firm-supplied ``is_eligible_financial_collateral``
-    attestation is not on its own sufficient here. It is ANDed with the Art. 197
-    TYPE predicate (``sa_fccm_type_eligible_expr``: a flagged property,
-    receivable, other-physical, life-insurance or unrecognised row is not
-    financial collateral, review CL-01) and with the shared Art. 197 instrument
-    gate (``engine/crm/eligibility.py``) — the same two predicates the
-    Comprehensive Method applies — so the two methods cannot recognise different
-    collateral.
+    collateral". The firm's Art. 207 attestation (``art207_attested_expr``: the
+    ``is_eligible_financial_collateral`` predicate the Comprehensive and
+    Foundation Collateral Methods read too) is therefore necessary but not on
+    its own sufficient here. It is ANDed with the Art. 197 TYPE predicate
+    (``sa_fccm_type_eligible_expr``: a flagged property, receivable,
+    other-physical, life-insurance or unrecognised row is not financial
+    collateral, review CL-01) and with the shared Art. 197 instrument gate
+    (``engine/crm/eligibility.py``) — the same predicates the Comprehensive
+    Method applies — so the two methods cannot recognise different collateral.
 
     The equity limb is the one legitimate divergence: Art. 198(1)(a)'s extension
     to non-main-index listed equity is expressly confined to a firm using the
@@ -603,7 +609,7 @@ def _prepare_eligible_collateral(
         eligible_schema_names, method=CRMCollateralMethod.SIMPLE
     )
     eligible = collateral.filter(
-        pl.col("is_eligible_financial_collateral").fill_null(False)
+        art207_attested_expr(eligible_schema_names)
         & sa_fccm_type_eligible_expr()
         & art_197_ineligible.not_()
     )

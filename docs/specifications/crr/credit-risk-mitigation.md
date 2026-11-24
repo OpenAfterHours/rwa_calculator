@@ -20,6 +20,7 @@ Collateral haircuts, overcollateralisation, FX mismatch, maturity mismatch, and 
 | FR-2.6 | Cross-approach CCF substitution | P0 | Done |
 | FR-2.7 | CCF=100% override for CRM exposure value (Art. 223(4)) | P0 | Done |
 | FR-2.8 | Immovable-property collateral valued net of prior claims (Art. 229(1)) | P0 | Done |
+| FR-2.9 | Art. 207 attestation gates financial collateral under every method, F-IRB included | P0 | Done |
 
 ---
 
@@ -1017,6 +1018,32 @@ conservatively to *not listed*. The Art. 224 Table 3/4 other-listed haircut
 (25% CRR / 30% Basel 3.1) is a valuation parameter and is unaffected by the
 eligibility gate. The condition is comprehensive-method scope, **not** a repo/SFT
 restriction. PS1/26 carries Art. 197(1)(f)/198(1)(a) forward unchanged.
+
+### Requirements for Financial Collateral (Art. 207)
+
+CRR Art. 207(1): *"Under all approaches and methods, financial collateral and gold
+shall qualify as eligible collateral where all the requirements laid down in
+paragraphs 2 to 4 are met."* Paragraphs 2-4 are the correlation test (no material
+positive correlation; the obligor's own securities are excluded), legal certainty
+(enforceability in every relevant jurisdiction) and the operational requirements
+(documentation, risk control, revaluation at least every six months, segregation).
+Paragraph 5 (residual maturity at least the exposure's) binds the Simple Method only.
+
+`is_eligible_financial_collateral` is the firm's attestation of paragraphs 2-4. One
+predicate reads it for every method (`engine/crm/expressions.py::art207_attested_expr`):
+the Comprehensive Method's E\*, the Simple Method's substitution and, since P1.445
+(review CL-06), the Foundation Collateral Method. On F-IRB an unattested cash or
+financial row (`art207_unattested_expr`) is zeroed on the Art. 231 waterfall feed and
+on the col 0180 carriers (`collateral_financial_value` / `collateral_cash_value`)
+beside the Art. 199 gate, so it gives no LGD\* relief and reports in no C 08.01 col
+0180 cell; a rolled-up `CRM031` warning names it. The loader seals an absent or null
+flag to `False`, so "never populated" and "marked as failing" are treated alike.
+Covered bonds, life insurance and the non-financial categories are outside this gate
+(Art. 199 / Art. 232). A collateral frame with no flag column at all (a direct
+caller's, never the production path) is eligible by type alone.
+
+Example (F-IRB senior corporate, E = 10,000,000, 6,000,000 cash): attested LGD\* =
+0.45 x 4,000,000 / 10,000,000 = 0.18; unattested LGD\* = 0.45.
 
 ## Eligible Unfunded Protection Providers (Art. 201)
 

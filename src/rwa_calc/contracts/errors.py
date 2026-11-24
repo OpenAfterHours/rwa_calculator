@@ -493,6 +493,16 @@ ERROR_CCR_ONLY_COLLATERAL_POOL = "CRM025"
 # F-IRB Foundation Collateral Method under its own Art. 199 attestation, and
 # life insurance to Art. 232). One rolled-up warning per run.
 ERROR_NON_ART197_FLAGGED_FINANCIAL = "CRM026"
+# Financial collateral not attested as meeting Art. 207 (CRR Art. 207(1): "under
+# all approaches and methods"; PS1/26 Art. 207(1) names the Simple, Comprehensive
+# and Foundation Collateral Methods and the SFT VaR Method; review CL-06, P1.445):
+# a cash, debt-security, equity, gold or credit-linked-note row whose
+# is_eligible_financial_collateral is False or unset (the loader seals absent and
+# null to False) is recognised under no method. It reduces no SA exposure value,
+# takes no Simple Method substitution, and gives no F-IRB LGD* relief, no Basel 3.1
+# A-IRB Art. 161(5) LGD-floor credit and no C 08.01 col 0180 amount. One rolled-up
+# warning per run names the items.
+ERROR_UNATTESTED_FINANCIAL_COLLATERAL = "CRM031"
 
 # SA-CCR trade-input codes (review CC-06). Raised by the input gate
 # (contracts/ccr_input_checks.py), one row-named ERROR per offending trade, for the

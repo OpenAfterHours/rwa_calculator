@@ -23,6 +23,7 @@ and IRB parameter substitution replacing double default.
 | FR-8.9 | Art. 232(3) life insurance derivation table with B31 input tiers (30% / 65% / 135%) | P1 | Done |
 | FR-8.10 | Art. 229(1)(b) prior claims on immovable property: `P / (1 − HC − Hfx)` reduction, negative value → 0 | P0 | Done |
 | FR-8.11 | Art. 229(1)(c) pari-passu claims: institution's proportion of the remaining value | P1 | Not Implemented (needs the P1.449 input split; the whole prior/pari-passu input is deducted as P, conservatively) |
+| FR-8.12 | Art. 207 attestation gates financial collateral under the Foundation Collateral Method and the A-IRB Art. 161(5) floor | P0 | Done |
 
 ---
 
@@ -228,6 +229,27 @@ For F-IRB exposures, supervisory LGD values for secured exposures:
 
 See [F-IRB Specification](firb-calculation.md) for full LGD details including unsecured
 values and the blended LGD formula.
+
+### Financial Collateral Requirements (Art. 207)
+
+PS1/26 Art. 207(1): *"An institution using the Financial Collateral Simple Method, the
+Financial Collateral Comprehensive Method, the Foundation Collateral Method or the SFT
+VaR Method may use financial collateral and gold as eligible collateral where all the
+requirements laid down in paragraphs 2 to 4 are met."* It corresponds to CRR Art. 207
+and survives unchanged; paragraph 5 (residual maturity) binds the Simple Method only.
+
+`is_eligible_financial_collateral` is the firm's attestation of paragraphs 2-4, read
+through one predicate for every method (`engine/crm/expressions.py::art207_attested_expr`).
+Under the Foundation Collateral Method (P1.445, review CL-06) an unattested cash or
+financial row is zeroed on the Art. 231 waterfall feed, so it gives no LGD\* relief and
+no `crm_alloc_financial` — the 0% LGDS term of the A-IRB Art. 161(5)(b) / 164(4)(c)
+LGD input floor, which Art. 161(5)(b) computes "using the Foundation Collateral Method"
+— and reports in no C 08.01 col 0180 cell; a rolled-up `CRM031` warning names it. An
+absent or null flag is sealed to `False` by the loader. The A-IRB market-value carriers
+(`collateral_*_market_value`, the Art. 169A limb of col 0180) are outside the gate.
+
+Example (F-IRB senior non-FSE corporate, E = 10,000,000, 6,000,000 cash): attested
+LGD\* = 0.40 x 4,000,000 / 10,000,000 = 0.16; unattested LGD\* = 0.40.
 
 ### Prior Claims on Immovable Property (Art. 229(1)(b))
 

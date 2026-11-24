@@ -10,13 +10,16 @@ Key responsibilities:
   counterparty-credit-risk rows out of every loan-table pool (CRR Art. 223(5A) /
   PS1/26 Art. 191A(4))
 - SA EAD reduction via eligible financial collateral
-- F-IRB LGD calculation with supervisory values
+- F-IRB LGD calculation with supervisory values, recognising only collateral
+  that passes the Foundation Collateral Method eligibility gates: Art. 199 for
+  non-financial collateral, Art. 207 for cash and financial collateral
 - A-IRB LGD Modelling Collateral Method (Art. 169A/169B)
 - Overcollateralisation and minimum threshold checks
 
 References:
     CRR Art. 223-224, 230: Collateral haircuts and allocation
     CRR Art. 161: F-IRB supervisory LGD
+    CRR / PRA PS1/26 Art. 199, 207: Foundation Collateral Method eligibility
     PRA PS1/26 Art. 169A/169B: LGD Modelling Collateral Method
     CRE22.52-53, CRE32.9-12: Basel 3.1 equivalents
 """
@@ -37,6 +40,7 @@ from rwa_calc.contracts.errors import (
     ERROR_INELIGIBLE_IRB_COLLATERAL,
     ERROR_NON_ART197_FLAGGED_FINANCIAL,
     ERROR_NON_MAIN_INDEX_EQUITY_INELIGIBLE,
+    ERROR_UNATTESTED_FINANCIAL_COLLATERAL,
     crm_warning,
 )
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
@@ -51,6 +55,8 @@ from rwa_calc.engine.crm.expressions import (
     CRM_POOL_BASIS,
     CRM_POOL_MEMBER,
     WATERFALL_ORDER,
+    art207_attested_expr,
+    art207_unattested_expr,
     beneficiary_level_expr,
     ccr_engine_row_expr,
     collateral_category_expr,
@@ -546,6 +552,11 @@ def _record_haircut_stage_findings(
     - CRM026 (rolled up, review CL-01): rows flagged
       ``is_eligible_financial_collateral`` whose type is not an Art. 197 type
       (``sa_fccm_type_eligible_expr``), so the flag reduced no SA exposure value.
+    - CRM031 (rolled up, review CL-06): cash / financial rows NOT attested under
+      Art. 207 (``art207_unattested_expr``), so they are recognised under no
+      method. A row an instrument gate above already zeroed (value_after_haircut
+      0, its flag cleared by ``apply_haircuts``) has its own record and is not
+      named again.
 
     Each predicate is the SAME one the haircut / allocation step applied, so a
     record cannot drift from the number it explains. The rolled-up records
@@ -553,9 +564,15 @@ def _record_haircut_stage_findings(
     — per-row emission floods the channel at 100k-exposure scale.
     """
     names = collateral.collect_schema().names()
-    # A direct caller's frame may not carry a reference (production always does).
+    # A direct caller's frame may not carry a reference or a post-haircut value
+    # (production always does; a null value names no row in CRM031).
     collateral = ensure_columns(
-        collateral, {"collateral_reference": ColumnSpec(pl.String, required=False)}, present=names
+        collateral,
+        {
+            "collateral_reference": ColumnSpec(pl.String, required=False),
+            "value_after_haircut": ColumnSpec(pl.Float64, required=False),
+        },
+        present=names,
     )
     equity_gate = equity_ineligible_expr(names, method=CRMCollateralMethod.COMPREHENSIVE)
     cln_gate = credit_linked_note_ineligible_expr(names)
@@ -567,6 +584,7 @@ def _record_haircut_stage_findings(
         else pl.lit(False)
     )
     non_art197 = flagged & ~sa_fccm_type_eligible_expr() & (pl.col("market_value") > 0.0)
+    unattested = art207_unattested_expr(names) & (pl.col("value_after_haircut") > 0.0)
     ref = pl.col("collateral_reference").cast(pl.String)
     found = collateral.select(
         equity_gate.cast(pl.UInt32).sum().alias("equity"),
@@ -584,6 +602,7 @@ def _record_haircut_stage_findings(
         .sort()
         .implode()
         .alias("art197_types"),
+        ref.filter(unattested).unique().sort().implode().alias("art207_refs"),
     ).collect()
     row = found.row(0, named=True)
     _append_equity_listing_record(int(row["equity"] or 0), errors)
@@ -591,6 +610,7 @@ def _record_haircut_stage_findings(
         _append_cln_record(coll_ref, ben_ref, errors)
     _append_unknown_currency_record(row["ccy_refs"], errors)
     _append_non_art197_record(row["art197_refs"], row["art197_types"], errors)
+    _append_unattested_financial_record(row["art207_refs"], errors)
 
 
 def _record_ccr_only_pledges(
@@ -737,6 +757,25 @@ def _append_non_art197_record(
     )
 
 
+def _append_unattested_financial_record(refs: list[str], errors: list[CalculationError]) -> None:
+    """CRM031 — one rolled-up record for financial collateral not attested under Art. 207."""
+    if not refs:
+        return
+    errors.append(
+        crm_warning(
+            ERROR_UNATTESTED_FINANCIAL_COLLATERAL,
+            f"{len(refs)} financial collateral item(s) ({_name_some(refs)}) are not "
+            f"attested as meeting the Art. 207(2)-(4) requirements "
+            f"(is_eligible_financial_collateral is False/unset), so they are recognised "
+            f"under no method: no Standardised exposure-value reduction or Simple Method "
+            f"substitution, and no Foundation Collateral Method LGD* (F-IRB, and the "
+            f"Basel 3.1 A-IRB LGD input floor). Art. 207(1) applies under all approaches "
+            f"and methods.",
+            regulatory_reference="CRR/PS1-26 Art. 207(1)",
+        )
+    )
+
+
 def _name_some(refs: list[str], limit: int = 5) -> str:
     """The first ``limit`` references, and how many more there are."""
     named = ", ".join(str(r) for r in refs[:limit])
@@ -745,8 +784,10 @@ def _name_some(refs: list[str], limit: int = 5) -> str:
 
 
 @cites("CRR Art. 199")
+@cites("CRR Art. 207")
 @cites("CRR Art. 211")
 @cites("PS1/26 Art. 199")
+@cites("PS1/26 Art. 207")
 @cites("PS1/26 Art. 211")
 def _apply_collateral_unified(
     exposures: pl.LazyFrame,
@@ -856,15 +897,12 @@ def _apply_collateral_unified(
     )
 
     # --- Determine eligible expression for EAD reduction ---
-    # Review CL-01: the firm's Art. 197 attestation counts only on an Art. 197
+    # Review CL-01: the firm's Art. 197/207 attestation counts only on an Art. 197
     # TYPE (``sa_fccm_type_eligible_expr``); a flagged property, receivable,
     # other-physical, life-insurance or unrecognised row reduces no SA exposure
     # value (CRM026). A frame with no flag at all (a direct caller's) is
-    # eligible by type alone.
-    if "is_eligible_financial_collateral" in collateral_schema:
-        is_eligible = pl.col("is_eligible_financial_collateral") & sa_fccm_type_eligible_expr()
-    else:
-        is_eligible = sa_fccm_type_eligible_expr()
+    # eligible by type alone (``art207_attested_expr``).
+    is_eligible = art207_attested_expr(collateral_schema.names()) & sa_fccm_type_eligible_expr()
 
     # --- Annotate collateral with LGD categories (using shared expressions) ---
     # Ensure the AIRB-model flag is present (default False) so the pool-aware
@@ -949,15 +987,27 @@ def _apply_collateral_unified(
         _receivables_too_long = pl.lit(False)
     if errors is not None:
         _record_ineligible_irb_collateral(annotated, _not_attested, _receivables_too_long, errors)
-    # The gate zeroes the Foundation-limb ``C_i`` carriers (``_adj_re``/``_rec``/
-    # ``_oth``) as well as this waterfall feed: both their consumers are keyed on
-    # Art. 199 eligibility — COREP cols 0190/0200/0210 and the Art. 230 C* test below,
-    # whose C must be recognisable collateral. AIRB market-value carriers stay UNGATED.
-    # RD-4/RD-5/RD-9, docs/plans/irb-collateral-corep-reporting.md.
-    _art199_zeroed = pl.when(_not_attested | _receivables_too_long).then(pl.lit(0.0))
+    # Review CL-06 (P1.445) — CRR Art. 207(1): "Under all approaches and methods,
+    # financial collateral and gold shall qualify as eligible collateral where all
+    # the requirements laid down in paragraphs 2 to 4 are met"; PS1/26 Art. 207(1)
+    # names the Foundation Collateral Method beside the Simple and Comprehensive
+    # Methods. So the Art. 197/207 attestation that gates the SA E* above gates the
+    # waterfall's cash / financial bucket too: an unattested row (False, or null —
+    # the loader seals absent to False) gives no LGD*, no crm_alloc_financial (the
+    # Basel 3.1 A-IRB Art. 161(5) floor feed) and no col 0180 amount. CRM031 names
+    # it, from the haircut-stage scan (``_record_haircut_stage_findings``).
+    _art207_unattested = art207_unattested_expr(collateral_schema.names())
+    # The gate zeroes the Foundation-limb ``C_i`` carriers (``_adj_fin``/``_cash``/
+    # ``_re``/``_rec``/``_oth``) as well as this waterfall feed: their consumers are
+    # keyed on eligibility — COREP cols 0180/0190/0200/0210 and the Art. 230 C* test
+    # below, whose C must be recognisable collateral. AIRB market-value carriers stay
+    # UNGATED. RD-4/RD-5/RD-9, docs/plans/irb-collateral-corep-reporting.md.
+    _fcm_zeroed = pl.when(_not_attested | _receivables_too_long | _art207_unattested).then(
+        pl.lit(0.0)
+    )
     annotated = annotated.with_columns(
-        _art199_zeroed.otherwise(pl.col("effectively_secured")).alias("effectively_secured"),
-        _art199_zeroed.otherwise(pl.col("adjusted_value")).alias("_adjusted_value_art199"),
+        _fcm_zeroed.otherwise(pl.col("effectively_secured")).alias("effectively_secured"),
+        _fcm_zeroed.otherwise(pl.col("adjusted_value")).alias("_adjusted_value_fcm"),
     )
 
     # --- Single group_by: EAD + LGD aggregates in one pass, split by AIRB pool ---
@@ -1024,12 +1074,12 @@ def _apply_collateral_unified(
             # eligibility, same blend below — so it can never exceed ``_cv``.
             + _split_aggs("_cv_net", val_expr, is_eligible & pl.col("_is_on_bs_netting"))
             + _split_aggs("_mv", pl.col("market_value"), is_eligible)
-            + _split_aggs("_adj_fin", pl.col("adjusted_value"), cat == "financial")
-            + _split_aggs("_adj_cash", pl.col("adjusted_value"), cat == "cash")
-            # Non-financial: the Art. 199-gated adjusted value (see the gate above).
-            + _split_aggs("_adj_re", pl.col("_adjusted_value_art199"), cat == "real_estate")
-            + _split_aggs("_adj_rec", pl.col("_adjusted_value_art199"), cat == "receivables")
-            + _split_aggs("_adj_oth", pl.col("_adjusted_value_art199"), cat == "other_physical")
+            # The Art. 207 / Art. 199-gated adjusted value (see the gate above).
+            + _split_aggs("_adj_fin", pl.col("_adjusted_value_fcm"), cat == "financial")
+            + _split_aggs("_adj_cash", pl.col("_adjusted_value_fcm"), cat == "cash")
+            + _split_aggs("_adj_re", pl.col("_adjusted_value_fcm"), cat == "real_estate")
+            + _split_aggs("_adj_rec", pl.col("_adjusted_value_fcm"), cat == "receivables")
+            + _split_aggs("_adj_oth", pl.col("_adjusted_value_fcm"), cat == "other_physical")
             + market_value_aggs
             + waterfall_aggs
         )

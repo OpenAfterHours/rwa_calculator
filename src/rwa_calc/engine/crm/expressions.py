@@ -328,6 +328,49 @@ def sa_fccm_type_eligible_expr() -> pl.Expr:
     return collateral_category_expr().is_in(["cash", "financial", "covered_bond"])
 
 
+@cites("CRR Art. 207")
+@cites("PS1/26 Art. 207")
+def art207_attested_expr(names: Collection[str]) -> pl.Expr:
+    """True where the firm attests a collateral row meets Art. 207(2)-(4).
+
+    CRR Art. 207(1): "Under all approaches and methods, financial collateral and
+    gold shall qualify as eligible collateral where all the requirements laid
+    down in paragraphs 2 to 4 are met" (correlation, legal certainty, the
+    operational requirements). PS1/26 Art. 207(1) names the four methods it
+    binds: the Financial Collateral Simple Method, the Comprehensive Method, the
+    Foundation Collateral Method and the SFT VaR Method. Paragraph 5 (residual
+    maturity) is the Simple Method's alone. ``is_eligible_financial_collateral``
+    is that attestation, and this one predicate is what the Comprehensive
+    Method's E* (``collateral._apply_collateral_unified``), the Simple Method
+    (``simple_method._prepare_eligible_collateral``) and the Foundation
+    Collateral Method gate (``art207_unattested_expr``) read.
+
+    A null is unattested. The loader seals an absent or null column to False, so
+    on the production path "unset" and "marked as failing" are one population.
+    A frame with no flag column at all (a direct caller's) is eligible by type
+    alone.
+    """
+    if "is_eligible_financial_collateral" not in names:
+        return pl.lit(True)
+    return pl.col("is_eligible_financial_collateral").fill_null(False)
+
+
+@cites("CRR Art. 207")
+@cites("PS1/26 Art. 207")
+def art207_unattested_expr(names: Collection[str]) -> pl.Expr:
+    """True on a cash / financial row the firm has NOT attested under Art. 207.
+
+    The Foundation Collateral Method's Art. 207 gate (review CL-06, P1.445). The
+    cash and financial categories of ``collateral_category_expr`` (the Art. 231
+    waterfall's 0% LGDS bucket, ``WATERFALL_ORDER`` suffix ``fin``) are
+    recognised only where ``art207_attested_expr`` holds. Covered bonds, life
+    insurance and the non-financial categories are outside this gate: they have
+    their own routes (Art. 199 via ``is_eligible_irb_collateral``, Art. 232).
+    Reads ``collateral_type`` and ``issuer_type``.
+    """
+    return collateral_category_expr().is_in(["cash", "financial"]) & ~art207_attested_expr(names)
+
+
 @cites("CRR Art. 223")
 @cites("PS1/26, paragraph 191A")
 def ccr_engine_row_expr() -> pl.Expr:

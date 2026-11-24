@@ -2329,7 +2329,7 @@ and once per material country.
 
     | Ref | Row | vs CRR |
     |-----|-----|--------|
-    | 0010 | Central governments or central banks | |
+    | ~~0010~~ | ~~Central governments or central banks~~ | **Removed** |
     | 0020 | Institutions | |
     | 0030 | Corporates | |
     | 0042 | &emsp;Of which: specialised lending (excl. slotting approach) | |
@@ -2350,9 +2350,21 @@ and once per material country.
     | ~~0140~~ | ~~Equity~~ | **Removed** |
     | 0150 | **Total exposures** | |
 
-    !!! warning "Removed Row"
-        Row **0140** (Equity) is removed — equity is no longer an IRB exposure class under
-        Basel 3.1. Total exposures (0150) equals the sum of rows 0020, 0030, and 0060.
+    !!! warning "Removed Rows"
+        Row **0010** (Central governments or central banks) is removed: PS1/26 Art. 147A(1)(a)
+        makes every central-government, central-bank and quasi-sovereign exposure
+        Standardised, and PS1/26 Annex II §3.4.2 starts the OF 09.02 rows at 0020 — the PRA001
+        taxonomy has no row 0010 either. The layout is held to the taxonomy's row and column
+        codes by `tests/contracts/test_of09_02_published_rows.py`. Row **0140** (Equity) is
+        removed — equity is no longer an IRB exposure class under Basel 3.1.
+
+        Total exposures (0150) equals the sum of rows 0020, 0030 and 0060 (Annex II;
+        `boe_b0786`, ERROR). Row 0150 is nevertheless computed over **every** leg of the IRB
+        book, not as that sum, so a leg of no published class stays visible as a break of
+        `boe_b0786` rather than vanishing from the return;
+        `tests/acceptance/reporting/test_of09_02_total_row_partition.py` requires the
+        difference to be 0.00 in every column the rule covers, on every country sheet of every
+        registered Basel 3.1 IRB run.
 
     **One classification with OF 08.01.** The Bank ties each sub-class row, all countries,
     to the OF 08.01 sheets of that sub-class: row 0048 to sheet 0022, row 0050 to sheets

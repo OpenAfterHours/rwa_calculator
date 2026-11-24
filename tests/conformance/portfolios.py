@@ -126,10 +126,36 @@ FLAVOURS: tuple[str, ...] = (
 )
 
 #: Entity types probed with an internal rating to reach the IRB-permission
-#: lookup. Their derived IRB class is where CRR Art. 147(3)(b)/(c) and PS1/26
-#: Art. 147(3)(f)/(g) speak most directly, and the approach they end up on is
+#: lookup. Their derived IRB class is where CRR Art. 147(3)/(4) and PS1/26
+#: Art. 147(3)(c)-(g) speak most directly, and the approach they end up on is
 #: the observable consequence of getting that class right.
-IRB_PROBE_ENTITY_TYPES: tuple[str, ...] = ("mdb_named", "international_org", "covered_bond")
+#:
+#: The quasi-sovereigns are here because CRR admits them to an IRB class and so
+#: to an IRB approach: Art. 147(3)(a) sends the RGLAs and PSEs treated as central
+#: governments to Art. 147(2)(a), Art. 147(4)(a)-(c) sends the others and the
+#: non-0% MDBs to Art. 147(2)(b), and this grid's permission set covers both. Of
+#: the types probed here they are the only ones that actually REACH F-IRB / A-IRB
+#: under CRR — ``mdb_named``, ``international_org`` and ``covered_bond`` never do
+#: (register D6 / D7) — so before they were added no probe produced an IRB-routed
+#: row, and the routing carrier the engine re-aligns only on an IRB-routed row
+#: (rule C6a / C6b / C8a in the table) went unasserted.
+#: Under Basel 3.1 PS1/26 Art. 147(3)(c)-(f) makes all of them quasi-sovereign and
+#: Art. 147A(1)(a) Standardised-only, which these probes assert with a PD present.
+#: For the RGLAs and PSEs that assertion is load-bearing: dropping one of them from
+#: ``B31_SOVEREIGN_LIKE_ENTITY_TYPES`` turns the grid red. For ``mdb`` it is not
+#: yet: its Basel 3.1 IRB class is the Standardised label ``mdb`` (register D4),
+#: which no permission matches, so the row is Standardised whether or not the
+#: Art. 147A(1)(a) blocker fires — until P1.303 gives it its Art. 147(3)(f) class.
+IRB_PROBE_ENTITY_TYPES: tuple[str, ...] = (
+    "mdb_named",
+    "international_org",
+    "covered_bond",
+    "mdb",
+    "rgla_sovereign",
+    "rgla_institution",
+    "pse_sovereign",
+    "pse_institution",
+)
 
 #: Origination date, comfortably before every reporting date used here.
 VALUE_DATE = date(2015, 1, 1)

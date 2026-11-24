@@ -8,10 +8,11 @@ of their own. The rest were held by nothing fast. OF 08.02 generates columns 027
 / 0276 where its table has 0105 / 0106, and carries OF 08.01's slotting
 financial-collateral meaning on 0101-0104, codes its table uses for the
 conversion-factor breakdown; OF 08.06 is laid out on the CRR row grid; OF 09.02
-has a row its table does not; C 08.04 is generated per class against a table with
-no sheet axis. The slow filing-mapping ratchet sees part of this, but as counts,
-for non-zero figures only, and each figure under the first reason that applies —
-so an open-row or open-key reason hides every row and column error behind it.
+had a row its table does not (row 0010, removed by P5.60); C 08.04 is generated per
+class against a table with no sheet axis. The slow filing-mapping ratchet sees part
+of this, but as counts, for non-zero figures only, and each figure under the first
+reason that applies — so an open-row or open-key reason hides every row and column
+error behind it.
 Holding them all at once found one more: our four C 34 templates carry the
 published codes with other templates' meanings (``_C34_REASON``).
 
@@ -368,12 +369,6 @@ KNOWN_DIVERGENCES: dict[tuple[str, str], Known] = {
         "(exposures in default) has no column 0020; c09.py declares that memo on every "
         "row, and on row 0100 its predicate (the raw exposure_class 'defaulted', which a "
         "sealed leg never carries) matches nothing, so the zero-fill writes 0.0.",
-    ),
-    ("c09_02", ROWS_OURS): Known(
-        frozenset({"0010"}),
-        "OWNER: P2.108 (to be filed with this test) - OF09.02.01.01 starts at row 0020: "
-        "PS1/26 Article 147A(1)(a) puts central governments, central banks and "
-        "quasi-sovereigns on the Standardised Approach, and OF 09.02 is the IRB breakdown.",
     ),
     ("c09_02", CELLS): Known(
         frozenset({"r0045 c0080", "r0045 c0090", "r0045 c0100"}),

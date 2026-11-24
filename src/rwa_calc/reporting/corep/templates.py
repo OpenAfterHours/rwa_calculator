@@ -1765,9 +1765,14 @@ CRR_C09_02_ROWS: list[COREPRow] = [
 ]
 
 # OF 09.02 (Basel 3.1) rows — adds corporate sub-rows, restructures retail RE,
-# removes equity
+# removes equity, and has NO row 0010 "Central banks and central governments":
+# PS1/26 Annex II §3.4.2 starts the row instructions at 0020 and defines row 0150
+# as "the sum of rows 0020, 0030 and 0060" (boe_b0786), because Art. 147A(1)(a)
+# makes every Art. 147(2)(a) exposure Standardised. The row set is the PRA001
+# taxonomy's OF09.02.01.01 rows (tests/contracts/test_of09_02_published_rows.py).
+# Row 0150 still counts EVERY leg of the IRB book, not just those three rows, so
+# a leg of no published class stays visible to boe_b0786 rather than vanishing.
 B31_C09_02_ROWS: list[COREPRow] = [
-    COREPRow("0010", _LBL_SA_CENTRAL_GOVT, "central_govt_central_bank"),
     COREPRow("0020", "Institutions", "institution"),
     COREPRow("0030", "Corporates", "corporate"),
     COREPRow(
@@ -1939,9 +1944,10 @@ def get_c09_02_columns(framework: str = "CRR") -> list[COREPColumn]:
 def get_c09_02_rows(framework: str = "CRR") -> list[COREPRow]:
     """Return the C 09.02 / OF 09.02 row definitions for the given framework.
 
-    CRR: 16 rows (incl. equity row 0140).
-    Basel 3.1: 19 rows (adds corporate sub-rows 0048/0049/0055, restructures
-    retail RE rows, removes equity).
+    CRR: 16 rows (incl. central-government row 0010 and equity row 0140).
+    Basel 3.1: 18 rows (adds corporate sub-rows 0048/0049/0055, restructures
+    retail RE rows, removes equity, and has no central-government row 0010 —
+    PS1/26 Annex II §3.4.2 starts at row 0020, as the PRA001 taxonomy does).
     """
     return B31_C09_02_ROWS if framework == "BASEL_3_1" else CRR_C09_02_ROWS
 

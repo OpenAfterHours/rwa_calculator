@@ -125,9 +125,15 @@ class TestC0902TemplateDefinitions:
         assert len(CRR_C09_02_ROWS) == 16
 
     def test_b31_rows_count(self) -> None:
+        """18 rows: PS1/26 Annex II OF 09.02 has no row 0010 (it starts at 0020).
+
+        Was 19 while the layout carried the CRR central-government row; the row
+        SET is held to the PRA001 taxonomy by
+        tests/contracts/test_of09_02_published_rows.py.
+        """
         from rwa_calc.reporting.corep.templates import B31_C09_02_ROWS
 
-        assert len(B31_C09_02_ROWS) == 19
+        assert len(B31_C09_02_ROWS) == 18
 
     def test_crr_has_equity_row(self) -> None:
         from rwa_calc.reporting.corep.templates import CRR_C09_02_ROWS

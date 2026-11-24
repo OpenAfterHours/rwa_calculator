@@ -85,8 +85,6 @@ SRC_ROOT = REPO_ROOT / "src" / "rwa_calc"
 SKILL_DIR = REPO_ROOT / ".claude" / "skills" / "regulation-text"
 INDEX_DIR = SKILL_DIR / "index"
 
-#: The committed index files ``index`` writes, by name.
-INDEX_FILES: tuple[str, ...] = ("b31.csv", "crr.csv", "other.csv")
 CORRECTIONS_FILE = "corrections.csv"
 
 #: Any valid reporting date gives the same pack entry set (see

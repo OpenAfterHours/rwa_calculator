@@ -707,11 +707,11 @@ Based on IRB permissions in the configuration, exposures are routed to:
 ## Real estate classification derivation
 
 The Basel 3.1 SA real-estate framework (Art. 124 to Art. 124L) relies on a number
-of classification flags — `is_adc`, `is_materially_dependent`, `is_mixed_use`,
-`exposure_subclass` for corporate granularity — that the current pipeline
-consumes as **pre-tagged** inputs from the caller. None of the derivations below
-are performed by the classifier today; each subsection records the regulatory
-expectation for full compliance.
+of classification flags — `is_adc`, material dependence (`has_income_cover`),
+`is_mixed_use`, `exposure_subclass` for corporate granularity — that the
+pipeline largely consumes as **pre-tagged** inputs from the caller. Each
+subsection records the regulatory expectation for full compliance and what the
+hierarchy and classifier derive today.
 
 ### ADC classification trigger (PS1/26 App 1, Art. 124K)
 
@@ -814,25 +814,93 @@ splitting is not performed.
 > is created specifically to finance and/or operate immovable property,
 > where the natural person acts as a guarantor …"
 
-**Expected derivation.** Natural-person obligors with four or more
-simultaneous buy-to-let / investment RRE exposures (i.e. breaching the three
-qualifying-property limit in paragraph 2) should automatically flip from
-Art. 124F (non-materially-dependent RRE — lower risk weights via Art. 124L
-counterparty RWs) to Art. 124G (materially-dependent RRE — higher
-property-LTV-based weights). The three-property count must be computed across
-**all** lenders' RRE exposures to the obligor (per the "regardless of which
-lender has the residential real estate exposure" qualifier), but in practice
-a single-firm calculator can only count exposures it sees.
+Art. 124E(4): "each separate housing unit shall count as an individual
+property, including for real estate exposures secured by a single charge."
 
-**Current implementation.** The classifier consumes `is_materially_dependent`
-as a caller-supplied flag on the exposure schema. No automatic counting of
-qualifying properties is performed.
+**Expected derivation.** A natural-person obligor with more than three
+qualifying properties fails limb (b), and their residential exposures flip
+from Art. 124F (not materially dependent — the 20% loan split plus the
+Art. 124L counterparty weight) to Art. 124G (materially dependent — whole-loan
+Table 6B), or, for a non-qualifying ("other") residential exposure, from
+Art. 124J(2) (the Art. 124L counterparty weight) to Art. 124J(1) (150%). Two things follow from the text. First, the primary residence is
+**never** a qualifying property, so the count excludes it. Second, limbs (a)
+and (b) are **independent**: the exposure secured by the borrower's single
+primary residence is not materially dependent whatever their buy-to-let count.
+The count runs across **all** lenders' exposures ("regardless of which lender
+has the residential real estate exposure"), which a single-firm calculator
+cannot see, so it is an input.
 
-!!! warning "Not yet implemented — Art. 124E three-property auto-derivation"
-    See **IMPLEMENTATION_PLAN.md P1.142** (Art. 124E three-property limit
-    auto-classification). The cross-lender property count requires an
-    external data source and is tracked as a v2.0 / Tier-7 item (see
-    `IMPLEMENTATION_PLAN.md` §"Tier 7 — Future / v2.0").
+**Current implementation (Basel 3.1 only; Feature
+`b31_art_124e_three_property_limit_applies`, disabled in the CRR pack).**
+
+| Input | Where | Meaning |
+|-------|-------|---------|
+| `qualifying_property_count` | counterparty | The Art. 124E(2) count: residential properties other than the person's primary residence, all lenders, each housing unit counted. Null = unknown (no re-route) |
+| `is_primary_residence` | real-estate collateral | The property is one housing unit and is the obligor's primary residence. Read only on a `property_type` residential row. Null = not attested |
+
+1. The hierarchy (`engine/hierarchy/enrich.py::_single_primary_residence_expr`)
+   sets `re_collateral_is_primary_residence` where the exposure's real-estate
+   security is exactly **one** linked collateral row — one row, at one of the
+   direct / facility / counterparty levels — and that row is a residential
+   property flagged `True`. A home pledged beside a buy-to-let, two flagged
+   properties, or a loan-level property plus a counterparty-level one is not "a
+   single property". A **commercial** row never carries limb (a), flag or no
+   flag: Art. 124E(1)(a) is a limb of the residential test, and a commercial
+   exposure is decided by Art. 124E(6) — materially dependent "except where each
+   property ... is predominantly used by the borrower for its own business
+   purpose", which a home is not (the same residential gate the sibling
+   `re_collateral_is_presold` applies for Art. 124K(2)).
+2. The classifier (`engine/classify/attributes.py::_build_has_income_cover_expr`)
+   sets `has_income_cover = explicit OR (natural person AND count > 3 AND NOT
+   re_collateral_is_primary_residence)`. An explicit `is_income_producing =
+   True` is the institution's own assessment and stands; only the derived
+   re-route is spared. The flag is never null.
+
+Measured (P1.473 acceptance test, 500,000 property, LTV 0.60, count 4). Every
+consumer of `has_income_cover` moves with the flag, so the exception reaches
+more than the Art. 124F / 124G choice. It **lowers** RWA:
+
+- A 300,000 first charge on the flagged home moves from Art. 124G 35% (105,000)
+  to the Art. 124F split, 275,000 × 20% + 25,000 × 75% = 73,750 (RW 0.245833).
+  The same holds when the home loan sits beside the landlord's own buy-to-let
+  loans at **one** counterparty: limb (a) tests the exposure's security, not the
+  obligor's, so the home is 73,750 and each buy-to-let stays 105,000.
+- The same 300,000 on a flagged home that is not regulatory real estate
+  (`is_qualifying_re` False, an "other" residential exposure) moves from
+  Art. 124J(1) 150% (450,000) to Art. 124J(2), the Art. 124L(1)(a) 75%
+  natural-person weight (225,000) — the largest cut measured here.
+- A **defaulted** flagged home (no provisions) moves from Art. 127(1)(a) 150%
+  (450,000) to Art. 127(3), "a residential real estate exposure which is a
+  defaulted exposure and is not materially dependent ... 100%" (300,000).
+- A natural person booked `entity_type` corporate with `is_natural_person` True
+  (a sole trader), product `term_loan`, changes **row shape**. Before, the
+  re-route kept the row off the real-estate splitter, leaving one corporate row
+  at 100% (300,000; that weight is the separate P1.262 routing gap). After, the
+  row is a split candidate and comes back as **two legs**: `_sec` 275,000 × 20%
+  on the real-estate class (OF 07.00 real_estate sheet) and `_res` 25,000 at the
+  corporate 100% (corporate sheet) = 80,000. The rule's residual weight is
+  Art. 124L(1)(a) 75% (73,750 in all). The engine's 100% is a separate defect,
+  and the test pins it so that a fix shows. A `retail_mortgage` row, by contrast,
+  is priced within the row and keeps one row.
+- On A-IRB retail mortgages the same loans' SA-equivalent RWA (the output
+  floor's S-TREA) moves identically: 105,000 → 73,750, 450,000 → 225,000 and,
+  for the defaulted home, 450,000 → 300,000.
+
+A commercial-typed property flagged as the home does not move: Art. 124I(1)
+100% (300,000) before and after.
+
+The exception can also **raise** RWA: a 50,000 junior charge behind a 250,000
+third-party prior charge moves from Art. 124G(2) 35% × 1.25 = 0.4375 to
+Art. 124F(2)(a), where the prior charge uses up the 20% band (rule value 0.475;
+the engine gives 0.704167 until P1.449 fixes the stacked-LTV denominator).
+CRR has no such test and is unchanged (35% on every first charge; CRR
+Art. 127(3) 100% on the defaulted home).
+
+!!! warning "Residual — inputs the exception cannot yet use"
+    Limb (a) is read from collateral rows only: a loan whose property data is
+    carried on the loan row (`ltv` / `property_type`, no collateral row) cannot
+    attest a primary residence and stays on the count re-route. Multi-property
+    mortgage rows are P1.471.
 
 !!! info "Reassessment obligations (Art. 124E(5) and (7))"
     Art. 124E(5) requires institutions to **reassess** material dependency of a

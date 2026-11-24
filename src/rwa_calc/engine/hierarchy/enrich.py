@@ -33,6 +33,7 @@ References:
 - PRA PS1/26 Art. 124(4) / Art. 124A / Art. 124J: non-qualifying RE gate
 - PRA PS1/26 Art. 124C: LTV for a property supplied without one (``re_ltv``)
 - PRA PS1/26 Art. 124K: collateral-level ADC / pre-sold flags
+- PRA PS1/26 Art. 124E(1)(a) / (4): the single primary-residence property flag
 """
 
 from __future__ import annotations
@@ -68,6 +69,15 @@ if TYPE_CHECKING:
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
+
+#: Scratch on the real-estate collateral rows: the allocation level each row is
+#: linked at. The allocation kernel ORs a flag across the direct / facility /
+#: counterparty levels, which alone cannot tell one linked property from two at
+#: different levels; the PS1/26 Art. 124E(1)(a) single-property test counts the
+#: levels a property is linked at from this column.
+_RE_LINK_LEVEL = "_re_link_level"
+#: Prefix of the per-level "a property is linked here" scratch flags.
+_RE_PR_AT_PREFIX = "_re_pr_at_"
 
 
 def propagate_facility_qrre_columns(
@@ -418,7 +428,7 @@ def enrich_with_property_coverage(
         Exposures with columns added: residential_collateral_value,
         property_collateral_value, has_facility_property_collateral,
         re_collateral_is_adc, re_collateral_is_presold,
-        exposure_for_retail_threshold
+        re_collateral_is_primary_residence, exposure_for_retail_threshold
     """
     # Per CRR Article 147, "total amount owed" = drawn amount only (not undrawn)
     exposures = exposures.with_columns(
@@ -442,6 +452,7 @@ def enrich_with_property_coverage(
                 pl.lit(False).alias("re_collateral_non_qualifying"),
                 pl.lit(False).alias("re_collateral_is_adc"),
                 pl.lit(False).alias("re_collateral_is_presold"),
+                pl.lit(False).alias("re_collateral_is_primary_residence"),
                 pl.col("total_exposure_amount").alias("exposure_for_retail_threshold"),
             ]
         )
@@ -958,26 +969,32 @@ def _join_property_collateral_multi_level(
 
     Returns:
         Exposures with residential_collateral_value, property_collateral_value,
-        has_facility_property_collateral, re_collateral_non_qualifying and the
+        has_facility_property_collateral, re_collateral_non_qualifying, the
         collateral ADC flags re_collateral_is_adc / re_collateral_is_presold
-        (PS1/26 Art. 124K) added
+        (PS1/26 Art. 124K) and re_collateral_is_primary_residence (PS1/26
+        Art. 124E(1)(a), see :func:`_single_primary_residence_expr`) added
     """
     is_residential = pl.col("property_type").str.to_lowercase() == "residential"
+    level_of = beneficiary_level_expr(unknown="direct")
+    levels = (
+        LevelSpec("direct", "exposure_reference", pro_rata=False),
+        LevelSpec("facility", "parent_facility_reference", weights="window"),
+        LevelSpec("counterparty", "counterparty_reference", weights="window"),
+    )
+    primary_residence_flags = _primary_residence_flag_values(
+        is_residential, [lv.name for lv in levels]
+    )
 
     allocated = allocate_multi_level(
         exposures,
-        all_property_collateral,
+        all_property_collateral.with_columns(level_of.alias(_RE_LINK_LEVEL)),
         values={
             "residential_collateral_value": pl.col("market_value").filter(is_residential).sum(),
             "property_collateral_value": pl.col("market_value").sum(),
         },
         basis=pl.col("total_exposure_amount"),
-        level_of=beneficiary_level_expr(unknown="direct"),
-        levels=(
-            LevelSpec("direct", "exposure_reference", pro_rata=False),
-            LevelSpec("facility", "parent_facility_reference", weights="window"),
-            LevelSpec("counterparty", "counterparty_reference", weights="window"),
-        ),
+        level_of=level_of,
+        levels=levels,
         any_positive={"has_facility_property_collateral": "property_collateral_value"},
         # Review RE-01 / RE-02: the collateral-level ADC flags, any-True per
         # beneficiary and OR-ed across levels (``is_adc`` / ``is_presold`` are
@@ -987,6 +1004,7 @@ def _join_property_collateral_multi_level(
             "re_collateral_is_adc": pl.col("is_adc").any(),
             "re_collateral_is_presold": pl.col("is_presold").any(),
             "_re_collateral_non_residential": (~is_residential.fill_null(False)).any(),
+            **primary_residence_flags,
         },
     )
     # Art. 124K(2)'s 100% is for ADC financing residential development only, so
@@ -996,8 +1014,61 @@ def _join_property_collateral_multi_level(
     return allocated.with_columns(
         (pl.col("re_collateral_is_presold") & ~pl.col("_re_collateral_non_residential")).alias(
             "re_collateral_is_presold"
-        )
-    ).drop("_re_collateral_non_residential")
+        ),
+        _single_primary_residence_expr(),
+    ).drop("_re_collateral_non_residential", *primary_residence_flags)
+
+
+def _primary_residence_flag_values(
+    is_residential: pl.Expr, level_names: list[str]
+) -> dict[str, pl.Expr]:
+    """Per-beneficiary scratch flags for the Art. 124E(1)(a) single-property test.
+
+    Evaluated by the allocation kernel per (level, beneficiary) and OR-ed across
+    levels: whether any linked property is NOT an attested residential primary
+    residence, whether one beneficiary carries two or more properties, and, per
+    allocation level in ``level_names``, whether a property is linked at that
+    level.
+
+    A row attests limb (a) only when ``is_primary_residence`` is True AND its
+    ``property_type`` is residential (``is_residential``): Art. 124E(1)(a) is a
+    limb of the RESIDENTIAL materiality test, while a commercial property is
+    decided by Art. 124E(6) (materially dependent unless "predominantly used by
+    the borrower for its own business purpose" — a home is not). Null in either
+    column is not an attestation. This is the same residential gate the sibling
+    ``re_collateral_is_presold`` applies for Art. 124K(2).
+    """
+    attested = pl.col("is_primary_residence").eq_missing(True) & is_residential.eq_missing(True)
+    flags: dict[str, pl.Expr] = {
+        "_re_pr_unattested": (~attested).any(),
+        "_re_pr_several": pl.len() > 1,
+    }
+    flags |= {
+        f"{_RE_PR_AT_PREFIX}{name}": (pl.col(_RE_LINK_LEVEL) == name).any() for name in level_names
+    }
+    return flags
+
+
+@cites("PS1/26, paragraph 124E")
+def _single_primary_residence_expr() -> pl.Expr:
+    """``re_collateral_is_primary_residence``: the PS1/26 Art. 124E(1)(a) security test.
+
+    Art. 124E(1)(a): an exposure "to one or more natural persons ... secured by a
+    single property that is the obligor's primary residence" is not materially
+    dependent on the property's cash flows; Art. 124E(4): "each separate housing
+    unit shall count as an individual property". True only where the exposure's
+    real-estate security is exactly ONE linked collateral row — one level, one row
+    there — and that row is a residential property whose ``is_primary_residence``
+    is True (the collateral flag attests the single housing unit; a commercial row
+    is Art. 124E(6)'s to decide, never limb (a)'s). A home pledged beside a buy-to-let, two
+    flagged properties, or a property at the loan level plus one at the
+    counterparty level is not "a single property". Never null. The natural-person
+    half of the limb is the classifier's to test.
+    """
+    levels_linked = pl.sum_horizontal(pl.col(f"^{_RE_PR_AT_PREFIX}.*$").cast(pl.Int8))
+    return (~pl.col("_re_pr_unattested") & ~pl.col("_re_pr_several") & (levels_linked == 1)).alias(
+        "re_collateral_is_primary_residence"
+    )
 
 
 def _add_ltv_defaults_for_missing_collateral(exposures: pl.LazyFrame) -> pl.LazyFrame:

@@ -439,11 +439,15 @@ _ECA_SCORE_DOMAIN = NumericDomain(
 
 _PROPERTY_COUNT_DOMAIN = NumericDomain(
     reason=(
-        "PRA PS1/26 Art. 124E(1)(b) — the count of residential properties "
-        "securing the borrower's total residential RE exposure. A count cannot "
-        "be negative. NO upper bound: exceeding the three-property limit is a "
-        "legitimate value that re-routes the exposure to Art. 124G, not an "
-        "invalid one."
+        "PRA PS1/26 Art. 124E(1)(b) / (2) — the natural person's count of "
+        "qualifying properties: residential properties, other than their "
+        "primary residence, securing a residential RE exposure to them (or to a "
+        "property SPV they guarantee) with any lender, each separate housing "
+        "unit counted as a property (Art. 124E(4)). A count cannot be negative. "
+        "NO upper bound: exceeding the three-property limit is a legitimate "
+        "value, not an invalid one; it re-routes the exposure to Art. 124G / "
+        "Art. 124J(1) unless the exposure is secured by the single primary "
+        "residence (Art. 124E(1)(a))."
     ),
     lower=0,
 )
@@ -967,11 +971,16 @@ COUNTERPARTY_SCHEMA: dict[str, ColumnSpec] = {
     "apply_fi_scalar": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_managed_as_retail": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_natural_person": ColumnSpec(pl.Boolean, default=False, required=False),
-    # PRA PS1/26 Art. 124E(1)(b): count of residential properties securing the
-    # borrower's total residential RE exposure (including the financed one). When
-    # this count exceeds the three-property limit, the owner-occupied preferential
-    # treatment is disapplied and the exposure routes to the income-producing
-    # residential track (Art. 124G). Null = unknown (no income-producing re-route).
+    # PRA PS1/26 Art. 124E(1)(b) / (2): the natural person's QUALIFYING properties —
+    # residential properties, other than the person's primary residence, that
+    # secure a residential RE exposure to the person, or to a property SPV the
+    # person guarantees and takes the economic benefit from; across ALL lenders,
+    # and each separate housing unit counted as a property (Art. 124E(4)). The
+    # primary residence is never counted (P1.473: this used to read "including
+    # the financed one"). Above the three-property limit the exposure routes to
+    # the materially-dependent track (Art. 124G / 124J) unless its own security
+    # is the single primary residence (collateral ``is_primary_residence``,
+    # Art. 124E(1)(a)). Null = unknown (no re-route).
     "qualifying_property_count": ColumnSpec(
         pl.Int32, required=False, domain=_PROPERTY_COUNT_DOMAIN
     ),
@@ -1181,6 +1190,17 @@ COLLATERAL_SCHEMA: dict[str, ColumnSpec] = {
     "is_income_producing": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_adc": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_presold": ColumnSpec(pl.Boolean, default=False, required=False),
+    # PRA PS1/26 Art. 124E(1)(a): True where this real-estate collateral is ONE
+    # housing unit (Art. 124E(4): "each separate housing unit shall count as an
+    # individual property") that is the primary residence of the natural-person
+    # obligor of the exposures it secures. The hierarchy grants limb (a) only to
+    # an exposure whose real-estate security is exactly one linked property, of
+    # ``property_type`` residential (a commercial property is Art. 124E(6)'s), and
+    # that property carries True (``re_collateral_is_primary_residence``); the
+    # classifier then spares it the Art. 124E(2) three-property re-route to
+    # Art. 124G / Art. 124J(1). No Boolean default on purpose (P1.473): null means "not
+    # attested" and never exempts. Read under Basel 3.1 only.
+    "is_primary_residence": ColumnSpec(pl.Boolean, required=False),
     "is_qualifying_re": ColumnSpec(pl.Boolean, required=False),
     "prior_charge_ltv": ColumnSpec(pl.Float64, default=0.0, required=False, domain=_LTV_DOMAIN),
     # CRR Art. 126(2)(d): rental income / interest payments ratio (>= 1.5

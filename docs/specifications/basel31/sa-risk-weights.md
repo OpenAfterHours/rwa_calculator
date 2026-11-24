@@ -2146,6 +2146,34 @@ A residential RE exposure is **materially dependent by default**. It is classifi
     properties for the three-property count. This is material for multi-unit buy-to-let
     portfolios.
 
+!!! info "Exceptions (a) and (b) are independent (P1.473)"
+    A natural person over the three-property limit fails exception (b) only. The exposure
+    secured by their **single primary residence** still meets exception (a) and stays off
+    the materially-dependent track — Art. 124F rather than Art. 124G, or for a
+    non-qualifying ("other") residential exposure Art. 124J(2) rather than Art. 124J(1)
+    150% — and the primary residence is never one of the qualifying properties
+    counted under (b). The engine reads the count from counterparty
+    `qualifying_property_count` (primary residence excluded, all lenders, each housing
+    unit counted) and the exception from real-estate collateral `is_primary_residence`:
+    exactly one linked residential property, flagged `True` (null is not an attestation;
+    a commercial property is decided by Art. 124E(6), never by exception (a)). An explicit
+    `is_income_producing = True` still wins.
+
+    The exception moves RWA both ways:
+
+    - **Down** on a first charge (Art. 124G → Art. 124F), on other RRE (Art. 124J(1)
+      150% → Art. 124J(2)), on a **defaulted** exposure (Art. 127(1)(a) 150% →
+      Art. 127(3) 100%: "a residential real estate exposure which is a defaulted
+      exposure and is not materially dependent ... shall be assigned a risk weight of
+      100%"), and on a natural person whose exposure is not already in a real-estate
+      class — a sole trader booked `corporate`, for example. That exposure becomes a
+      loan-split candidate, so **one input row becomes two legs**: a `_sec` leg on the
+      real-estate class and a `_res` leg on the original class.
+    - **Up** on a junior charge whose prior charges use up the Art. 124F(2)(a) 20% band.
+
+    A `retail_mortgage` row is priced within the row and keeps one row. See
+    [hierarchy & classification](../common/hierarchy-classification.md#art-124e-three-property-limit-for-materially-dependent).
+
 ### Reassessment Triggers — Residential RE (Art. 124E(5))
 
 Art. 124E(5) imposes both a **mandatory reassessment trigger** and a **discretionary

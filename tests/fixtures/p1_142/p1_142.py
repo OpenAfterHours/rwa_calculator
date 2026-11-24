@@ -6,11 +6,15 @@ Pipeline position:
 
 Scenario design (P1.142 — Art. 124E three-property limit):
 
-    Basel 3.1 Art. 124E(1)(b) limits the preferential owner-occupied residential
-    treatment (Art. 124F loan-split, Art. 124L) to borrowers whose total exposure is
-    secured on no more than THREE residential properties (including the financed one).
-    When the limit is BREACHED (count >= 4) the exposure is re-routed to the
-    income-producing residential whole-loan track (Art. 124G, Table 6B).
+    Basel 3.1 Art. 124E(1)(b)/(2): a natural person's residential exposure is not
+    materially dependent on the property's cash flows (Art. 124F loan-split, Art.
+    124L) if they have no more than THREE qualifying properties — residential
+    properties, other than their primary residence, securing residential RE
+    exposures to them with any lender. When the limit is BREACHED (count >= 4) the
+    exposure is re-routed to the materially-dependent whole-loan track (Art. 124G,
+    Table 6B), unless it is secured by the borrower's single primary residence
+    (Art. 124E(1)(a), an independent limb: P1.473). Neither collateral row here
+    carries ``is_primary_residence``, so limb (a) never applies.
 
     Art. 124E(4) specifies that housing units (flats, apartments) within a single
     building are each counted individually — a multi-let block of flats is not a
@@ -20,15 +24,15 @@ Scenario design (P1.142 — Art. 124E three-property limit):
 
     BREACH row (CP_P1142_BREACH):
         qualifying_property_count = 4  → limit breached (4 > 3)
-        Engine must set materially_dependent = False (or route to income-producing),
-        deriving the Art. 124G whole-loan treatment.
+        Engine must treat the exposure as materially dependent (Art. 124E(1)(b)
+        fails), deriving the Art. 124G whole-loan treatment.
         Table 6B, LTV band 70-80% → RW = 0.50.
         EAD = 200,000 (on-balance CCF = 1.0)
         RWA = 200,000 x 0.50 = 100,000.00
 
     CONTROL row (CP_P1142_CTRL):
         qualifying_property_count = 3  → limit met (3 <= 3)
-        Engine keeps owner-occupied Art. 124F loan-split treatment.
+        Engine keeps the not-materially-dependent Art. 124F loan-split treatment.
         Loan-split: secured_share = min(1, 0.55 / 0.75) = 0.73333
         RW_split = 0.20 x 0.73333 + 0.75 x 0.26667 = 0.34667
         RWA = 200,000 x 0.34667 = 69,333.33
@@ -46,9 +50,9 @@ Scenario design (P1.142 — Art. 124E three-property limit):
 
 New field introduced by P1.142 (counterparty level):
     qualifying_property_count (pl.Int32, nullable):
-        Count of residential properties securing the borrower's total residential
-        RE exposure with the firm.  Null means the count is unknown/not collected
-        (treated conservatively by the engine — limit assumed breached).
+        Count of the borrower's Art. 124E(2) qualifying properties (primary
+        residence excluded, all lenders, each housing unit counted). Null means
+        the count is unknown/not collected (no re-route).
 
     Until the engine-implementer wave adds this field to COUNTERPARTY_SCHEMA in
     src/rwa_calc/data/schemas.py, the fixture uses an inline dtype dict that
@@ -80,10 +84,12 @@ Hand-calculations:
         RWA = 200,000 x 0.34667... = 69,333.33
 
 References:
-    - PRA PS1/26 Art. 124E(1)(b): three-property limit for owner-occupied RE.
-    - PRA PS1/26 Art. 124E(2): exclusion from owner-occupied path when limit breached.
+    - PRA PS1/26 Art. 124E(1)(b): the three-property limit limb of the
+      not-materially-dependent test.
+    - PRA PS1/26 Art. 124E(2): qualifying properties (primary residence excluded,
+      any lender); materially dependent when the limit is breached.
     - PRA PS1/26 Art. 124E(4): individual housing units counted separately.
-    - PRA PS1/26 Art. 124F: owner-occupied residential loan-split (20% / 75%).
+    - PRA PS1/26 Art. 124F: not-materially-dependent residential loan-split (20% / 75%).
     - PRA PS1/26 Art. 124G Table 6B: income-producing residential RW = 0.50 (70-80% LTV).
     - PRA PS1/26 Art. 124L(a): residual/unsecured portion RW = 75%.
     - src/rwa_calc/data/schemas.py: COUNTERPARTY_SCHEMA (qualifying_property_count NEW).
@@ -198,7 +204,8 @@ class _Counterparty:
     Counterparty row for P1.142.
 
     Both obligors are natural persons (is_natural_person=True) which is a
-    pre-condition for the Art. 124E owner-occupied residential treatment path.
+    pre-condition for the Art. 124E(1)(a)/(b) natural-person exceptions (not
+    materially dependent).
     qualifying_property_count is the load-bearing new field: 4 triggers the
     income-producing re-route; 3 stays on the preferential loan-split track.
     """
@@ -314,7 +321,7 @@ def create_p1142_counterparties() -> pl.DataFrame:
     CP_P1142_BREACH: natural person, qualifying_property_count=4 → Art. 124E limit
         breached → engine must route to Art. 124G income-producing residential track.
     CP_P1142_CTRL: natural person, qualifying_property_count=3 → limit met →
-        engine keeps Art. 124F owner-occupied loan-split track.
+        engine keeps the not-materially-dependent Art. 124F loan-split track.
 
     Uses _COUNTERPARTY_FIXTURE_SCHEMA (inline dict) because qualifying_property_count
     is not yet declared in the canonical COUNTERPARTY_SCHEMA.

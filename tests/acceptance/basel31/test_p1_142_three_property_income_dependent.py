@@ -5,24 +5,27 @@ Pipeline position:
     Loader → HierarchyResolver → Classifier → CRMProcessor → SACalculator → Aggregator
 
 Scenario design:
-    Basel 3.1 Art. 124E(1)(b) limits the preferential owner-occupied residential
-    treatment (Art. 124F loan-split + Art. 124L) to borrowers whose total residential
-    RE exposure is secured on no more than THREE residential properties (including
-    the financed one).  When the limit is BREACHED (count > 3), the exposure is
-    re-routed to the income-producing residential whole-loan track (Art. 124G,
-    Table 6B).
+    Basel 3.1 Art. 124E(1)(b)/(2): a natural person's residential exposure is not
+    materially dependent (Art. 124F loan-split + Art. 124L) if they have no more
+    than THREE qualifying properties — residential properties, other than their
+    primary residence, securing residential RE exposures to them with any lender.
+    When the limit is BREACHED (count > 3), the exposure is re-routed to the
+    materially-dependent whole-loan track (Art. 124G, Table 6B) — unless it is
+    secured by the borrower's single primary residence (Art. 124E(1)(a), an
+    independent limb; P1.473, ``test_p1_473_primary_residence_exception.py``).
+    These fixtures carry no ``is_primary_residence``, so limb (a) never applies.
 
     Two obligors are tested:
 
     BREACH row (CP_P1142_BREACH, qualifying_property_count=4):
         qualifying_property_count > 3  →  Art. 124E limit breached.
-        Engine must derive materially_dependent = False (income-producing route).
+        Engine must derive materially dependent = True (Art. 124G route).
         Art. 124G Table 6B, LTV band 70%-80% → RW = 0.50.
         EAD = 200,000  →  RWA = 200,000 × 0.50 = 100,000.00.
 
     CONTROL row (CP_P1142_CTRL, qualifying_property_count=3):
         qualifying_property_count = 3 ≤ 3  →  limit met.
-        Engine keeps Art. 124F owner-occupied loan-split treatment.
+        Engine keeps the not-materially-dependent Art. 124F loan-split treatment.
         secured_share = min(1, 0.55 / 0.75) = 0.73333...
         blended RW = 0.20 × 0.73333... + 0.75 × 0.26667... = 0.34667...
         EAD = 200,000  →  RWA = 200,000 × 0.34667... = 69,333.33.
@@ -30,7 +33,7 @@ Scenario design:
 Pre-fix (current) behaviour without qualifying_property_count derivation:
     The engine does not read qualifying_property_count and cannot derive the
     income-producing flag from it.  Both rows fall through to the default
-    owner-occupied Art. 124F loan-split track, producing RWA ≈ 69,333.33 for
+    not-materially-dependent Art. 124F loan-split track, producing RWA ≈ 69,333.33 for
     BOTH rows.  The BREACH assertion (RWA == 100,000) therefore FAILS.
 
 Post-fix expected behaviour:
@@ -40,9 +43,11 @@ Post-fix expected behaviour:
     CONTROL row: count=3 ≤ 3  →  loan-split retained  →  RWA ≈ 69,333.33.
 
 Regulatory references:
-    - PRA PS1/26 Art. 124E(1)(b): three-property limit for owner-occupied RE.
-    - PRA PS1/26 Art. 124E(2): exclusion from owner-occupied path when limit breached.
-    - PRA PS1/26 Art. 124F: owner-occupied residential loan-split (20% / 75%).
+    - PRA PS1/26 Art. 124E(1)(b): the three-property limit limb of the
+      not-materially-dependent test.
+    - PRA PS1/26 Art. 124E(2): qualifying properties (primary residence excluded,
+      any lender); materially dependent when the limit is breached.
+    - PRA PS1/26 Art. 124F: not-materially-dependent residential loan-split (20% / 75%).
     - PRA PS1/26 Art. 124G Table 6B: income-producing residential RW = 0.50 (70-80% LTV).
     - PRA PS1/26 Art. 124L(a): residual/unsecured portion RW = 75%.
     - tests/fixtures/p1_142/p1_142.py: fixture constants and builder functions.
@@ -317,7 +322,7 @@ class TestB31P1142ThreePropertyIncomeDependentRouting:
             f"(EAD 200,000 × blended RW {EXPECTED_RW_CTRL:.5f} from Art. 124F loan-split). "
             f"Got {total_rwa:,.2f}. "
             f"count=3 is within the Art. 124E(1)(b) limit (≤ 3) — engine must "
-            f"keep the owner-occupied loan-split track for this obligor."
+            f"keep the not-materially-dependent loan-split track for this obligor."
         )
 
     def test_p1_142_ctrl_blended_risk_weight(self, p1_142_sa_results: pl.DataFrame) -> None:

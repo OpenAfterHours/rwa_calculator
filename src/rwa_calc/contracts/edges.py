@@ -1004,6 +1004,19 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
             fill_null_default=True,
             citation="PS1/26 Art. 124K(2)",
         ),
+        # True where the exposure's real-estate security is exactly one linked
+        # residential property and its collateral ``is_primary_residence`` is True — the
+        # security half of the PS1/26 Art. 124E(1)(a) limb (P1.473). The Basel 3.1
+        # classifier exempts a natural person's exposure carrying it from the
+        # Art. 124E(2) three-property re-route. Optional with a False default (no
+        # attestation) so synthetic CCR rows read "not a primary residence".
+        "re_collateral_is_primary_residence": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            default=False,
+            fill_null_default=True,
+            citation="PS1/26 Art. 124E(1)(a)",
+        ),
         # True where ``ltv`` was derived from the linked property value because
         # no LTV was supplied (review RE-10; ``engine/hierarchy/re_ltv.py``).
         "ltv_derived": EdgeColumn(

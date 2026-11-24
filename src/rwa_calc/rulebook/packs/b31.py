@@ -742,13 +742,17 @@ ENTRIES: dict[str, RuleEntry] = {
             "PS1/26", "147", "Art. 147(3)(f) assigns all MDBs to the quasi-sovereign class"
         ),
     ),
-    # Basel 3.1 Art. 124E(1)(b)/(2): natural-person RRE re-routed to income-
-    # producing whole-loan (Art. 124G) above the three-property limit.
+    # Basel 3.1 Art. 124E(1)(b)/(2): natural-person RRE re-routed to the
+    # materially-dependent track (Art. 124G whole-loan; Art. 124J(1) for other RRE)
+    # above the three-property limit, except an exposure secured by the borrower's single primary residence
+    # (Art. 124E(1)(a) — an independent limb; P1.473).
     "b31_art_124e_three_property_limit_applies": Feature(
         name="b31_art_124e_three_property_limit_applies",
         enabled=True,
         citation=Citation(
-            "PS1/26", "124E", "natural-person three-property income-producing re-route"
+            "PS1/26",
+            "124E",
+            "natural-person three-property re-route; (1)(a) single primary residence exempt",
         ),
     ),
     # Basel 3.1 Art. 123A two-path retail qualification — see packs/crr.py. Gates the
@@ -1700,14 +1704,18 @@ ENTRIES: dict[str, RuleEntry] = {
         value=Decimal("0.60"),
         citation=Citation("PS1/26", "124J", "(3)(b) other-RE CRE floor 60%"),
     ),
-    # Art. 124E(1)(b) three-property limit: owner-occupied preferential RRE
-    # treatment is restricted to natural persons whose total residential RE
-    # exposure is secured on no more than three properties; a count strictly
-    # above this re-routes to the income-producing whole-loan track (Art. 124G).
+    # Art. 124E(1)(b)/(2) three-property limit: a natural person meets it with "no
+    # more than three qualifying properties" — residential properties, other than
+    # their primary residence, securing residential RE exposures to them (or to a
+    # property SPV they guarantee), across all lenders, each housing unit counted
+    # (Art. 124E(4)). A count strictly above this re-routes to the materially-
+    # dependent whole-loan track (Art. 124G) unless limb (a) holds (P1.473).
     "b31_rre_three_property_limit": IntParam(
         name="b31_rre_three_property_limit",
         value=3,
-        citation=Citation("PS1/26", "124E", "(1)(b) max residential properties for owner-occupied"),
+        citation=Citation(
+            "PS1/26", "124E", "(1)(b)/(2) max qualifying properties, primary residence excluded"
+        ),
     ),
     # RE general loan-split secured portion RW + cap (RRE Art. 124F / CRE Art. 124H)
     # and the income-RRE junior-charge multiplier + LTV gate (Art. 124G(2)).

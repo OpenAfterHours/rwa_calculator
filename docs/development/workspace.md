@@ -202,6 +202,39 @@ as history. Every `OWNER:` in the register must name a bullet
 owning bullet must remove or re-own the entries it owned
 (`tests/contracts/test_register_owners.py`, fast; it reads the plan).
 
+## The verdict set of the supervisory register
+
+A rule the template-level engine cannot evaluate on a run is `NOT_EVALUATED`
+there. That is not a break and not a vacuous pass, and while the template has
+other rules it is not an uncovered template either, so a rule that used to pass
+can stop being evaluated without any of the register's liability sections
+moving. Dropping one emitted row (C 02.00 r0160) from the CRR `rich` run does
+exactly that to `v3335_i`, an Error rule that no other run evaluates.
+
+So the register also banks `rules_with_a_verdict`: per regime, every rule id the
+template-level engine brings to `PASS`, `FAIL` or `VACUOUS` on at least one
+registered run. It is the covered set, not a liability, and its entries carry no
+reason. Two legs ratchet it both ways:
+
+| Leg | Fails when |
+|-----|------------|
+| (m) | A listed rule reaches no verdict on any run. The failure names the rule and why each run left it `NOT_EVALUATED`. |
+| (n) | A rule reaches a verdict and is not listed. Bank it, so leg (m) holds it from then on. |
+
+It is a set, not a count. `scripts/coverage_report.py --check` ratchets the same
+population as counts (`never_evaluated_rules`, `union_binding_rules_*`), so
+there one rule going dark while another activates nets to zero.
+
+Leg (m) sees only a rule's last verdict. A rule that loses its verdict on one run
+and keeps one on another moves nothing. The section also moves when the rule set
+does: the template-level rules are loaded with the Bank's deny list as it stands
+on the day the gate runs, so a deny-list entry coming into force, or an extract
+or taxonomy refresh, is a deliberate re-bank, with the reason in the commit:
+
+```bash
+REGEN_VALIDATION_BASELINE=1 uv run pytest tests/acceptance/reporting/test_supervisory_validations.py -n 0
+```
+
 ## The referee differential
 
 Every other check on the filing package is this repository checking its own

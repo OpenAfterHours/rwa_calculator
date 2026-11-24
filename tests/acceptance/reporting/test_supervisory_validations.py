@@ -5,6 +5,7 @@ Pipeline position:
     reporting portfolios -> PipelineOrchestrator -> COREP + Pillar 3 bundles
         -> evaluate_all (EBA rules under CRR, BoE rules under Basel 3.1)
         -> known-breaks + known-uncovered + known-vacuous baseline
+        -> rules_with_a_verdict (every rule evaluated on at least one run)
     Basel 3.1 only, from the SAME COREP bundle:
         -> build_canonical_return -> validate_return (the gateway engine, with
            the Bank's deny list as it stands on the run date)
@@ -15,7 +16,8 @@ known set of published rules, leaves a known set of templates unchecked, and
 executes a known set of rules that assert nothing. Asserting zero of any of
 those would fail permanently and be switched off; asserting nothing would let a
 new defect land unnoticed. So the gate is a RATCHET over a committed liability
-register, applied to ALL THREE populations:
+register, applied to ALL THREE populations — and, legs (m)/(n), to the set of
+rules that are evaluated at all:
 
   (a) no broken rule outside the baseline           — the regression gate;
   (b) no baseline rule that no longer breaks        — a fix must shrink it;
@@ -28,7 +30,9 @@ register, applied to ALL THREE populations:
   (i) no baseline gateway break that has gone       — a fix must shrink it;
   (j) no engine disagreement outside the baseline   — the two readings part company;
   (k) no baseline disagreement that has gone        — agreement must shrink it;
-  (l) no banked gateway break failing in more places — its count may not rise.
+  (l) no banked gateway break failing in more places — its count may not rise;
+  (m) no banked rule left with no verdict on any run — a PASS -> NOT_EVALUATED fails;
+  (n) no rule with a verdict that the register omits — a first verdict must be banked.
 
 An Error-severity break rejects the entire return at submission, so every
 ``ERROR`` line in the register is a blocking filing defect.
@@ -100,8 +104,9 @@ Publisher-issue labels:
     ``tests/contracts/test_register_publisher_issues.py`` enforces both
     directions on the committed JSON (fast; it runs no pipeline).
 
-The eleven set legs share ONE set-diff (P5.41); leg (l) compares counts on the
-pairs both sides hold, and a pair on one side only is (h)'s or (i)'s:
+Every set leg shares ONE set-diff (P5.41) — all but (e), which reads reasons,
+and (l), which compares counts on the pairs both sides hold (a pair on one side
+only is (h)'s or (i)'s):
     The arithmetic behind "new" and "gone" is ``scripts/tolerated_findings.py``
     ``::diff``, extracted from this file so that this register and the two
     DECLARED ones — ``tests/oracle/test_oracle.py::KNOWN_DISAGREEMENTS`` and
@@ -179,36 +184,46 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     FIRST, the union. Membership is the union over the runs: a rule is
     vacuity-only when NO run gets a real verdict out of it. A change that empties
     a column on ONE portfolio while another still exercises the same rule leaves
-    this population unmoved, and 221 rules (130 of them ERROR) currently hold a
-    real verdict on exactly one run, so that is a wide surface. It cuts both ways
+    this population unmoved. Measured on the 31-run matrix (2026-11-24), 432 of
+    the 679 rules with a real verdict hold it on two or more runs, so that is a
+    wide surface; the other 247 (145 ERROR) hold it on exactly one, where
+    darkening that run reaches leg (f) if the rule is vacuous elsewhere and leg
+    (m) if it is evaluated nowhere else. It cuts both ways
     on leg (g): a listed rule only leaves the population when the change reaches
     EVERY run where it was vacuous. Measured instance — ``crr/v3332_i`` is
     vacuous on both ``rich`` and ``crm-substitution``, so darkening it on ``rich``
     keeps it in the register and (g) stays green.
 
-    SECOND, and this is the real hole: these legs are scoped to the ``VACUOUS``
-    status. ``PASS -> NOT_EVALUATED`` escapes all six legs of this gate. Dropping
-    one emitted row (``C 02.00`` r0160) from ``crr/rich`` moves two ERROR rules
-    out of ``PASS`` into ``NOT_EVALUATED`` — one of them ``v3335_i``, which passed
-    on ``rich`` alone, so afterwards it has no verdict anywhere in the matrix —
-    and every leg here stays green with ``templates_uncovered`` unmoved, because a
-    darkened rule is not a break, not a vacuity, and does not uncover its
-    template. The worked example is ``v0207_m``: an ERROR rule on the C 02.00
-    hierarchy that PASSes on six portfolios today and is VACUOUS on the other two,
-    and which BOTH of that reviewer's mutations darken. It is a handful of dropped
-    rows from silently joining ``v0204_m`` / ``v0205_m`` / ``v0210_m`` /
-    ``v0211_m`` — four live ERROR rules that are already evaluated NOWHERE in the
-    matrix, and which no leg here objects to.
+    SECOND: these legs are scoped to the ``VACUOUS`` status, so ``PASS ->
+    NOT_EVALUATED`` escapes them, and legs (a)-(e) as well: a darkened rule is
+    not a break, not a vacuity, and does not uncover its template while the
+    template has other rules. Under Basel 3.1 the gateway legs see it only where
+    the gateway engine itself then FAILs the rule, because a NOT_EVALUATED side
+    is no disagreement (``_opposed``); under CRR there is no gateway leg.
+    Measured on the 31-run matrix (2026-11-24): dropping one emitted row
+    (``C 02.00`` r0160) from ``crr/rich`` moves two ERROR rules out of ``PASS``
+    into ``NOT_EVALUATED`` there — ``v3335_i``, which passes on ``rich`` alone,
+    and ``v0207_m``, which has a verdict on every CRR run — and not one
+    population legs (a)-(l) compare moves.
 
-    The mitigation, and its limits. ``scripts/coverage_report.py --check``
-    ratchets ``never_evaluated_rules`` (a MAX, banked at 785) and
-    ``union_binding_rules_{crr,b31}`` (a MIN, 257/289), and by those definitions
-    the row-drop moves both. But (i) that is inference from the metric
-    definitions, not a measured ``--check`` under the mutation; (ii) both are
-    COUNTS, so one rule going dark while another activates nets to zero; and
-    (iii) it is a DIFFERENT gate from this one, and this file is the mandatory
-    Tier 2 register. So the ``NOT_EVALUATED`` half is mitigated, not closed, and
-    it is owed work — not a property of legs (f)/(g).
+    Legs (m)/(n) close the half of that which a set can close. The register banks
+    ``rules_with_a_verdict``, every rule with PASS, FAIL or VACUOUS on at least
+    one run, and leg (m) fails when a banked rule has no verdict on any run: the
+    row-drop above fails it naming ``v3335_i``, and
+    ``test_a_rule_darkened_on_its_only_run_fails_leg_m_alone`` re-does that
+    row-drop on every run of this file, asserting that (m) is the ONLY leg that
+    moves. It is a SET, not a count: ``scripts/coverage_report.py --check``
+    ratchets the same population as COUNTS (``never_evaluated_rules`` may not
+    rise, ``union_binding_rules_{crr,b31}`` may not fall), so there one rule
+    going dark while another activates nets to zero, and that script is a
+    separate CI job that ``/next-items`` Tier 2 does not run.
+
+    What (m) does NOT close is the union limit above, for the same reason (f)
+    does not: ``v0207_m`` loses its ``rich`` verdict to the same row-drop and
+    keeps fourteen others, so nothing here moves. What (m) does close is a wide
+    surface too: 150 rules (56 ERROR) had a verdict of any kind on exactly one
+    run when measured, each one darkened run away from failing leg (m), and
+    before (m) from going dark with every leg green.
 
     Where the single-portfolio case actually goes: to the goldens, one per run.
     Six portfolios keep their own golden modules (rich, ccr, irb-classes,
@@ -231,7 +246,8 @@ Cost, and why every run is load-bearing:
     This file is the most expensive test in the suite: fifteen portfolios x two
     regimes plus ``equity-transitional`` under Basel 3.1 alone (thirty-one runs,
     sixteen of them Basel 3.1), plus a prior-period run for each of the fourteen
-    IRB ones, is FORTY-FIVE full pipeline runs. Count ``RUNS``, not this prose.
+    IRB ones, is FORTY-FIVE full pipeline runs, plus two for leg (m)'s probe
+    (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not this prose.
     The gateway leg adds one canonical return and one ``validate_return`` per
     Basel 3.1 run (sixteen) and no pipeline run: the pack is loaded once per
     process and the COREP bundle is the one the template leg already generated.
@@ -317,10 +333,13 @@ Baseline format:
     object with ``notes`` (how to read the register), ``summary`` (per-run
     outcome counts; descriptive, and the only part of the file nothing asserts
     entry-by-entry), ``known_broken_rules``, ``known_uncovered_templates``,
-    ``known_vacuous_rules``, ``known_gateway_breaks`` and
-    ``known_engine_disagreements``. The last two are written one entry per
-    (rule, reason) with the portfolios it covers, so a rule that breaks for two
-    causes on two portfolios is two entries, each with one cause.
+    ``known_vacuous_rules``, ``known_gateway_breaks``,
+    ``known_engine_disagreements`` and ``rules_with_a_verdict``. The two gateway
+    sections are written one entry per (rule, reason) with the portfolios it
+    covers, so a rule that breaks for two causes on two portfolios is two
+    entries, each with one cause. ``rules_with_a_verdict`` is ``{regime:
+    [rule_id, ...]}`` with no reasons: it is the covered set, not a liability,
+    and REGEN rewrites it whole.
 
 Regenerating the baseline:
     Set ``REGEN_VALIDATION_BASELINE=1`` and run this file. Hand-written
@@ -359,15 +378,18 @@ References:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import warnings
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
+import polars as pl
 import pytest
 from scripts.tolerated_findings import diff
 from tests.acceptance.reporting.test_reporting_golden import _b31_config, _crr_config
@@ -417,6 +439,7 @@ from rwa_filer.validate.evaluate import (
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import RawDataBundle
     from rwa_calc.reporting.corep.generator import COREPTemplateBundle
+    from rwa_calc.reporting.pillar3.generator import Pillar3TemplateBundle
     from rwa_filer.boe.engine import RuleResult
     from rwa_filer.validate.checker import RuleOutcome, ValidationReport
 
@@ -458,6 +481,30 @@ MAX_RECORDED_CELLS = 4
 #: the count of coordinates it held over vacuously are the only triage handles
 #: the evaluator can give, and they are recorded instead.
 MAX_RECORDED_TABLES = 5
+
+#: The register section holding every rule that reaches a verdict on at least
+#: one run of ``RUNS``, as ``{regime: [rule_id, ...]}``. Legs (m)/(n) ratchet it.
+EVALUATED_SECTION = "rules_with_a_verdict"
+
+#: What counts as a verdict for ``EVALUATED_SECTION``. VACUOUS is one — the rule
+#: ran and held, at ``0 = 0`` — so the only status that is NO verdict is
+#: NOT_EVALUATED, and the section's complement is the never-evaluated pool.
+VERDICT_STATUSES = frozenset({STATUS_PASS, STATUS_FAIL, STATUS_VACUOUS})
+
+#: Said by legs (m) and (n) when the register has no verdict set to compare with:
+#: an absent section would otherwise make (m) pass with nothing banked to lose.
+MISSING_EVALUATED_SECTION = (
+    f"the register holds no {EVALUATED_SECTION} section, so leg (m) has nothing to hold and "
+    "would pass whatever went dark. Bank it: REGEN_VALIDATION_BASELINE=1 uv run pytest "
+    "tests/acceptance/reporting/test_supervisory_validations.py -n 0"
+)
+
+#: Leg (m)'s observed-red probe: one run, and one emitted row whose removal darkens
+#: a rule that has its only verdict on that run. Measured 2026-11-24 on the 31-run
+#: matrix: dropping C 02.00 r0160 from crr/rich moves v3335_i (ERROR, PASS on rich
+#: alone) and v0207_m (ERROR, a verdict on every CRR run) to NOT_EVALUATED there.
+PROBE_RUN = ("crr", "rich")
+PROBE_ROW = "0160"
 
 #: Header written into the register on every regeneration, so the file explains
 #: how to read itself to someone who never saw this module. Emitted from here
@@ -574,19 +621,39 @@ REGISTER_NOTES: dict[str, str] = {
         "that stops being vacuous on every run must be REMOVED from the list."
     ),
     "what_the_vacuity_ratchet_does_NOT_catch": (
-        "Two limits, both measured, both stated because a green leg is otherwise read as more "
-        "than it is. (1) UNION: a change that empties a column on one portfolio while another "
-        "still gets a real verdict out of the same rule moves nothing here, and 221 rules (130 "
-        "ERROR) currently hold a real verdict on exactly ONE run. Same masking on the removal "
-        "leg: crr/v3332_i is vacuous on both rich and crm-substitution, so darkening it on rich "
-        "leaves the entry standing. (2) STATUS SCOPE: these legs see VACUOUS only, so "
-        "PASS -> NOT_EVALUATED escapes every leg of this gate - dropping one emitted row (C 02.00 "
-        "r0160) from crr/rich darkens two ERROR rules, one of them (v3335_i) passing on rich "
-        "alone, and the whole gate stays green. scripts/coverage_report.py --check mitigates that "
-        "by ratcheting never_evaluated_rules (may not rise) and union_binding_rules per regime "
-        "(may not fall), but those are counts in a different gate, so one rule going dark nets "
-        "against another "
-        "activating. The NOT_EVALUATED half is owed work, not a property of this register."
+        "Two limits, both measured, both stated because a green leg is otherwise read as more than"
+        " it is. (1) UNION: a change that empties a column on one portfolio while another still "
+        "gets a real verdict out of the same rule moves nothing here, and 432 of the 679 rules "
+        "with a real verdict held it on two or more runs when measured on the 31-run matrix "
+        "(2026-11-24). Same masking on the removal leg: crr/v3332_i is vacuous on both rich and "
+        "crm-substitution, so darkening it on rich leaves the entry standing. (2) STATUS SCOPE: "
+        "these legs see VACUOUS only, so PASS -> NOT_EVALUATED escapes them - dropping one emitted"
+        " row (C 02.00 r0160) from crr/rich moves two ERROR rules from PASS to NOT_EVALUATED "
+        "there, v3335_i and v0207_m, and no vacuity, break or coverage leg moves. That half is "
+        "held by rules_with_a_verdict (see what_rules_with_a_verdict_MEANS), but for a rule's LAST"
+        " verdict only: v3335_i passes on crr/rich alone, so it leaves that section and the gate "
+        "fails naming it; v0207_m still has a verdict on fourteen other CRR runs, so it moves "
+        "nothing anywhere in this register."
+    ),
+    "what_rules_with_a_verdict_MEANS": (
+        "rules_with_a_verdict lists, per regime, every rule id the template-level engine brings "
+        "to a verdict - PASS, FAIL or VACUOUS - on at least one registered run. It is the "
+        "COVERED set, not a liability, so its entries carry no reason. It is ratcheted both "
+        "ways. A listed rule that reaches no verdict on any run fails the gate, naming the rule "
+        "and why each run left it NOT_EVALUATED: that is the PASS -> NOT_EVALUATED regression "
+        "no other section sees (a row, column or sheet no longer emitted, a sheet map or binding "
+        "that stopped addressing it, a run dropped from RUNS), and a VACUOUS-only rule going "
+        "dark fails here and in the vacuity removal leg together. A rule that reaches a verdict "
+        "and is not listed must be added, so the section cannot go stale under the first leg. "
+        "It holds the LAST verdict only: a rule falling from verdicts on two runs to one moves "
+        "nothing here (limit (1) of what_the_vacuity_ratchet_does_NOT_catch). Membership also "
+        "moves with the rule set, because the template-level rules are loaded with the Bank's "
+        "deny list as it stands on the day the gate runs: a deny-list entry coming into force, "
+        "or an extract or taxonomy refresh, removes or adds entries, and those are re-banked "
+        "deliberately with REGEN_VALIDATION_BASELINE=1 and said so in the commit. The enforced "
+        "rules outside this section are the ones scripts/coverage_report.py counts as "
+        "never_evaluated_rules over the same RUNS; that script ratchets only the COUNT, so a "
+        "rule going dark while another activates nets out there and not here."
     ),
     "how_to_discharge_a_vacuity_entry": (
         "Make one cell the rule addresses carry a real figure on a registered portfolio, then "
@@ -597,9 +664,11 @@ REGISTER_NOTES: dict[str, str] = {
         "because a single moving row leaves the cell at 0.00 afterwards - and activated five "
         "previously-VACUOUS rules to PASS, boe_b0752_27 (the r0253 tie-out) among them. Do NOT "
         "discharge an entry by deleting the rule, narrowing a portfolio, or making the cell "
-        "structurally absent: absence is NOT_EVALUATED, which is worse than vacuity, not better - "
-        "and per what_the_vacuity_ratchet_does_NOT_catch, that route may not even redden a leg, so "
-        "nothing here will stop you doing it."
+        "structurally absent: absence is NOT_EVALUATED, which is worse than vacuity, not better. "
+        "Made absent on EVERY run where the rule was vacuous, it fails the vacuity removal leg "
+        "and the rules_with_a_verdict leg together, and the second names it as a lost verdict; "
+        "made absent on only some of them, per what_the_vacuity_ratchet_does_NOT_catch, it "
+        "reddens no leg at all, so nothing here will stop you doing it."
     ),
     "reading_a_vacuity_reason": (
         "The mechanism sentence names WHICH limb the measured evidence supports. 'emitted but "
@@ -1376,6 +1445,24 @@ class DisagreementFact(NamedTuple):
     gateway_detail: str
 
 
+class RunVerdicts(NamedTuple):
+    """One run of ``RUNS`` as the gate judged it — what ``_fold_runs`` adds up.
+
+    ``report`` is the template-level engine's verdict on every enforced rule;
+    ``gateway`` and ``disagreements`` are the gateway leg's findings on the same
+    return (empty under CRR, which files nothing). Kept on ``GateRun`` so that a
+    test can re-judge ONE run from a mutated bundle and fold the matrix again
+    without re-running the rest of it — which is how leg (m) is watched failing
+    on a real row-drop (``test_a_rule_darkened_on_its_only_run_fails_leg_m_alone``).
+    """
+
+    regime: str
+    portfolio: str
+    report: ValidationReport
+    gateway: dict[GatewayKey, GatewayFact]
+    disagreements: dict[DisagreementKey, DisagreementFact]
+
+
 class GateRun(NamedTuple):
     """Everything the runs of ``RUNS`` produced (thirty-one, sixteen of them Basel 3.1).
 
@@ -1386,6 +1473,10 @@ class GateRun(NamedTuple):
 
     ``gateway`` and ``disagreements`` are the Basel 3.1 gateway leg, keyed per
     (rule, portfolio): see "Why there is a GATEWAY leg" in the module docstring.
+
+    ``evaluated`` is every rule that reaches a verdict (``VERDICT_STATUSES``) on
+    at least one run — the set legs (m)/(n) ratchet. ``runs`` is the per-run
+    record it and every other field were folded from.
     """
 
     broken: dict[RuleKey, RuleFact]
@@ -1394,6 +1485,8 @@ class GateRun(NamedTuple):
     vacuous: dict[RuleKey, VacuityFact]
     gateway: dict[GatewayKey, GatewayFact]
     disagreements: dict[DisagreementKey, DisagreementFact]
+    evaluated: frozenset[RuleKey]
+    runs: tuple[RunVerdicts, ...]
 
 
 # ---------------------------------------------------------------------------
@@ -1402,7 +1495,42 @@ class GateRun(NamedTuple):
 
 
 def _run_gate() -> GateRun:
-    """Evaluate every enforced rule over every portfolio/regime combination.
+    """Evaluate every enforced rule over every portfolio/regime combination."""
+    return _fold_runs(tuple(_judge_run(run, *_generate_run(run)) for run in RUNS))
+
+
+def _generate_run(run: GateInput) -> tuple[COREPTemplateBundle, Pillar3TemplateBundle]:
+    """One run's COREP and Pillar 3 bundles, generated as production generates them."""
+    result = PipelineOrchestrator().run_with_data(run.build_bundle(), run.build_config())
+    prior = (
+        PipelineOrchestrator().run_with_data(run.build_bundle(), run.build_prior_config())
+        if run.build_prior_config is not None
+        else None
+    )
+    corep = COREPGenerator().generate_from_lazyframe(
+        result.results,
+        framework=run.framework,
+        # As production generates it: OF 02.00 takes OF-ADJ from the run's summary.
+        output_floor_summary=result.output_floor_summary,
+        previous_period_results=None if prior is None else prior.results,
+    )
+    pillar3 = Pillar3Generator().generate_from_lazyframe(result.results, framework=run.framework)
+    return corep, pillar3
+
+
+def _judge_run(
+    run: GateInput, corep: COREPTemplateBundle, pillar3: Pillar3TemplateBundle
+) -> RunVerdicts:
+    """Both engines' verdicts on one run's bundles — the gateway's under Basel 3.1 only."""
+    report = evaluate_all(corep, pillar3, run.framework)
+    if run.framework != GATEWAY_FRAMEWORK:
+        return RunVerdicts(run.regime, run.portfolio, report, {}, {})
+    breaks, opposed = _gateway_leg(run.portfolio, corep, report)
+    return RunVerdicts(run.regime, run.portfolio, report, breaks, opposed)
+
+
+def _fold_runs(runs: Sequence[RunVerdicts]) -> GateRun:
+    """Add the per-run verdicts up into the populations the legs compare.
 
     ``broken`` is the union over portfolios, keyed by rule: a rule breaking on
     more than one portfolio is ONE defect, and the portfolios it was seen on are
@@ -1424,6 +1552,13 @@ def _run_gate() -> GateRun:
     is not a lost check; a rule that only ever holds at ``0 = 0`` is. That is why
     ``real_verdict`` is accumulated across every run before the filter is applied,
     rather than deciding membership run by run.
+
+    ``evaluated`` is the union of every verdict, VACUOUS included: a rule is out
+    of it only when NO run evaluates it. A ``PASS -> NOT_EVALUATED`` move shows in
+    another population only if it leaves the rule vacuous-only (``vacuous``) or
+    its template with no rule executed (``uncovered``); when it takes the rule's
+    LAST verdict, it always shows here, and a move that does not take the last
+    verdict shows here not at all.
     """
     broken: dict[RuleKey, RuleFact] = {}
     uncovered: dict[TemplateKey, int] = {}
@@ -1432,27 +1567,9 @@ def _run_gate() -> GateRun:
     real_verdict: set[RuleKey] = set()
     gateway: dict[GatewayKey, GatewayFact] = {}
     disagreements: dict[DisagreementKey, DisagreementFact] = {}
-    for regime, framework, portfolio, build_bundle, build_config, build_prior in RUNS:
-        result = PipelineOrchestrator().run_with_data(build_bundle(), build_config())
-        prior = (
-            PipelineOrchestrator().run_with_data(build_bundle(), build_prior())
-            if build_prior is not None
-            else None
-        )
-        corep = COREPGenerator().generate_from_lazyframe(
-            result.results,
-            framework=framework,
-            # As production generates it: OF 02.00 takes OF-ADJ from the run's summary.
-            output_floor_summary=result.output_floor_summary,
-            previous_period_results=None if prior is None else prior.results,
-        )
-        pillar3 = Pillar3Generator().generate_from_lazyframe(result.results, framework=framework)
-
-        report = evaluate_all(corep, pillar3, framework)
-        if framework == GATEWAY_FRAMEWORK:
-            breaks, opposed = _gateway_leg(portfolio, corep, report)
-            gateway.update(breaks)
-            disagreements.update(opposed)
+    for regime, portfolio, report, breaks, opposed in runs:
+        gateway.update(breaks)
+        disagreements.update(opposed)
         summary[f"{regime}/{portfolio}"] = {
             **report.status_counts(),
             "rules_enforced": report.rules_enforced,
@@ -1506,12 +1623,24 @@ def _run_gate() -> GateRun:
                 rhs=first.rhs,
             )
     return GateRun(
-        broken,
-        uncovered,
-        summary,
-        {key: fact for key, fact in vacuous.items() if key not in real_verdict},
-        gateway,
-        disagreements,
+        broken=broken,
+        uncovered=uncovered,
+        summary=summary,
+        vacuous={key: fact for key, fact in vacuous.items() if key not in real_verdict},
+        gateway=gateway,
+        disagreements=disagreements,
+        evaluated=_rules_with_a_verdict(runs),
+        runs=tuple(runs),
+    )
+
+
+def _rules_with_a_verdict(runs: Iterable[RunVerdicts]) -> frozenset[RuleKey]:
+    """Every rule some run brings to PASS, FAIL or VACUOUS — the set legs (m)/(n) hold."""
+    return frozenset(
+        RuleKey(run.regime, outcome.rule_id)
+        for run in runs
+        for outcome in run.report.outcomes
+        if outcome.status in VERDICT_STATUSES
     )
 
 
@@ -1634,6 +1763,10 @@ class Baseline(NamedTuple):
     ``unsatisfied`` is each banked gateway pair's ``by_portfolio`` unsatisfied
     count, which leg (l) holds to may-not-rise. A pair whose entry carries no
     count (a synthetic payload) has none here.
+
+    ``evaluated`` is the ``rules_with_a_verdict`` section, legs (m)/(n): a SET,
+    not a reason map, because it is the covered population rather than a
+    liability. Empty when the section is absent, which both legs refuse.
     """
 
     rules: dict[RuleKey, str]
@@ -1642,17 +1775,18 @@ class Baseline(NamedTuple):
     gateway: dict[GatewayKey, str]
     disagreements: dict[DisagreementKey, str]
     unsatisfied: dict[GatewayKey, int]
+    evaluated: frozenset[RuleKey]
 
 
 def _read_baseline() -> Baseline:
-    """Load the committed register as five ``{key: reason}`` maps and the gateway counts."""
+    """Load the committed register: five reason maps, the gateway counts, the verdict set."""
     if not BASELINE_PATH.exists():
-        return Baseline({}, {}, {}, {}, {}, {})
+        return Baseline({}, {}, {}, {}, {}, {}, frozenset())
     return _baseline_from(json.loads(BASELINE_PATH.read_text(encoding="utf-8")))
 
 
 def _baseline_from(payload: Mapping[str, Any]) -> Baseline:
-    """The ``{key: reason}`` maps of a register's content, and its gateway counts.
+    """The ``{key: reason}`` maps of a register's content, its gateway counts and verdict set.
 
     The two gateway sections hold one entry per (rule, reason) with the
     portfolios it covers; each is exploded back into its (rule, portfolio)
@@ -1661,7 +1795,9 @@ def _baseline_from(payload: Mapping[str, Any]) -> Baseline:
     Raises:
         ValueError: if one key appears twice in a section. REGEN never writes
             that, but a hand edit of one entry's reason can, and a plain dict
-            would keep the last reason and drop the other unseen.
+            would keep the last reason and drop the other unseen. In
+            ``rules_with_a_verdict`` a repeated id loses nothing, but it is still
+            a hand edit REGEN would not have made, so it is refused alike.
     """
     rules = _keyed_reasons(
         "known_broken_rules",
@@ -1710,7 +1846,8 @@ def _baseline_from(payload: Mapping[str, Any]) -> Baseline:
         for entry in payload.get("known_gateway_breaks", [])
         for portfolio, facts in entry.get("by_portfolio", {}).items()
     }
-    return Baseline(rules, templates, vacuous, gateway, disagreements, unsatisfied)
+    evaluated = _rule_set(EVALUATED_SECTION, payload.get(EVALUATED_SECTION, {}))
+    return Baseline(rules, templates, vacuous, gateway, disagreements, unsatisfied, evaluated)
 
 
 def _keyed_reasons[K: tuple[str, ...]](
@@ -1732,6 +1869,20 @@ def _keyed_reasons[K: tuple[str, ...]](
     return reasons
 
 
+def _rule_set(section: str, by_regime: Mapping[str, Sequence[str]]) -> frozenset[RuleKey]:
+    """A ``{regime: [rule_id, ...]}`` section as a set of ``RuleKey``, refusing a repeat."""
+    counts = Counter(
+        RuleKey(regime, rule_id) for regime, rule_ids in by_regime.items() for rule_id in rule_ids
+    )
+    held_twice = sorted(key.describe() for key, count in counts.items() if count > 1)
+    if held_twice:
+        raise ValueError(
+            f"{section} lists {len(held_twice)} rule(s) more than once, which REGEN never "
+            "writes; list each once:\n  " + "\n  ".join(held_twice)
+        )
+    return frozenset(counts)
+
+
 def _write_baseline(run: GateRun) -> None:
     """Rewrite the register, PRESERVING every hand-written reason that still applies.
 
@@ -1739,6 +1890,9 @@ def _write_baseline(run: GateRun) -> None:
     are facts about the current estate and are always refreshed. In the two
     gateway sections the reason is kept per (rule, portfolio), so a rule that
     starts breaking on one more portfolio arrives ``unclassified``.
+    ``rules_with_a_verdict`` carries no reason and is rewritten whole, last, so a
+    re-bank that moves it is a run of ``+`` / ``-`` rule-id lines at the end of
+    the diff.
     """
     existing = _read_baseline()
     payload = {
@@ -1784,9 +1938,18 @@ def _write_baseline(run: GateRun) -> None:
         "known_engine_disagreements": _disagreement_entries(
             run.disagreements, existing.disagreements
         ),
+        EVALUATED_SECTION: _rule_set_entries(run.evaluated),
     }
     BASELINE_PATH.parent.mkdir(parents=True, exist_ok=True)
     BASELINE_PATH.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _rule_set_entries(keys: Iterable[RuleKey]) -> dict[str, list[str]]:
+    """A set of ``RuleKey`` as the register holds it: ``{regime: [rule_id, ...]}``, sorted."""
+    by_regime: dict[str, list[str]] = {}
+    for key in sorted(keys):
+        by_regime.setdefault(key.regime, []).append(key.rule_id)
+    return by_regime
 
 
 def _gateway_entries(
@@ -1859,7 +2022,7 @@ def _disagreement_entries(
 # dicts can be driven with a synthetic measured-vs-baseline pair in seconds, so
 # both directions are demonstrable on demand instead of argued from the code.
 #
-# All seven legs now route their set arithmetic through ONE mechanism —
+# Every set leg routes its set arithmetic through ONE mechanism —
 # `scripts/tolerated_findings.py::diff`, extracted under P5.41 so this register
 # and the two declared ones (`KNOWN_DISAGREEMENTS`,
 # `classification_table.toml`'s `[[known_disagreement]]`) cannot drift apart on
@@ -1884,6 +2047,94 @@ def _rules_no_longer_vacuous(
 ) -> tuple[RuleKey, ...]:
     """Register entries whose rule has started reaching a real verdict again."""
     return diff(measured, baseline).removed
+
+
+# ---------------------------------------------------------------------------
+# The verdict-set ratchet, as two named predicates
+# ---------------------------------------------------------------------------
+# The sibling of the vacuity pair, for the move it cannot see: a rule that stops
+# being evaluated ANYWHERE. Named for the same reason, so that
+# tests/contracts/test_register_verdict_set.py can drive both directions with
+# synthetic sets in milliseconds. Mind the direction, which is the opposite of
+# the sibling it sits under: leg (f) fails on what JOINS its measured population
+# (`.added`), leg (m) on what LEAVES this one (`.removed`).
+
+
+def _rules_newly_unevaluated(
+    measured: Iterable[RuleKey], baseline: Iterable[RuleKey]
+) -> tuple[RuleKey, ...]:
+    """Banked rules that now reach no verdict on any run - leg (m) fails on these."""
+    return diff(measured, baseline).removed
+
+
+def _rules_newly_evaluated(
+    measured: Iterable[RuleKey], baseline: Iterable[RuleKey]
+) -> tuple[RuleKey, ...]:
+    """Rules that reach a verdict on some run and are not banked - leg (n) fails on these."""
+    return diff(measured, baseline).added
+
+
+def _outcome_index(runs: Iterable[RunVerdicts]) -> dict[RuleKey, dict[str, RuleOutcome]]:
+    """Each rule's template-level outcome on every run that enforces it, by portfolio."""
+    index: dict[RuleKey, dict[str, RuleOutcome]] = {}
+    for run in runs:
+        for outcome in run.report.outcomes:
+            index.setdefault(RuleKey(run.regime, outcome.rule_id), {})[run.portfolio] = outcome
+    return index
+
+
+def _statuses(verdicts: RunVerdicts) -> dict[str, str]:
+    """One run's template-level status per rule id."""
+    return {outcome.rule_id: outcome.status for outcome in verdicts.report.outcomes}
+
+
+def _describe_unevaluated(
+    keys: Sequence[RuleKey], index: Mapping[RuleKey, Mapping[str, RuleOutcome]]
+) -> str:
+    """Format leg (m)'s findings: each rule, and why each run left it NOT_EVALUATED."""
+    lines: list[str] = []
+    for key in keys:
+        outcomes = index.get(key, {})
+        if not outcomes:
+            lines.append(
+                f"  {key.describe()}  no longer in the enforced rule set on any run (a deny-list "
+                "entry now in force, or an extract or taxonomy refresh)"
+            )
+            continue
+        first = next(iter(outcomes.values()))
+        why: dict[str, list[str]] = {}
+        for portfolio, outcome in outcomes.items():
+            why.setdefault(outcome.reason or "no reason recorded", []).append(portfolio)
+        lines.append(
+            f"  {key.describe()}  [{first.severity}] NOT_EVALUATED on all "
+            f"{len(outcomes)} run(s) of its regime\n"
+            f"      rule: {first.expression or ''}\n"
+            f"      why:  "
+            + "; ".join(f"{reason} on {', '.join(ports)}" for reason, ports in sorted(why.items()))
+            + (f"\n      {first.label}" if first.label else "")
+        )
+    return "\n".join(lines)
+
+
+def _describe_evaluated(
+    keys: Sequence[RuleKey], index: Mapping[RuleKey, Mapping[str, RuleOutcome]]
+) -> str:
+    """Format leg (n)'s findings: each rule, and the verdict it reaches on which runs."""
+    lines: list[str] = []
+    for key in keys:
+        outcomes = index[key]
+        verdicts: dict[str, list[str]] = {}
+        for portfolio, outcome in outcomes.items():
+            if outcome.status in VERDICT_STATUSES:
+                verdicts.setdefault(outcome.status, []).append(portfolio)
+        severity = next(iter(outcomes.values())).severity
+        lines.append(
+            f"  {key.describe()}  [{severity}] "
+            + "; ".join(
+                f"{status} on {', '.join(ports)}" for status, ports in sorted(verdicts.items())
+            )
+        )
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -2110,7 +2361,8 @@ def test_every_baseline_entry_carries_a_written_reason() -> None:
     All FIVE populations are checked. A vacuity entry without a reason is the
     worst to leave lying around: it looks like a passing rule. A gateway entry
     without one is an Error the Bank rejects the return for, with no account of
-    whose it is.
+    whose it is. ``rules_with_a_verdict`` is not a sixth: it is the covered set,
+    not a liability, and carries no reasons.
 
     Arrange: the committed register.
     Act:     find entries still carrying the capture placeholder.
@@ -2207,7 +2459,9 @@ def test_no_baseline_vacuous_rule_asserts_again_without_being_removed(gate_run: 
     progress. A rule also leaves by becoming NOT_EVALUATED on every run where it
     was vacuous — a cell that stopped being emitted, a portfolio dropped from
     ``RUNS`` — and that estate is WORSE, not better. PASS or FAIL is the
-    discharge; absence is a regression wearing the same shirt.
+    discharge; absence is a regression wearing the same shirt. Where the rule
+    was vacuous on every run that evaluated it, leg (m) fails alongside this one
+    and names it as a lost verdict, which tells the two apart.
 
     Do not read the converse into that, though. This leg does NOT catch a rule
     going dark: it fires only when the rule leaves the population ENTIRELY, which
@@ -2422,6 +2676,188 @@ def test_no_baseline_disagreement_has_gone_without_being_removed(gate_run: GateR
     )
 
 
+def test_no_banked_rule_loses_its_last_verdict(gate_run: GateRun) -> None:
+    """A rule the register lists as evaluated and that no run now evaluates fails — leg (m).
+
+    This is the ``PASS -> NOT_EVALUATED`` regression legs (a)-(g) cannot see: a
+    darkened rule is not a break, not a vacuity and does not uncover its
+    template while the template still has other rules. The gateway legs see it
+    only where the gateway engine itself then FAILs the rule, since they count a
+    NOT_EVALUATED side as no disagreement. Measured on the 31-run matrix
+    (2026-11-24): dropping C 02.00 r0160 from ``crr/rich`` darkens ``v3335_i``
+    (ERROR), which passes on that run alone, and of all fourteen legs only this
+    one fails — ``test_a_rule_darkened_on_its_only_run_fails_leg_m_alone``
+    reproduces it on every run of this file.
+
+    It holds a rule's LAST verdict only. ``v0207_m``, darkened on ``crr/rich`` by
+    the same row-drop, keeps a verdict on the other fourteen CRR runs and passes
+    here; see "What legs (f)/(g) do NOT catch" in the module docstring.
+
+    Arrange: the committed register's verdict set plus the rules the current
+             estate brings to a verdict on some run.
+    Act:     find banked rules that no run now evaluates.
+    Assert:  there are none.
+    """
+    if REGEN:
+        pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
+
+    # Arrange
+    baseline = _read_baseline().evaluated
+    assert baseline, MISSING_EVALUATED_SECTION
+
+    # Act
+    dark = _rules_newly_unevaluated(gate_run.evaluated, baseline)
+
+    # Assert
+    index = _outcome_index(gate_run.runs)
+    blocking = [
+        key
+        for key in dark
+        if any(outcome.severity == "ERROR" for outcome in index.get(key, {}).values())
+    ]
+    assert not dark, (
+        f"{len(dark)} rule(s) listed under {EVALUATED_SECTION} reach NO verdict on any run, "
+        f"{len(blocking)} of them Error-severity. Each was checked somewhere at the last bank "
+        "and is now checked nowhere, and no other leg can see that:\n"
+        f"{_describe_unevaluated(dark, index)}\n"
+        "Find what stopped it being evaluated - a row, column or sheet no longer emitted, a "
+        "sheet map or binding that no longer addresses it, a run dropped from RUNS - and "
+        "restore it. Only if the loss is deliberate (the Bank deactivated the rule, an "
+        "extract refresh retired it) re-bank with REGEN_VALIDATION_BASELINE=1 and say so in "
+        "the commit."
+    )
+
+
+def test_no_rule_reaches_a_verdict_without_being_banked(gate_run: GateRun) -> None:
+    """A rule some run now evaluates that the register does not list fails — leg (n).
+
+    The mirror of leg (m), and what keeps it honest: a rule that first reaches a
+    verdict after the last bank is not in the set, so leg (m) could not see it
+    go dark again. The move is normally progress — a fixture lit a cell, a
+    binding began to address a table, a refreshed extract added a rule — so the
+    remedy is to bank it, not to undo it.
+
+    Arrange: the committed register's verdict set plus the current verdicts.
+    Act:     find rules with a verdict somewhere that the register does not list.
+    Assert:  there are none.
+    """
+    if REGEN:
+        pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
+
+    # Arrange
+    baseline = _read_baseline().evaluated
+    assert baseline, MISSING_EVALUATED_SECTION
+
+    # Act
+    gained = _rules_newly_evaluated(gate_run.evaluated, baseline)
+
+    # Assert
+    assert not gained, (
+        f"{len(gained)} rule(s) reach a verdict that {EVALUATED_SECTION} in "
+        f"{BASELINE_PATH.name} does not list:\n"
+        f"{_describe_evaluated(gained, _outcome_index(gate_run.runs))}\n"
+        "Bank them with REGEN_VALIDATION_BASELINE=1 so leg (m) holds these verdicts too. A "
+        "rule reaching only VACUOUS is also new under known_vacuous_rules and needs its "
+        "written reason there."
+    )
+
+
+def test_a_rule_darkened_on_its_only_run_fails_leg_m_alone(gate_run: GateRun) -> None:
+    """Leg (m) watched failing on a real row-drop, with every other leg blind to it.
+
+    A leg nobody has watched fail is a claim, not a gate (LESSONS C12). This
+    drops ONE emitted row from ONE run's COREP bundle — the case the module
+    docstring measured — re-judges only that run, folds the matrix again, and
+    compares every population a leg reads. It asserts both halves: the rules
+    whose only verdict was on that run leave the verdict set (so (m) fires,
+    naming them), and nothing legs (a)-(l) compare moves (so without (m) the
+    darkening is invisible, which is why (m) is not redundant).
+
+    Two adequacy checks come first, each a reason this test could pass while
+    proving nothing: the re-generated run must reproduce the gate's own verdicts
+    (or a difference is not the row-drop's), and the drop must darken at least
+    one rule whose only verdict was there (or (m) has nothing to catch).
+
+    Arrange: the probe run re-generated, checked against the gate, then the probe
+             row dropped from its C 02.00.
+    Act:     re-judge that run and fold the matrix again with it in place.
+    Assert:  exactly the rules whose last verdict was on that run leave the
+             verdict set, and every population of legs (a)-(l) is unchanged.
+    """
+    if REGEN:
+        pytest.skip("REGEN_VALIDATION_BASELINE=1 - baseline rewritten by the companion test")
+
+    # Arrange
+    regime, portfolio = PROBE_RUN
+    run = next(item for item in RUNS if (item.regime, item.portfolio) == PROBE_RUN)
+    stored = next(item for item in gate_run.runs if (item.regime, item.portfolio) == PROBE_RUN)
+    corep, pillar3 = _generate_run(run)
+    assert _statuses(_judge_run(run, corep, pillar3)) == _statuses(stored), (
+        f"re-generating {regime}/{portfolio} did not reproduce the gate's verdicts, so a "
+        "change below could not be attributed to the dropped row"
+    )
+    c_02_00 = corep.c_02_00
+    assert c_02_00 is not None and c_02_00.filter(pl.col("row_ref") == PROBE_ROW).height == 1, (
+        f"{regime}/{portfolio} emits no C 02.00 r{PROBE_ROW} to drop - the probe is vacuous"
+    )
+    dropped = dataclasses.replace(corep, c_02_00=c_02_00.filter(pl.col("row_ref") != PROBE_ROW))
+    index = _outcome_index(gate_run.runs)
+
+    # Act
+    probe = _judge_run(run, dropped, pillar3)
+    mutated = _fold_runs(tuple(probe if item is stored else item for item in gate_run.runs))
+    dark = _rules_newly_unevaluated(mutated.evaluated, gate_run.evaluated)
+
+    # Assert
+    before, after = _statuses(stored), _statuses(probe)
+    darkened_here = {
+        RuleKey(regime, rule_id)
+        for rule_id, status in before.items()
+        if status in VERDICT_STATUSES and after.get(rule_id) == STATUS_NOT_EVALUATED
+    }
+    last_verdict_here = {
+        key
+        for key in darkened_here
+        if {name for name, outcome in index[key].items() if outcome.status in VERDICT_STATUSES}
+        == {portfolio}
+    }
+    assert last_verdict_here, (
+        f"dropping C 02.00 r{PROBE_ROW} from {regime}/{portfolio} darkens "
+        f"{sorted(key.describe() for key in darkened_here)} there, none of which had its only "
+        "verdict on that run, so leg (m) has nothing to catch and this test proves nothing. "
+        "If a fixture now gives them a verdict elsewhere, that is progress: re-point "
+        "PROBE_RUN / PROBE_ROW at a row whose rules are evaluated on one run only."
+    )
+    assert dark == tuple(sorted(last_verdict_here)), (
+        f"leg (m) would name {[key.describe() for key in dark]}, not the rules whose last "
+        f"verdict the row-drop removed: {sorted(key.describe() for key in last_verdict_here)}"
+    )
+    moved = [
+        name
+        for name, original, changed in (
+            ("(a)/(b) known_broken_rules", set(gate_run.broken), set(mutated.broken)),
+            ("(c)/(d) known_uncovered_templates", set(gate_run.uncovered), set(mutated.uncovered)),
+            ("(f)/(g) known_vacuous_rules", set(gate_run.vacuous), set(mutated.vacuous)),
+            ("(h)/(i) known_gateway_breaks", set(gate_run.gateway), set(mutated.gateway)),
+            (
+                "(j)/(k) known_engine_disagreements",
+                set(gate_run.disagreements),
+                set(mutated.disagreements),
+            ),
+            (
+                "(l) gateway unsatisfied counts",
+                {(key, fact.unsatisfied) for key, fact in gate_run.gateway.items()},
+                {(key, fact.unsatisfied) for key, fact in mutated.gateway.items()},
+            ),
+        )
+        if original != changed
+    ]
+    assert not moved, (
+        f"the row-drop also moved {moved}, so this no longer shows that leg (m) is the only "
+        "leg that sees a rule losing its last verdict"
+    )
+
+
 def test_the_summary_keeps_unevaluable_rules_apart_from_passes(gate_run: GateRun) -> None:
     """A rule that cannot be evaluated is not a rule that passes.
 
@@ -2433,8 +2869,9 @@ def test_the_summary_keeps_unevaluable_rules_apart_from_passes(gate_run: GateRun
     every fixture change. It is deliberately NOT the vacuity gate: keeping the
     ``VACUOUS`` column in the summary was all this file used to do about vacuity,
     and four counts adding up to ``rules_enforced`` is satisfied just as neatly
-    after a rule falls out of ``PASS`` into ``VACUOUS`` as before. Legs (f)/(g)
-    ratchet the rules themselves.
+    after a rule falls out of ``PASS`` into ``VACUOUS`` (or ``NOT_EVALUATED``) as
+    before. Legs (f)/(g) ratchet the vacuous rules themselves, and legs (m)/(n)
+    the set of rules evaluated at all.
 
     Arrange: the runs of ``RUNS``.
     Act:     read the per-run summary.

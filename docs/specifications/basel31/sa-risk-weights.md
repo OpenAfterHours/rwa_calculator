@@ -1996,6 +1996,70 @@ enables the calculator to determine the junior charge effect on the loan-splitti
 threshold (55% of property value for both RRE under Art. 124F(1) and CRE under
 Art. 124H(1)).
 
+#### One property securing several loans (`collateral_links`, review CL-13 / P1.450)
+
+Art. 124C(3) puts every loan secured by a pari passu (or prior) charge into each
+exposure's LTV, and Art. 124 and 124F–124L weight **each** exposure the property
+secures. Where one `real_estate` item is spread over several beneficiaries by
+`collateral_links` (and `enable_collateral_link_splitting` is on), the hierarchy stage
+(`engine/hierarchy/re_links.py`) builds the view its property enrichment reads with one
+row per link, replacing the item row's own beneficiary:
+
+- every linked loan takes the property's attributes and flags (type, Art. 124A
+  qualifying, ADC / pre-sold, income dependence, prior charges, a supplied LTV), so a
+  linked loan of an ADC, materially-dependent or non-qualifying property takes Art.
+  124K / 124G / 124I / 124J as the item's own beneficiary does;
+- each takes a share of the value pro rata to its Art. 124C(2) amount, capped by the
+  link's `max_pledge_amount`; the shares never sum above the value;
+- the derived LTV is therefore (all the loans the item secures + `prior_charge_ltv` ×
+  value) / value on every linked loan. A supplied `property_ltv` is not re-derived: it
+  reaches every linked loan unchanged and the 20% part is 55% / that LTV of each loan,
+  so supply the pooled figure;
+- a loan linked to two items takes one item's single-valued attributes (type, Art. 124A
+  qualifying, income dependence, prior charges, a supplied LTV): at the most specific
+  level, the first listed in the collateral table, one carrying a `property_ltv` first —
+  the rule for two collateral rows naming one loan. Its share of value, derived LTV and the non-qualifying / ADC flags read
+  every item. The order is fixed, so every run gives the same answer;
+- a linked mortgage's share of the house takes it out of the obligor's Art.
+  123A(1)(b)(ii) aggregate ("excluding all residential real estate exposures"), so a loan
+  of the same obligor that no link names can fall within GBP 880,000 and become regulatory
+  retail at 75% (Art. 123(3)(b)) — measured: a 50,000 loan beside 400,000 and 900,000
+  mortgages linked to a 1,500,000 house moves from 100% to 75%;
+- a link to a contingent says `contingent`, and the contingent's share is measured on
+  its undrawn committed amount (Art. 124C(2));
+- the same linked value sets the IRB retail-mortgage class (the classifier's mortgage
+  flag reads it), and each linked IRB row's output-floor SA-equivalent is the weight
+  above;
+- the CRM stage ranks a link's beneficiaries by their SA risk weight, which now reflects
+  the property, so financial collateral linked beside a property may be allocated to
+  different loans (a second-order effect, not measured).
+
+The **firm's own charges** on a property, as this measures them, are the exposures one
+item secures — its link set (and, without links, the exposures a facility or
+counterparty pledge secures) — measured from those exposures' Art. 124C(2) amounts;
+`prior_charge_ltv` carries only the other charges and is shared with the value. A link
+carries no ranking, so the link set is one pari passu pool: a junior loan of the firm's
+own enters a senior one's LTV too, which is conservative for the senior loan. The Art.
+124F(1)(a) / 124H(1)(a) 55% part is shared the same way: with a derived LTV each loan's
+part is 55% of its share of the value, so the parts sum to at most 55% of the value.
+Art. 124F(2) / 124H(2) reduce the band only for charges *not* held by the institution and
+do not say how the institution's own exposures share it; the pro-rata, never-double-counted
+reading is the owner-approved convention (P1.450). Whether P1.449's proposed own-prior
+and own-pari-passu input amounts replace or refine this measured definition is open.
+
+```
+Natural person, LN_A 100,000; LN_B 100,000 + 20,000 interest; one property 300,000
+linked to both.  LTV = 220,000 / 300,000 = 0.7333 on both loans.
+Shares: 136,364 / 163,636.  20% part = 55% x share = 75,000 / 90,000 (75% of each).
+RW = 0.75 x 20% + 0.25 x 75% (Art. 124L(1)(a)) = 33.75%.  RWA 74,250.
+Before: LN_A 20% on its own loan, LN_B other retail 100% with RE005; RWA 140,000.
+
+A-IRB, the same loans as TERM_LOAN products, plus an unlinked 50,000 loan:
+LN_B moves from corporate to retail_mortgage; U-TREA 98,128 -> 73,757;
+S-TREA 190,000 -> 124,250 (SA-equivalents 33,750 + 40,500 + 50,000);
+the floor stops binding; post-floor total 107,538 -> 73,757.
+```
+
 !!! info "Relationship between `property_ltv` and `prior_charge_ltv`"
     - `property_ltv` = total regulatory LTV including all prior charges (the single
       number used for risk weight band lookup in Art. 124G/124I tables)

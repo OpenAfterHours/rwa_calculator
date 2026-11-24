@@ -8,7 +8,8 @@ Key responsibilities:
 - ``HierarchyResolver.resolve``: the stage recipe — the PS1/26 Art.
   138(1)(g) implicit-support ratings filter, counterparty lookup
   build, exposure unification, short-term rating override, FX conversion,
-  LTV / property-coverage / lending-group enrichment, lending_group_totals
+  real-estate collateral-link expansion (``re_links``), LTV /
+  property-coverage / lending-group enrichment, lending_group_totals
   aggregate, and the ``hierarchy_resolved`` producer seal.
 - Thin delegating private methods preserving the historical
   ``HierarchyResolver._*`` surface for tests and callers; the
@@ -60,6 +61,7 @@ from rwa_calc.engine.hierarchy.ratings import (
     build_rating_inheritance_lazy,
     disregard_implicit_support_ratings,
 )
+from rwa_calc.engine.hierarchy.re_links import expand_real_estate_links
 from rwa_calc.engine.hierarchy.unify import unify_exposures
 from rwa_calc.rulebook import RulepackV0
 
@@ -176,10 +178,22 @@ class HierarchyResolver:
             equity_exposures, counterparty_lookup.counterparties
         )
 
-        exposures = self._add_collateral_ltv(exposures, collateral)
+        # P1.450 (review CL-13): the property enrichment reads a view in which
+        # each real-estate item spread by ``collateral_links`` is one row per
+        # link, so every linked loan carries the property, a pro-rata share of
+        # its value and, where no LTV is supplied, the PS1/26 Art. 124C(3) pooled
+        # LTV. The bundle keeps the collateral as supplied: the CRM stage expands
+        # the links itself.
+        property_collateral = expand_real_estate_links(
+            exposures,
+            collateral,
+            data.collateral_links,
+            enabled=config.enable_collateral_link_splitting,
+        )
+        exposures = self._add_collateral_ltv(exposures, property_collateral)
 
         # .over() window functions avoid group_by + join-back plan tree branching
-        exposures = self._enrich_with_property_coverage(exposures, collateral)
+        exposures = self._enrich_with_property_coverage(exposures, property_collateral)
         exposures = self._enrich_with_lending_group(exposures, data.lending_mappings)
 
         # Derive lending_group_totals for bundle API contract

@@ -1291,6 +1291,35 @@ A naïve LTV-band reading ("90% LTV → 75%") would assign 75% to the whole
     property". The split needs an LTV — Art. 125(2)(d) caps the 35% part at
     "80 % of the market value of the property in question".
 
+    - One property spread over several loans by `collateral_links` (review
+      CL-13 / P1.450): every linked loan takes the property's attributes and a
+      share of its market value pro rata to the loan amounts, capped by the
+      link's `max_pledge_amount` — the "pledged amount of the market value" of
+      Art. 124(1) — so the shares never sum above the value. Where the LTV is
+      derived it is the pooled one on every linked loan, so each loan's 35% /
+      50% part is 80% / 50% of its share (Art. 125(2)(d) / 126(2)(d)). A
+      supplied `property_ltv` is not re-derived: it reaches every linked loan
+      unchanged, and each loan's part is 80% (50%) / that LTV of the loan, so
+      supply the pooled figure. A loan linked to two items takes one item's
+      single-valued attributes — the first listed in the collateral table
+      (one carrying a `property_ltv` first) — while its share of value reads
+      every item. A linked mortgage's share of the house also takes it out of
+      the obligor's Art. 123(c) retail-threshold aggregate, so a loan of the
+      same obligor that no link names can become retail (measured: a 50,000
+      loan, corporate 100% -> retail 75%, beside 400,000 and 900,000 mortgages
+      linked to a 1,500,000 house). The CRM stage ranks a link's
+      beneficiaries by their SA risk weight, which now reflects the property,
+      so financial collateral linked beside a property may be allocated to
+      different loans (not measured). Before, only the item row's own
+      beneficiary was secured: a second linked mortgage of 120,000
+      took retail 75% with `RE005` (90,000) instead of 35% (42,000), and a
+      linked loan of a non-qualifying property 75% instead of Art. 124(1) 100%.
+      A link to a contingent says `contingent`, and the contingent is secured
+      as a loan is. The linked value also sets the IRB class: a linked A-IRB
+      retail loan whose product names no mortgage moves from `retail_other`
+      (correlation 0.1216) to `retail_mortgage` (Art. 154(3), 0.15), which
+      raises its RWA (measured on the integration case: the 120,000 linked
+      loan 12,938 -> 15,942, the portfolio 50,483 -> 53,487).
     - A property linked with a `market_value` but no `property_ltv`: the LTV is
       **derived** as (drawn + accrued interest + undrawn committed amount) /
       property value, plus `prior_charge_ltv`, and a `RE006` warning is raised.

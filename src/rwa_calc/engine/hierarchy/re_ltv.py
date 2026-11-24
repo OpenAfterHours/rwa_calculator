@@ -87,7 +87,7 @@ def derive_missing_ltv(exposures: pl.LazyFrame, collateral: pl.LazyFrame) -> pl.
         (pl.col("collateral_type").str.to_lowercase() == "real_estate")
         & (pl.col("market_value") > 0.0)
     ).with_columns(beneficiary_level_expr(unknown="direct").alias(_LEVEL))
-    exposures = exposures.with_columns(_loan_amount_expr().alias(_LOAN_AMOUNT))
+    exposures = exposures.with_columns(art_124c_loan_amount_expr().alias(_LOAN_AMOUNT))
 
     level_ltvs: list[pl.Expr] = []
     scratch: list[str] = [_LOAN_AMOUNT]
@@ -120,11 +120,13 @@ def derive_missing_ltv(exposures: pl.LazyFrame, collateral: pl.LazyFrame) -> pl.
     ).drop(scratch)
 
 
-def _loan_amount_expr() -> pl.Expr:
+def art_124c_loan_amount_expr() -> pl.Expr:
     """PS1/26 Art. 124C(2): outstanding (drawn + interest) plus undrawn committed amount.
 
     ``sum_horizontal`` skips nulls, so an unreported component contributes
-    nothing rather than voiding the sum.
+    nothing rather than voiding the sum. Also the basis on which
+    ``re_links.expand_real_estate_links`` shares a linked property's value, so
+    the share it gives each loan and the LTV derived here from that share agree.
     """
     return pl.sum_horizontal(
         pl.col("drawn_amount").clip(lower_bound=0.0),

@@ -18,6 +18,8 @@ Layout:
   lending group)
 - ``re_ltv``           — PS1/26 Art. 124C LTV derivation for a property
   supplied without ``property_ltv``
+- ``re_links``         — the property-enrichment view of a real-estate item
+  spread over several beneficiaries by ``collateral_links``
 
 The ``run(ctx, rulepack, run_config)`` adapter that wires this domain into the
 fold lives at ``engine/stages/hierarchy.py``, not here: ``engine/stages/`` is

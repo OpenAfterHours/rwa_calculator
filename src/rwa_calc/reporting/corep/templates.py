@@ -379,10 +379,12 @@ B31_SA_ROW_SECTIONS: list[RowSection] = [
             COREPRow("0331", "  of which: not materially dependent on property cash flows"),
             COREPRow("0332", "  of which: materially dependent on property cash flows"),
             COREPRow("0340", "of which: Regulatory commercial RE"),
-            COREPRow("0341", "  of which: not materially dependent (non-SME)"),
+            # 0343 / 0344 nest INSIDE 0341 / 0342 (PS1/26 Annex II p.91; the
+            # PRA001 taxonomy row order 0341, 0343, 0342, 0344).
+            COREPRow("0341", "  of which: not materially dependent"),
+            COREPRow("0343", "    of which: to SMEs"),
             COREPRow("0342", "  of which: materially dependent"),
-            COREPRow("0343", "  of which: SME (non-materially dependent)"),
-            COREPRow("0344", "  of which: SME (materially dependent)"),
+            COREPRow("0344", "    of which: to SMEs"),
             COREPRow("0350", "of which: Other real estate"),
             COREPRow("0351", "  of which: Residential (not mat. dependent)"),
             COREPRow("0352", "  of which: Residential (mat. dependent)"),

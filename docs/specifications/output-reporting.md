@@ -213,6 +213,28 @@ when allocating SME CRE exposures.
     deliberately interleaves them as 0341 → 0343 → 0342 → 0344 to make this
     explicit. Do not assume row-ID ordering implies parent-child grouping.
 
+    Row 0341 therefore carries **every** not-materially-dependent regulatory CRE
+    leg, SME or not: 0340 = 0341 + 0342 (`boe_b0732`) and 0343 ≤ 0341
+    (`boe_b0960`), and 0344 ≤ 0342 likewise. Until 2026-11 row 0341 excluded the
+    SME legs, so an SME leg sat in 0343 and in neither summand of 0340 (plan
+    P1.378). The generator lists the rows in the taxonomy's order, 0341, 0343,
+    0342, 0344.
+
+!!! info "The SME flag: rows 0020, 0343 and 0344"
+    Row 0020 is "All exposures to SMEs as defined in the Glossary Part" (Annex II
+    p.88; CRR Annex II C 07.00: "All exposures to SME"), and 0343 / 0344 are
+    "Exposures to SMEs ... within Article 124H / 124I". The flag behind them, and
+    behind the C 09.01 "of which: SME" rows defined by reference to row 0020, is
+    the obligor's sealed `is_sme` (with the Basel 3.1 `exposure_subclass`),
+    OR-ed with an exposure class whose name contains "sme"
+    (`reporting/corep/sme_flag.py`, one function C 07.00 and C 09 both call). It
+    used to read the class name alone. The loan-splitter renames an SME's secured
+    leg `residential_mortgage` (both regimes) or `commercial_mortgage`, and an
+    SME's specialised-lending exposure keeps the `specialised_lending` class, so
+    those legs reached no SME row while `is_sme` said SME (plan P1.339). Not
+    covered: an SME's ADC exposure and a retail-qualifying SME, for which the
+    classifier's `is_sme` is False.
+
 !!! info "0330, 0340, 0350 and 0360: the limb the weight was set under"
     The four parent rows are the three Art. 124 limbs, and no leg is in two of
     them. A leg's limb is the one the Basel 3.1 SA dispatcher's real-estate route

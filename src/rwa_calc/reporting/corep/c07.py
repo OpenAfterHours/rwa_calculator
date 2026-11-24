@@ -264,6 +264,7 @@ from rwa_calc.reporting.corep.ccf_buckets import CCF_CARRIERS, ccf_bucket_expr
 from rwa_calc.reporting.corep.crm_substitution import irb_origin_inflows
 from rwa_calc.reporting.corep.postpass import negate_deduction_cols
 from rwa_calc.reporting.corep.re_limbs import RE_LIMB_SOURCES, ReRow, re_limb_exprs, re_limb_terms
+from rwa_calc.reporting.corep.sme_flag import sme_exposure_expr
 from rwa_calc.reporting.corep.supporting_factors import (
     sf_adjustment_terms,
     sf_infra_flag_exprs,
@@ -524,12 +525,14 @@ _MEMO_DEFAULTED_RW: dict[str, str] = {"0300": "100%", "0320": "150%"}
 _MEMO_RE_SECURED: dict[str, str] = {"0290": "commercial", "0310": "residential"}
 # OF 07.00 real-estate rows (B31): the Art. 124 limb the SA dispatcher's route places
 # the leg in (``corep/re_limbs.py``: 0330-0344 regulatory, 0350-0354 other, 0360 ADC).
+# 0343 / 0344 are "of which: to SMEs" INSIDE 0341 / 0342 (Annex II p.91, boe_b0960), so
+# 0341 / 0342 carry no SME term and r0340 = r0341 + r0342 (boe_b0732) holds.
 _RE_ROW_FILTERS: dict[str, ReRow] = {
     "0330": ReRow("regulatory", "residential"),
     "0331": ReRow("regulatory", "residential", md=False),
     "0332": ReRow("regulatory", "residential", md=True),
     "0340": ReRow("regulatory", "commercial"),
-    "0341": ReRow("regulatory", "commercial", md=False, sme=False),
+    "0341": ReRow("regulatory", "commercial", md=False),
     "0342": ReRow("regulatory", "commercial", md=True),
     "0343": ReRow("regulatory", "commercial", md=False, sme=True),
     "0344": ReRow("regulatory", "commercial", md=True, sme=True),
@@ -946,15 +949,10 @@ def _prepare(data: pl.DataFrame, cols: set[str], framework: str) -> pl.DataFrame
     elif "pd_floored" in cols:
         exprs.append((pl.col("pd_floored") >= 1.0).alias("c07_defaulted"))
 
-    # SME ladder (retired _filter_sme).
-    if "sme_supporting_factor_eligible" in cols:
-        exprs.append(
-            (pl.col("sme_supporting_factor_eligible") == True).alias("c07_sme")  # noqa: E712
-        )
-    elif "exposure_class" in cols:
-        exprs.append(
-            pl.col("exposure_class").str.contains("sme").fill_null(value=False).alias("c07_sme")
-        )
+    # SME flag off the sealed is_sme carrier, not the class name (``sme_flag``).
+    sme = sme_exposure_expr(cols)
+    if sme is not None:
+        exprs.append(sme.alias("c07_sme"))
 
     # On/off-balance-sheet (kernel rule: bs_type preferred, else exposure_type).
     # Derivability is asked ONCE, via _has_bs_side: the CCF-bucket cells narrow on

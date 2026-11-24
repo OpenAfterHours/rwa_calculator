@@ -240,6 +240,7 @@ from rwa_calc.reporting.corep.c07 import c07_population
 from rwa_calc.reporting.corep.c08_sheets import sheet_keys
 from rwa_calc.reporting.corep.postpass import negate_deduction_cols, null_empty_rows
 from rwa_calc.reporting.corep.re_limbs import re_limb_exprs, re_limb_terms
+from rwa_calc.reporting.corep.sme_flag import sme_exposure_expr
 from rwa_calc.reporting.corep.supporting_factors import sf_adjustment_terms, sf_infra_flag_exprs
 from rwa_calc.reporting.corep.templates import (
     C09_01_SA_CLASS_MAP,
@@ -570,7 +571,7 @@ def _c09_01_derived_exprs(cols: set[str], rwa_col: str | None) -> list[pl.Expr]:
     """The C 09.01 discriminator columns: the defaulted ladder, the SME flag, the
     RE-family limb flags and the CCR original-exposure term.
 
-    ``c09_sme`` is C 07.00's ``c07_sme`` ladder verbatim — the of-which SME rows
+    ``c09_sme`` is C 07.00's ``c07_sme`` flag, one function — the of-which SME rows
     are defined as "Same definition as for row 0020 of CR SA template", so they
     must select exactly the legs that row selects or the cross-template tie-out
     cannot hold. ``c09_re_limb`` / ``c09_re_property`` come from the SAME
@@ -1476,15 +1477,14 @@ def _pre_ccf_gross_binding(cols: set[str], *, with_ccr: bool) -> ValueBinding | 
 
 
 def _sme_expr(cols: set[str]) -> pl.Expr:
-    """C 07.00's ``c07_sme`` ladder: the SME discriminator its row 0020 selects on,
-    which the C 09.01 of-which SME rows are defined by reference to. Nulls fold to
-    False so the flag is a non-null Boolean the ``equals`` terms can match (a null
-    ``sme_supporting_factor_eligible`` never matched ``== True`` either)."""
-    if "sme_supporting_factor_eligible" in cols:
-        return (pl.col("sme_supporting_factor_eligible") == True).fill_null(value=False)  # noqa: E712
-    if "exposure_class" in cols:
-        return pl.col("exposure_class").str.contains("sme").fill_null(value=False)
-    return pl.lit(value=False)
+    """C 07.00's ``c07_sme`` flag: the SME discriminator its row 0020 selects on,
+    which the C 09.01 of-which SME rows are defined by reference to. The SAME
+    function C 07.00 calls (``sme_flag.sme_exposure_expr``, off the sealed
+    ``is_sme``), so the cross-template SME ties cannot drift; until 2026-11-24
+    this was a verbatim copy of a ladder that read the class name. False when
+    the frame carries no SME source at all."""
+    sme = sme_exposure_expr(cols)
+    return pl.lit(value=False) if sme is None else sme
 
 
 def _defaulted_expr(cols: set[str]) -> pl.Expr:

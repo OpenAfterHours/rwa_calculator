@@ -99,8 +99,11 @@ def _sa_results_with_re() -> pl.LazyFrame:
             # Sealed too: every property here is valued. A property with no LTV
             # fails Art. 124A(1)(d) and is other real estate (rows 0350-0354).
             "ltv": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, None],
-            # SME flag for commercial sub-split
-            "sme_supporting_factor_eligible": [
+            # The obligor's SME flag, on the carrier the sealed ledger has
+            # (``is_sme``; ``sme_supporting_factor_eligible`` is never sealed,
+            # LESSONS C11(c)). SA_RE_COMM_3 is an SME's split secured leg: its
+            # class name says commercial_mortgage, not SME.
+            "is_sme": [
                 False,
                 False,
                 False,
@@ -177,25 +180,32 @@ class TestRealEstateRows:
         # SA_RE_COMM_1 + _2 + _3: 500 + 400 + 150 = 1050 (SA_RE_ADC_1 is in 0360)
         assert row["0200"][0] == pytest.approx(1050.0)
 
-    def test_commercial_not_dependent_non_sme(self) -> None:
-        """Row 0341: commercial, not dependent, non-SME."""
+    def test_commercial_not_dependent_includes_the_sme_leg(self) -> None:
+        """Row 0341: every Art. 124H commercial leg not materially dependent,
+        SME or not (PS1/26 Annex II p.91 gives it no SME qualifier; row 0343 is
+        an of-which INSIDE it). It used to exclude SME legs, which left them in
+        neither summand of row 0340 (plan P1.378)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_re(), framework="BASEL_3_1")
         re_comm = bundle.c07_00["real_estate"]
         row = re_comm.filter(pl.col("row_ref") == "0341")
         assert len(row) == 1
-        # SA_RE_COMM_1: 500 (not dependent, not SME)
-        assert row["0200"][0] == pytest.approx(500.0)
+        # SA_RE_COMM_1 500 (not SME) + SA_RE_COMM_3 150 (SME): 650
+        assert row["0200"][0] == pytest.approx(650.0)
 
     def test_commercial_sme_not_dependent(self) -> None:
-        """Row 0343: commercial, not dependent, SME."""
+        """Row 0343: the SME legs of row 0341, keyed on the sealed ``is_sme``
+        (plan P1.339: the class name of an SME's split leg says
+        commercial_mortgage, so the old class-name reading left this row empty)."""
         gen = LedgerShimCorepGenerator()
         bundle = gen.generate_from_lazyframe(_sa_results_with_re(), framework="BASEL_3_1")
         re_comm = bundle.c07_00["real_estate"]
         row = re_comm.filter(pl.col("row_ref") == "0343")
+        not_dependent = re_comm.filter(pl.col("row_ref") == "0341")
         assert len(row) == 1
-        # SA_RE_COMM_3: 150 (not dependent, SME)
+        # SA_RE_COMM_3: 150 (not dependent, SME), inside row 0341 (boe_b0960)
         assert row["0200"][0] == pytest.approx(150.0)
+        assert row["0200"][0] <= not_dependent["0200"][0]
 
     def test_adc_row(self) -> None:
         """Row 0360 shows ADC exposures."""

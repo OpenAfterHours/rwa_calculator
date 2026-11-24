@@ -728,9 +728,13 @@ _RE_MD: CellRequirement = _any_of(
 LEDGER_ROW_AXIS: Mapping[str, tuple[RowAxisRequirement, ...]] = {
     "c07_00": (
         RowAxisRequirement(("0015", "0300", "0320"), _DEFAULTED, "defaulted rows"),
+        # The ``corep/sme_flag.py`` ladder's sources. Row 0341 is not an SME row:
+        # 0343 is an "of which: to SMEs" INSIDE it (PS1/26 Annex II p.91).
         RowAxisRequirement(
-            ("0020", "0341", "0343", "0344"),
-            _any_of("sme_supporting_factor_eligible", "exposure_class"),
+            ("0020", "0343", "0344"),
+            _any_of(
+                "is_sme", "exposure_subclass", "sme_supporting_factor_eligible", "exposure_class"
+            ),
             "SME 'of which' rows",
         ),
         RowAxisRequirement(("0021", "0022", "0023"), _needs("sl_type"), "specialised lending"),

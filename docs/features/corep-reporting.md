@@ -722,7 +722,7 @@ flowchart TD
     |-----|-----|--------|
     | 0010 | **TOTAL EXPOSURES** | |
     | 0015 | of which: Defaulted exposures — high-risk, equity and CIU sheets, and the Total, only | Adds CIU |
-    | 0020 | of which: SME | |
+    | 0020 | of which: SME — every leg whose obligor is an SME (sealed `is_sme`), whatever its class name | |
     | ==0021== | ==of which: Specialised lending — Object finance== | ==**New**== |
     | ==0022== | ==of which: Specialised lending — Commodities finance== | ==**New**== |
     | ==0023== | ==of which: Specialised lending — Project finance== | ==**New**== |
@@ -733,10 +733,10 @@ flowchart TD
     | ==0331== | ==&emsp;of which: not materially dependent on property cash flows== | ==**New**== |
     | ==0332== | ==&emsp;of which: materially dependent on property cash flows== | ==**New**== |
     | ==0340== | ==of which: Regulatory commercial RE== | ==**New**== |
-    | ==0341== | ==&emsp;of which: not materially dependent (non-SME)== | ==**New**== |
-    | ==0343== | ==&emsp;of which: SME (non-materially dependent)== | ==**New**== |
+    | ==0341== | ==&emsp;of which: not materially dependent (SME and non-SME)== | ==**New**== |
+    | ==0343== | ==&emsp;&emsp;of which: to SMEs (inside 0341)== | ==**New**== |
     | ==0342== | ==&emsp;of which: materially dependent== | ==**New**== |
-    | ==0344== | ==&emsp;of which: SME (materially dependent)== | ==**New**== |
+    | ==0344== | ==&emsp;&emsp;of which: to SMEs (inside 0342)== | ==**New**== |
     | ==0350== | ==of which: Other real estate== | ==**New**== |
     | ==0351-0354== | ==&emsp;Residential/Commercial x cash-flow dependency splits== | ==**New**== |
     | ==0360== | ==of which: Land ADC exposures== | ==**New**== |

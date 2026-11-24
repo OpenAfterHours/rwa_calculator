@@ -338,11 +338,12 @@ Approach's), but always allocated to row 0261 in Section 3.
       whole): row 0180 366,666.67 / RWEA 73,333.33, row 0220 33,333.33 / RWEA
       25,000.00, row 0280 empty, as `boe_b0445` requires on sheet 0010. No risk weight
       or RWEA changes. **Not yet:** the CRR template (the Art. 125 / 126 blend above
-      the LTV limit), the residual leg of a loan the engine splits physically (still
-      reported on the counterparty's sheet), Pillar 3 CR5 (Annex XX carries the same
-      sentence), and banding a non-split Art. 123B or junior-charge exposure on its
-      un-multiplied weight — those two are still banded on the applied weight; no
-      registered portfolio reaches either.
+      the LTV limit, which lands in row 0280; the registered row past the limit is
+      `RWL-LN-RE-105` in `crr/rw-ladder`), the residual leg of a loan the engine
+      splits physically (still reported on the counterparty's sheet), Pillar 3 CR5
+      (Annex XX carries the same sentence), and banding a non-split Art. 123B or
+      junior-charge exposure on its un-multiplied weight — those two are still banded
+      on the applied weight; no registered portfolio reaches either.
     - **A substituted covered part is reported in two risk-weight rows, one per
       basis.** Cols 0010-0040 are the original exposure "deducted from the
       obligor's exposure class" (Annex II p.84, cols 0090 / 0100) and the rows give

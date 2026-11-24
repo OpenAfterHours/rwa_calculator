@@ -283,13 +283,13 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     both side inputs, so no register rule sees either cell populated.
 
 Cost, and why every run is load-bearing:
-    This file is the most expensive test in the suite: fifteen portfolios x two
-    regimes plus ``equity-transitional`` under Basel 3.1 alone (thirty-one runs,
-    sixteen of them Basel 3.1), plus a prior-period run for each of the fourteen
-    IRB ones, is FORTY-FIVE full pipeline runs, plus two for leg (m)'s probe
+    This file is the most expensive test in the suite: sixteen portfolios x two
+    regimes plus ``equity-transitional`` under Basel 3.1 alone (thirty-three runs,
+    seventeen of them Basel 3.1), plus a prior-period run for each of the fourteen
+    IRB ones, is FORTY-SEVEN full pipeline runs, plus two for leg (m)'s probe
     (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not this prose.
     The gateway leg adds one canonical return and one ``validate_return`` per
-    Basel 3.1 run (sixteen) and no pipeline run: the pack is loaded once per
+    Basel 3.1 run (seventeen) and no pipeline run: the pack is loaded once per
     process and the COREP bundle is the one the template leg already generated.
     Timed directly (2026-11-16, 4-core box, when the matrix held fifteen Basel 3.1
     runs): 0.6 s to load the pack plus 5.4 s for the fifteen filings (0.2-1.0 s
@@ -342,6 +342,11 @@ Cost, and why every run is load-bearing:
                            the only route to C 07.00 col 0035 ("(-) Adjustment
                            due to on-balance sheet netting", Basel 3.1 sheet
                            only) carrying a figure at all.
+    - ``rw-ladder``        the ONLY route to the C 07.00 / OF 07.00 risk-weight
+                           rows of the class weights no other book uses
+                           (Basel 3.1 15/25/40/45/65/80/105/130/135%, CRR
+                           250/1250%), and so to the rung identities written
+                           over them.
 
     Measured: ``sa-classes`` and ``irb-classes`` together move 53 CRR and 32
     Basel 3.1 rules out of NOT_EVALUATED. The ten prior-period runs exist
@@ -459,6 +464,10 @@ from tests.fixtures.reporting_over_collateralised_portfolio import (
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 from tests.fixtures.reporting_re_split_portfolio import build_reporting_re_split_bundle
 from tests.fixtures.reporting_row_scope_portfolio import build_reporting_row_scope_bundle
+from tests.fixtures.reporting_rw_ladder_portfolio import (
+    build_reporting_rw_ladder_bundle,
+    rw_ladder_config,
+)
 from tests.fixtures.reporting_sa_classes_portfolio import build_reporting_sa_classes_bundle
 
 from rwa_calc.contracts.config import CalculationConfig
@@ -1330,6 +1339,35 @@ RUNS: tuple[GateInput, ...] = (
         build_reporting_equity_transitional_bundle,
         lambda: _sa_config("BASEL_3_1"),
     ),
+    # The risk-weight ladder — LESSONS B5 on the row (y) axis of C 07.00 / OF
+    # 07.00. Each rows 0140-0280 rung carries an identity, RWEA = exposure value x
+    # the row's weight, and a rung no run reaches holds that identity at 0 = 0.
+    # Before this book, every run above left these rungs dark: Basel 3.1 15%,
+    # 25%, 40%, 45%, 65%, 80%, 105%, 130% and 135%, and CRR 250% and 1250%. The
+    # class weights behind them (SCRA grade A, unrated covered bonds, the
+    # Art. 122(6) corporate split, project-finance phases, the QRRE transactor,
+    # Art. 124G whole-loan bands, an Art. 48(4) holding, a CIU on the fallback)
+    # appear in no other book. One leg per rung, each unsplit and at exactly its
+    # rung's weight.
+    #
+    # It uses the PORTFOLIO's config, not ``_sa_config``, and the difference is
+    # load-bearing: ``rw_ladder_config`` elects Art. 122(6) under Basel 3.1.
+    # Without the election both corporate legs take the flat 100% and the 65% /
+    # 135% rows go dark: B5's third form, registered with the wrong config.
+    # SA-only, no prior frame. Measured when registered: it adds no broken rule
+    # outside the register in either regime. The legs it leaves out (70% life
+    # insurance, 110%, currency mismatch, 4%, the class-sheet twins) and why are
+    # in the portfolio docstring.
+    GateInput(
+        "crr", "CRR", "rw-ladder", build_reporting_rw_ladder_bundle, lambda: rw_ladder_config("CRR")
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "rw-ladder",
+        build_reporting_rw_ladder_bundle,
+        lambda: rw_ladder_config("BASEL_3_1"),
+    ),
 )
 
 
@@ -1613,7 +1651,7 @@ class RunVerdicts(NamedTuple):
 
 
 class GateRun(NamedTuple):
-    """Everything the runs of ``RUNS`` produced (thirty-one, sixteen of them Basel 3.1).
+    """Everything the runs of ``RUNS`` produced (count the tuple, not this line).
 
     ``summary`` is per-run outcome counts, kept descriptive: nothing asserts an
     individual count, only that the four statuses are all reported and account

@@ -189,9 +189,11 @@ Deliberately OUT of scope:
     weight; ``reporting_ccr_portfolio.py`` owns that axis.
   * r0190 (35%) — Art. 125 residential mortgage. Keyed on the security, not the
     obligor class, so it belongs to the immovable-property sheet.
-  * r0210 (70%) — no Standardised ladder in either regime contains 70%. It is a
-    slotting weight (Art. 153(5) "strong"), and slotting reports on C 08.x, not
-    C 07.00. Genuinely unreachable through this template.
+  * r0210 (70%) — no class ladder contains 70%. Annex II names the row's one
+    source, Art. 232(3)(c): the part of an exposure covered by life insurance
+    from an insurer weighted 65%-135%. That is a CRM outcome, not a
+    quasi-sovereign class weight. ``reporting_rw_ladder_portfolio.py`` records
+    why no registered book carries that leg yet.
   * r0220 (75%) under CRR — the Art. 123 retail weight. No quasi-sovereign class
     has a 75% rung under CRR; the row IS lit under Basel 3.1, where the
     Art. 122 corporate ladder puts CQS 3 at 75% (``LN_CORP_ANCHOR``).

@@ -35,22 +35,40 @@ these tests pin:
 - **max_workers bounding** — against a monkeypatched ``os.cpu_count`` so the
   assertions pin the intended policy rather than this box's core count.
 
-Five groups spawn real processes: ``TestSerialParallelEquivalence`` (a real
+Six groups spawn real processes: ``TestSerialParallelEquivalence`` (a real
 pipeline, two workers), ``TestHardWorkerExit`` (one pool plus one recovery pool
-per lost scope, hence the ~20s), ``TestWorkerStartMethod``,
+per lost scope, hence the ~20s), ``TestDeadlockedWorkerBound`` (a 3s bound,
+then one recovery pool per lost scope), ``TestWorkerStartMethod``,
 ``TestWorkerPolarsCap``, and the reversed-completion order test. They are
 deliberately NOT skipped under xdist — a skipped test of the parallel path is
 indistinguishable from a passing one that never ran anything, and the whole
 file is ~50s for that reason. Everything else monkeypatches ``_run_scope`` or
 replaces the executor.
+
+**Every test here runs under a bound that ENDS a stuck worker** — the autouse
+``bounded_pool_wait`` fixture (P5.73). The product contains a worker that DIES
+(``BrokenProcessPool`` -> recovery -> ``BATCH005``) but not one that DEADLOCKS:
+that one stays alive and silent, and an unbounded test waits on it for ever.
+Under xdist ``--dist=loadfile`` that is one worker going quiet and the run
+stalling at ~99%, which reads as a slow box, not as a red test (escape log
+2026-11-13 — the forked-Polars hang presented exactly so). The bound has to
+TERMINATE the worker, not merely raise in this process: ``ProcessPoolExecutor``'s
+``with`` exit is ``shutdown(wait=True)``, which waits on that same worker, so a
+bound that only raises — pytest-timeout's default ``signal`` method, a bare
+``as_completed(timeout=)`` — raises and then hangs again on the way out
+(measured, CPython 3.13). ``TestDeadlockedWorkerBound`` proves the bound against
+a worker that never returns.
 """
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import multiprocessing
 import os
 import pickle
+import threading
+import time
 from concurrent.futures import Future
 from datetime import date
 from decimal import Decimal
@@ -76,7 +94,20 @@ from rwa_calc.domain.enums import ReportingBasis
 from rwa_calc.worker_bootstrap import configure_worker_process
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
+
+# How long one test may keep worker processes before the watchdog ends them.
+# About 10x the slowest real-pool test measured on a loaded 4-CPU box
+# (TestHardWorkerExit, ~18s): a spurious firing is a red test, so the bound is
+# generous; what it buys is that a deadlock fails at all.
+POOL_WAIT_BOUND_SECONDS = 180.0
+
+# Once the bound has passed, how often the watchdog sweeps again. It must keep
+# sweeping rather than fire once: ending a deadlocked pool sends its scopes to
+# ``_recover_lost_scopes``, which starts a fresh one-worker pool per scope — and
+# whatever deadlocked the first pool deadlocks those too (measured under
+# ``fork``: one hang in the batch's pool, then one in each recovery pool).
+WATCHDOG_SWEEP_SECONDS = 0.5
 
 # =============================================================================
 # Fixtures and helpers
@@ -87,6 +118,101 @@ if TYPE_CHECKING:
 def clean_index() -> None:
     """Each test starts from an empty in-process run index."""
     run_index.clear()
+
+
+@pytest.fixture(autouse=True)
+def bounded_pool_wait(request: pytest.FixtureRequest) -> Iterator[_PoolWatchdog]:
+    """Turn a deadlocked worker into a named failure instead of a stalled run.
+
+    Autouse, so a real-pool test added later is bounded without anyone
+    remembering to ask. The watchdog ends the stuck workers, which hands control
+    back to the test (its pool wait raises ``BrokenProcessPool``, or
+    ``run_batch`` returns with the scopes failed), and then this teardown fails
+    the test whatever its own assertions made of that — so a test the watchdog
+    had to rescue can never pass.
+    """
+    with _PoolWatchdog(POOL_WAIT_BOUND_SECONDS) as watchdog:
+        yield watchdog
+    if watchdog.fired:
+        pytest.fail(
+            f"{request.node.nodeid} was still running worker processes "
+            f"{POOL_WAIT_BOUND_SECONDS:.0f}s after it started: a worker DEADLOCKED "
+            "(it stopped making progress without exiting). The watchdog terminated "
+            f"{len(watchdog.terminated)} worker process(es), pids {watchdog.terminated}, "
+            "to end the wait; unbounded, this test hangs instead of failing "
+            "(P5.73; docs/development/escape-log.md, 2026-11-13).",
+            pytrace=False,
+        )
+
+
+class _PoolWatchdog:
+    """Ends every worker process still alive once *bound_seconds* have passed.
+
+    A bound that only RAISES in this process does not end a deadlocked pool:
+    ``ProcessPoolExecutor.__exit__`` is ``shutdown(wait=True)``, which joins a
+    manager thread that will not finish while a work item is still running, so
+    the exception unwinds straight into a second, identical hang. Abandoning the
+    executor does not escape either — ``concurrent.futures.process`` joins every
+    live manager thread at interpreter exit. What does work is ending the
+    workers: the pool's manager thread sees the sentinel fire, marks the pool
+    broken and fails every pending future with ``BrokenProcessPool``, which
+    releases whatever was waiting. Python 3.13 has no
+    ``ProcessPoolExecutor.terminate_workers`` (3.14+), and a test cannot reach
+    the pool ``run_batch`` builds, hence ``multiprocessing.active_children()``.
+
+    That is process-global, which is safe here and would not be in product code:
+    under ``--dist=loadfile`` this file runs serially on one xdist worker (and
+    under ``-n 0`` the whole session is serial), so every child of this process
+    alive during a test is that test's. A child seen a second time is killed
+    rather than terminated, for a worker that ignores SIGTERM.
+
+    After the first sweep it keeps sweeping every ``WATCHDOG_SWEEP_SECONDS``
+    until disarmed, so the recovery pools a broken batch starts are ended as
+    fast as they appear rather than after a fresh bound each. Disarming is
+    leaving the ``with`` block; ``fired_at`` (``time.monotonic()`` at the first
+    sweep) and ``terminated`` (pids, in the order they were ended) stay readable.
+    """
+
+    def __init__(self, bound_seconds: float) -> None:
+        self.bound_seconds = bound_seconds
+        self.terminated: list[int] = []
+        self.fired_at: float | None = None
+        self._disarmed = threading.Event()
+        self._thread = threading.Thread(target=self._watch, name="pool-watchdog", daemon=True)
+
+    @property
+    def fired(self) -> bool:
+        """True once the bound passed with the watchdog still armed."""
+        return self.fired_at is not None
+
+    def __enter__(self) -> _PoolWatchdog:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self._disarmed.set()
+        self._thread.join()
+
+    def _watch(self) -> None:
+        if self._disarmed.wait(self.bound_seconds):
+            return
+        self.fired_at = time.monotonic()
+        while True:
+            self._end_children()
+            if self._disarmed.wait(WATCHDOG_SWEEP_SECONDS):
+                return
+
+    def _end_children(self) -> None:
+        for child in multiprocessing.active_children():
+            # The pool's own manager thread may reap or close the process
+            # between the listing and the signal; either way it is ending.
+            with contextlib.suppress(ValueError, OSError):
+                if child.pid in self.terminated:
+                    child.kill()
+                    continue
+                child.terminate()
+                if child.pid is not None:
+                    self.terminated.append(child.pid)
 
 
 def _response(marker: str, framework: str = "CRR") -> CalculationResponse:
@@ -660,6 +786,69 @@ class TestHardWorkerExit:
 
 
 # =============================================================================
+# A worker DEADLOCKING — the bound every test in this file runs under
+# =============================================================================
+
+
+class TestDeadlockedWorkerBound:
+    """``bounded_pool_wait`` ends a pool whose workers never return.
+
+    The product does not bound a deadlocked worker (P5.73 half (i), parked on an
+    API decision), so this file must: without the bound, the next deadlock
+    stalls the run instead of failing it. This class proves the bound itself,
+    over a real pool and a probe that genuinely never returns — so it holds on
+    every platform and interpreter, not only where ``fork`` reproduces the
+    original hang.
+    """
+
+    # Short, because this test WANTS the watchdog to fire; long enough that
+    # ending both recovery pools inside one further bound is not tight on a
+    # loaded box (measured ~1s for both).
+    BOUND_SECONDS = 5.0
+
+    def test_a_deadlocked_batch_is_ended_and_returns_its_scopes_failed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+    ) -> None:
+        """Every scope blocks for ever; the batch still returns, promptly.
+
+        Both scopes block, so the outcome does not depend on how fast a worker
+        spawns: whenever the watchdog fires, both futures are pending, both are
+        lost to the broken pool, and both are re-run alone in a recovery pool
+        that deadlocks again and has to be ended again. ``BATCH005`` on both
+        says the two recovery pools were ended — nothing else can end a worker
+        running ``blocking_run``. The time from the first firing to the return
+        says they were ended by the SWEEP: a watchdog that waited a fresh bound
+        per recovery pool needs two more bounds, and one that fired only once
+        leaves them to the file-wide fixture (and the second hangs for good).
+        """
+        assert "bounded_pool_wait" in request.fixturenames, (
+            "the file-wide bound is no longer autouse: every real-pool test here is unbounded"
+        )
+        assert POOL_WAIT_BOUND_SECONDS > 3 * self.BOUND_SECONDS, (
+            "the file-wide bound must not be able to fire before this test's own does"
+        )
+        monkeypatch.setattr(batch, "_run_scope", _batch_probe.blocking_run)
+        scopes = _entity_scopes("E1", "E2")
+
+        with _PoolWatchdog(self.BOUND_SECONDS) as watchdog:
+            result = run_batch(_request(scopes, tmp_path, max_workers=2))
+            returned_at = time.monotonic()
+
+        assert watchdog.fired_at is not None, "nothing blocked: the probe did not run"
+        assert result.parallel is True
+        assert [r.success for r in result] == [False, False]
+        assert [r.error.code for r in result.results] == [  # type: ignore[union-attr]
+            batch.ERROR_WORKER_DIED,
+            batch.ERROR_WORKER_DIED,
+        ]
+        after_firing = returned_at - watchdog.fired_at
+        assert after_firing < self.BOUND_SECONDS, (
+            f"the batch returned {after_firing:.1f}s after the watchdog first fired: the "
+            "two recovery pools were not swept as they appeared"
+        )
+
+
+# =============================================================================
 # The start method — spawn, on every platform
 # =============================================================================
 
@@ -679,7 +868,9 @@ class TestWorkerStartMethod:
     (docs/development/escape-log.md, 2026-11-13.)
 
     The real-pool tests below this class DO detect that — one hangs and one
-    fails under ``fork`` — and they passed for the life of the feature, because
+    fails under ``fork`` (the hang now ends at ``bounded_pool_wait``'s bound
+    and fails by name instead of stalling the run; P5.73) — and they passed for
+    the life of the feature, because
     neither CI (Linux, Python 3.14) nor the dev box (Windows) defaults to
     ``fork``. So the pin is asserted two ways, each covering the other's blind
     spot:

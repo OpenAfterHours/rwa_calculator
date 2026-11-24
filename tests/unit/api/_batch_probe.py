@@ -11,13 +11,15 @@ makes ``_batch_probe`` importable on the far side.
 
 The point of the stagger is to force a real pool's completion order to differ
 from its submission order, so that "results come back in input order" is
-actually tested rather than true by coincidence.
+actually tested rather than true by coincidence. ``blocking_run`` is the other
+pathology a worker can have: it neither returns nor dies.
 """
 
 from __future__ import annotations
 
 import multiprocessing
 import os
+import threading
 import time
 from datetime import datetime
 from decimal import Decimal
@@ -99,6 +101,24 @@ def staggered_run(job: _ScopeJob) -> _JobOutcome:
         _wait_for_siblings(Path(job.cache_dir).parent, job.reporting_entity or "?")
     time.sleep(STAGGER_SECONDS.get(job.reporting_entity or "", 0.0))
     return _outcome(job)
+
+
+def blocking_run(job: _ScopeJob) -> _JobOutcome:
+    """Never return: a worker that DEADLOCKS, as opposed to one that dies.
+
+    ``crashing_run`` breaks the pool, and the product contains that
+    (``BrokenProcessPool`` -> recovery -> ``BATCH005``). This one breaks
+    nothing: it waits on an event nobody will ever set, so the worker stays
+    alive and silent and every wait on its future blocks for good. It stands in
+    for the forked-Polars hang of the 2026-11-13 escape log, and for a plan that
+    spins, with the cause taken away, so that the bound in ``test_batch.py``
+    (``bounded_pool_wait``) can be tested on every platform and interpreter and
+    not only where ``fork`` happens to reproduce the hang. Nothing in here
+    exits or times out, and the ``raise`` below is unreachable: only something
+    outside the worker can end it.
+    """
+    threading.Event().wait()
+    raise AssertionError(f"unreachable: an event nobody sets was set ({job.run_id})")
 
 
 def _wait_for_siblings(rendezvous: Path, name: str) -> None:

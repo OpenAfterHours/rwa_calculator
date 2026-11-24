@@ -515,6 +515,41 @@ given, for example with `job.finish(success=True)`. The route registers the job 
 `create_job()` before it calls `submit_job`, and the registry is never pruned, so a job left
 open stays `"running"` for the rest of the process.
 
+### Testing the batch driver over real worker processes
+
+`tests/unit/api/test_batch.py` is the one file that starts real worker processes (the batch
+driver's `ProcessPoolExecutor`). The driver contains a worker that **dies**: the pool breaks,
+the lost scopes are re-run one at a time, and the scope that killed its worker is reported as
+`BATCH005`. It does not contain a worker that **deadlocks**. That worker stays alive and
+silent, so an unbounded test waits for it for ever. Under xdist `--dist=loadfile` the run then
+stalls at ~99%, which looks like a slow machine, not a red test. The 2026-11-13 escape-log
+entry (a forked worker hanging on its first Polars query) presented exactly so.
+
+So every test in that file runs under the autouse fixture `bounded_pool_wait`. If a test still
+has worker processes alive after `POOL_WAIT_BOUND_SECONDS` (180 s), a watchdog thread
+terminates them. It then sweeps again every 0.5 s until the test returns, because ending a
+broken pool starts one recovery pool per lost scope, and those deadlock too. The fixture's
+teardown then fails the test with a message naming it, the bound and the pids it ended. A test
+the watchdog had to rescue can never pass. `TestDeadlockedWorkerBound` proves the bound against
+a probe worker that never returns (`_batch_probe.blocking_run`).
+
+The bound has to **end the worker**, not just raise in the test process.
+`ProcessPoolExecutor`'s `with` exit is `shutdown(wait=True)`, which waits on that same worker.
+So these do not work:
+
+- pytest-timeout's default `signal` method;
+- a bare `as_completed(timeout=)` or `.result(timeout=)`.
+
+Each raises, then hangs again on the way out (measured on CPython 3.13). Abandoning the
+executor does not work either, because `concurrent.futures` joins every live pool thread at
+interpreter exit. The watchdog finds the workers with the process-global
+`multiprocessing.active_children()`. That is safe only because the file runs serially on one
+xdist worker. Product code would need the pool's own processes.
+
+To check the bound by hand, set `rwa_calc.api.batch.WORKER_START_METHOD = "fork"` on Linux from
+a throwaway pytest plugin, and run `TestSerialParallelEquivalence`. The test fails with the
+watchdog's message about 180 s in, rather than hanging.
+
 ## The robustness suite (`tests/robustness/`)
 
 Every other suite in this estate is organised on one axis — **by regulatory

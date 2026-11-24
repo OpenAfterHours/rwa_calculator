@@ -31,6 +31,7 @@ from rwa_calc.engine.irb.transforms import (
 )
 from rwa_calc.rulebook.model import Citation, ScalarParam
 from rwa_calc.rulebook.resolve import ResolvedRulepack, resolve
+from tests.fixtures.contract_columns import pad_property_security
 
 
 def _make_irb_frame(
@@ -59,17 +60,19 @@ def _make_irb_frame(
     exercise limb (c) and must reach it. The F-IRB side is pinned in
     ``tests/unit/irb/test_p1_399_unrecognised_exposure_airb_only.py``.
     """
-    return pl.LazyFrame(
-        {
-            "exposure_reference": ["EXP_1"],
-            "approach": [approach],
-            "exposure_class": [exposure_class],
-            "rwa": [rwa],
-            "risk_weight": [risk_weight],
-            "ead_final": [ead_final],
-            "expected_loss": [expected_loss],
-            "is_defaulted": pl.Series([is_defaulted], dtype=pl.Boolean),
-        }
+    return pad_property_security(
+        pl.LazyFrame(
+            {
+                "exposure_reference": ["EXP_1"],
+                "approach": [approach],
+                "exposure_class": [exposure_class],
+                "rwa": [rwa],
+                "risk_weight": [risk_weight],
+                "ead_final": [ead_final],
+                "expected_loss": [expected_loss],
+                "is_defaulted": pl.Series([is_defaulted], dtype=pl.Boolean),
+            }
+        )
     )
 
 
@@ -468,20 +471,22 @@ class TestPMASequencing:
             pma_rwa_scalar=Decimal("0.10"),
             mortgage_rw_floor=Decimal("0.10"),
         )
-        lf = pl.LazyFrame(
-            {
-                "exposure_reference": ["MTG_1", "CORP_1"],
-                "approach": [ApproachType.AIRB.value, ApproachType.AIRB.value],
-                "exposure_class": ["retail_mortgage", "corporate"],
-                "rwa": [100.0, 1000.0],
-                "risk_weight": [0.05, 0.50],
-                "ead_final": [2000.0, 2000.0],
-                "expected_loss": [5.0, 50.0],
-                # Both rows NON-defaulted, so the Art. 154(4A)(b) scope gate is a
-                # no-op here and every asserted value below is preserved exactly.
-                # The column is emitted because the transform reads it per row.
-                "is_defaulted": [False, False],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["MTG_1", "CORP_1"],
+                    "approach": [ApproachType.AIRB.value, ApproachType.AIRB.value],
+                    "exposure_class": ["retail_mortgage", "corporate"],
+                    "rwa": [100.0, 1000.0],
+                    "risk_weight": [0.05, 0.50],
+                    "ead_final": [2000.0, 2000.0],
+                    "expected_loss": [5.0, 50.0],
+                    # Both rows NON-defaulted, so the Art. 154(4A)(b) scope gate is a
+                    # no-op here and every asserted value below is preserved exactly.
+                    # The column is emitted because the transform reads it per row.
+                    "is_defaulted": [False, False],
+                }
+            )
         )
         result = lf.pipe(apply_post_model_adjustments, config, pack=pack).collect()
         # Mortgage row: (a) = 100 * 0.10 = 10 on the base; (b) then needs
@@ -650,19 +655,21 @@ _P1319_PMA_COLUMNS: tuple[str, ...] = (
 
 def _make_p1319_frame() -> pl.LazyFrame:
     """The P1.319 scope frame — every row at the same EAD, PMA scalars at zero."""
-    return pl.LazyFrame(
-        {
-            "exposure_reference": [row[0] for row in _P1319_ROWS],
-            # The sealed approach column the transform reads for limb (c); the
-            # unrecognised scalar is zero here, so the value moves nothing.
-            "approach": [ApproachType.AIRB.value] * len(_P1319_ROWS),
-            "exposure_class": [row[1] for row in _P1319_ROWS],
-            "is_defaulted": pl.Series([row[2] for row in _P1319_ROWS], dtype=pl.Boolean),
-            "risk_weight": [row[3] for row in _P1319_ROWS],
-            "rwa": [row[4] for row in _P1319_ROWS],
-            "ead_final": [_P1319_EAD] * len(_P1319_ROWS),
-            "expected_loss": [row[5] for row in _P1319_ROWS],
-        }
+    return pad_property_security(
+        pl.LazyFrame(
+            {
+                "exposure_reference": [row[0] for row in _P1319_ROWS],
+                # The sealed approach column the transform reads for limb (c); the
+                # unrecognised scalar is zero here, so the value moves nothing.
+                "approach": [ApproachType.AIRB.value] * len(_P1319_ROWS),
+                "exposure_class": [row[1] for row in _P1319_ROWS],
+                "is_defaulted": pl.Series([row[2] for row in _P1319_ROWS], dtype=pl.Boolean),
+                "risk_weight": [row[3] for row in _P1319_ROWS],
+                "rwa": [row[4] for row in _P1319_ROWS],
+                "ead_final": [_P1319_EAD] * len(_P1319_ROWS),
+                "expected_loss": [row[5] for row in _P1319_ROWS],
+            }
+        )
     )
 
 
@@ -697,12 +704,17 @@ class TestMortgageFloorScopeArt154_4Ab:
     (ORC-141). This class pins the first two:
 
     - **non-defaulted** — exactly, off ``is_defaulted``;
-    - **retail secured by residential immovable property** — via the engine's
-      closest available proxy, ``ExposureClass.RETAIL_MORTGAGE``, which is
-      OVER-INCLUSIVE of retail exposures secured only by COMMERCIAL property
-      (``hierarchy/enrich.py`` computes ``property_collateral_value`` over both
-      property kinds by design, so ``classify/attributes.py`` sets ``is_mortgage``
-      for either). That residual is conservative and is a separate item.
+    - **retail secured by residential immovable property** — the class
+      ``ExposureClass.RETAIL_MORTGAGE``, which also holds retail exposures secured
+      only by COMMERCIAL property (``hierarchy/enrich.py`` computes
+      ``property_collateral_value`` over both property kinds by design, so
+      ``classify/attributes.py`` sets ``is_mortgage`` for either). This docstring
+      used to call that residual "conservative"; the floor can only ADD RWEA, so
+      it over-stated capital there, and P1.324 closed it by narrowing the gate
+      with ``commercial_only_property_security_expr`` — pinned in
+      ``tests/unit/irb/test_p1_324_commercial_only_retail_floors.py``. This frame
+      carries no property evidence (``pad_property_security``: a null
+      ``property_type``), so every row here is untouched by that narrowing.
 
     The **UK** limb is not implementable — no property-country column reaches the
     IRB branch — so ``ORC-142`` stays a recorded disagreement.

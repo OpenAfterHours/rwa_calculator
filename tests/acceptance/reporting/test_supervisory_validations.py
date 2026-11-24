@@ -152,8 +152,8 @@ Why there is an output-floor state census, (m)-(p):
     are computed apart (P1.367, the output-floor-subset bullet). The banked
     binding set is a SET, not a count (LESSONS B8).
 
-    What it does NOT do: put any row the binding state lacks into it. The one
-    binding run holds F-IRB corporates only, so slotting, A-IRB retail,
+    What it does NOT do: put any row the binding state lacks into it. The two
+    binding runs hold F-IRB corporates and A-IRB retail only, so slotting,
     defaulted, LFSE and CCR rows have met every published rule with the floor
     slack. (p) holds that gap still — it cannot widen silently — and
     ``FLOOR_STATE_SHAPES`` names who owes it. Nor does a slack-state guard on
@@ -287,8 +287,8 @@ Cost, and why every run is load-bearing:
     entry of ``RUNS`` (most portfolios under both regimes, a few under one only),
     one more for each IRB-permissioned entry's prior period, and two for leg (m)'s
     probe (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not
-    this prose — on 2026-11-24 it held fifty-six runs, twenty-nine of them Basel
-    3.1 and thirty-one with a prior period. The gateway leg adds one canonical
+    this prose — on 2026-11-24 it held fifty-eight runs, thirty of them Basel
+    3.1 and thirty-three with a prior period. The gateway leg adds one canonical
     return and one ``validate_return`` per Basel 3.1 run and no pipeline run: the
     pack is loaded once per process and the COREP bundle is the one the template
     leg already generated.
@@ -507,6 +507,7 @@ from tests.fixtures.reporting_portfolio import build_reporting_bundle
 from tests.fixtures.reporting_qrre_headroom_portfolio import build_reporting_qrre_headroom_bundle
 from tests.fixtures.reporting_qrre_mof_portfolio import build_reporting_qrre_mof_bundle
 from tests.fixtures.reporting_re_split_portfolio import build_reporting_re_split_bundle
+from tests.fixtures.reporting_retail_cre_portfolio import build_reporting_retail_cre_bundle
 from tests.fixtures.reporting_row_scope_portfolio import build_reporting_row_scope_bundle
 from tests.fixtures.reporting_rw_ladder_portfolio import (
     build_reporting_rw_ladder_bundle,
@@ -1834,6 +1835,35 @@ RUNS: tuple[GateInput, ...] = (
         lambda: _irb_config("BASEL_3_1"),
         lambda: _prior_config("BASEL_3_1"),
     ),
+    # Retail secured only on COMMERCIAL immovable property — LESSONS B5 (P1.324).
+    # No earlier run held a single commercial-only-secured retail exposure in
+    # either regime, so the Basel 3.1 OF 08.01 retail CRE sheets 0018 / 0019 were
+    # never emitted and every published rule over them was NOT_EVALUATED. Two legs
+    # move (a natural person and an SME, each on a shop) and one must not (a
+    # house): column 0253 is 0 on the CRE sheets beside a live column 0260, and
+    # positive on the RRE sheet. A-IRB retail, so the IRB config and a prior frame
+    # like the other IRB runs. The placement is pinned by
+    # tests/acceptance/reporting/test_p1_324_retail_cre_sheets.py. Two side
+    # effects, both measured: its Basel 3.1 floor binds (an all-A-IRB book at PD
+    # 0.04%; see BINDING_FLOOR_RUNS), and with no F-IRB or slotting leg it files
+    # no OF 08.01 sheet 0002 / 0010, so ``boe_b1041`` (publisher issue PI-06)
+    # breaks on its return.
+    GateInput(
+        "crr",
+        "CRR",
+        "retail-cre",
+        build_reporting_retail_cre_bundle,
+        lambda: _irb_config("CRR"),
+        lambda: _prior_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "retail-cre",
+        build_reporting_retail_cre_bundle,
+        lambda: _irb_config("BASEL_3_1"),
+        lambda: _prior_config("BASEL_3_1"),
+    ),
 )
 
 
@@ -1849,8 +1879,14 @@ RUNS: tuple[GateInput, ...] = (
 #: count (LESSONS B8), so one run starting to bind while another stops is two
 #: findings rather than a net zero. The facility-share pair differ in one input,
 #: the non-member anchor obligor's PD, and that input decides the state
-#: (``tests/fixtures/facility_share_portfolio.py``).
-BINDING_FLOOR_RUNS: frozenset[str] = frozenset({"b31/facility-share-binding"})
+#: (``tests/fixtures/facility_share_portfolio.py``). ``b31/retail-cre`` (P1.324)
+#: binds because it is an all-A-IRB retail book of three 300,000 loans at PD 0.04%
+#: and own LGD 3%: U-TREA 48,275.25 against a threshold of 347,887.50 (S-TREA
+#: 581,500 at the 60% 2027 transitional floor, plus OF-ADJ -1,012.50 = -12.5 x the
+#: 81.00 EL shortfall), measured; it bound before P1.324 too (U-TREA 90,000,
+#: threshold 348,337.50). All-modelled, so the engine's subset
+#: and the return's whole book agree and OF 02.00 r0034 reports Yes (leg (o)).
+BINDING_FLOOR_RUNS: frozenset[str] = frozenset({"b31/facility-share-binding", "b31/retail-cre"})
 
 _MODELLED_APPROACHES = (
     ApproachType.FIRB.value,
@@ -1885,10 +1921,11 @@ FLOOR_SHAPES: dict[str, pl.Expr] = {
 
 #: The ``FLOOR_SHAPES`` each floor state reaches across ``RUNS``.
 #:
-#: The binding state OWES five of the six. Its one run holds three F-IRB
-#: corporate legs and nothing else (``facility_share_portfolio.py``: no retail,
-#: slotting, CCR, defaulted or financial-sector obligor), so every published rule
-#: over a slotting, A-IRB retail, defaulted, LFSE or CCR row has been evaluated
+#: The binding state OWES four of the six. ``b31/facility-share-binding`` holds
+#: three F-IRB corporate legs and nothing else (``facility_share_portfolio.py``: no
+#: retail, slotting, CCR, defaulted or financial-sector obligor), and
+#: ``b31/retail-cre`` (P1.324) adds A-IRB retail and nothing else, so every
+#: published rule over a slotting, defaulted, LFSE or CCR row has been evaluated
 #: only with the floor slack — the shape of the ``boe_b0751`` / ``boe_b0763``
 #: escape. Owed under the P5.64 residual (its Part B: register a Basel 3.1 book
 #: whose floor binds and which holds them), sequenced after P1.367 — the
@@ -1897,7 +1934,7 @@ FLOOR_SHAPES: dict[str, pl.Expr] = {
 #: the register, the coverage, cell-coverage, filing-mapping and referee
 #: baselines in one change.
 FLOOR_STATE_SHAPES: dict[str, frozenset[str]] = {
-    "binding": frozenset({"foundation_irb"}),
+    "binding": frozenset({"foundation_irb", "advanced_irb_retail"}),
     "not binding": frozenset(FLOOR_SHAPES),
 }
 
@@ -3765,7 +3802,7 @@ def test_each_floor_state_reaches_exactly_the_banked_row_shapes(gate_run: GateRu
 
     Registered, live and binding is not enough: the binding run must hold the row
     a rule is written over, or that rule's binding branch is never evaluated. The
-    binding state reaches one of the six shapes today and owes five (see
+    binding state reaches two of the six shapes today and owes four (see
     ``FLOOR_STATE_SHAPES``); the slack state reaches all six. A shape that joins
     either state is coverage to bank; one that leaves is coverage lost.
 

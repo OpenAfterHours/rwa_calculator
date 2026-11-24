@@ -2608,6 +2608,17 @@ REAL_ESTATE_COLLATERAL_TYPES: list[str] = [
     "commercial_property",
 ]
 
+# The REAL_ESTATE_COLLATERAL_TYPES synonyms that name RESIDENTIAL property by
+# themselves, whatever ``property_type`` says. The hierarchy reads a pledge of
+# one of these as residential security for the Basel 3.1 IRB floors PS1/26 ties
+# to it (Art. 147(5B), 154(4A)(b), 163(1)(b), 164(4)(a); P1.324).
+RESIDENTIAL_REAL_ESTATE_COLLATERAL_TYPES: list[str] = [
+    "rre",
+    "residential_re",
+    "residential",
+    "residential_property",
+]
+
 OTHER_PHYSICAL_COLLATERAL_TYPES: list[str] = [
     "other_physical",
     "equipment",

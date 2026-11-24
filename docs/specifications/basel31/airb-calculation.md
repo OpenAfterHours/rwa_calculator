@@ -107,6 +107,72 @@ LGD_floor = (E_unsecured / EAD) x LGDU_floor + sum_i((E_i / EAD) x LGDS_floor_i)
 | Other retail | Other physical | **15%** |
 | Other retail | Financial | **0%** |
 
+### Retail Secured Only on Commercial Property (P1.324)
+
+The engine's `retail_mortgage` class holds every retail exposure secured by immovable
+property, commercial as well as residential. That is right for the treatments that read
+*any* immovable property — R = 0.15 under Art. 154(3) ("retail exposures secured by
+immovable property collateral"), the CRR Art. 164(4) 15% commercial LGD bucket, and the
+OF 08.01 "Retail – Secured by commercial immovable property" sheets 0018 / 0019. But
+Art. 147(5B) puts only "retail exposures secured by residential immovable property" in the
+(d)(ii) subclass, and Art. 147(5C) sends every other retail exposure to (d)(iii) other
+retail. Three Basel 3.1 treatments name residential security, so a `retail_mortgage` leg
+secured **only on commercial property** takes the other-retail value of each:
+
+| Treatment | Residential-secured `retail_mortgage` | Commercial-only `retail_mortgage` |
+|-----------|---------------------------------------|-----------------------------------|
+| PD floor, Art. 163(1) | (b) `retail_mortgage` floor | (c) `retail_other` floor |
+| LGD floor, Art. 164(4) | (a) flat `retail_rre` floor | (c) LGD\* blend over every recognised collateral type (LGDU `retail_lgdu`; LGDS `financial_collateral`, `receivables`, `commercial_real_estate` for immovable property, `other_physical`); (b)(ii) `retail_other_unsecured` with no recognised collateral |
+| RWEA floor, Art. 154(4A)(b) | `mortgage_rw_floor` add-on | none |
+
+"Commercial-only" is `engine/irb/formulas.py::commercial_only_property_security_expr`:
+positive commercial evidence (`property_type == "commercial"`) and **no residential
+evidence on any of three carriers**:
+
+- `re_collateral_may_be_residential` is False. The hierarchy stage
+  (`engine/hierarchy/enrich.py::enrich_with_residential_security`) sets it wherever real
+  estate that is, or may be, residential reaches the exposure on a route the CRM allocates
+  collateral on: pledged directly, at the parent or **any ancestor** facility (the CRM's
+  facility cascade), at the obligor, or through the M:N `collateral_links` table. A row is
+  residential when `property_type` is `residential` or its `collateral_type` is a
+  residential synonym (`RESIDENTIAL_REAL_ESTATE_COLLATERAL_TYPES`, e.g.
+  `residential_property`); real estate of any recognised spelling not reported as
+  `commercial` (an ADC or unreported type) counts as possibly residential. The flag records
+  presence, not recognition, is never weighted and does not depend on row order;
+- `residential_collateral_value_uncapped` is not positive;
+- `is_uk_residential_mortgage_commitment` is not True (the firm's own attestation, which the
+  CCF stage reads for Table A1 row 4(b)).
+
+So a house behind a facility's undrawn row (drawn-basis residential value 0), behind a mixed
+house-and-shop security whose keep-first `property_type` reads "commercial", behind a link,
+behind a root-facility pledge, or typed with a synonym keeps the residential treatment. Any
+null also leaves a row on it, so the predicate moves only a row it can show to be
+commercial-only. CRR is unchanged: one flat Art. 163(1) PD floor, no A-IRB LGD input
+floor and no post-model adjustments.
+
+The first two limbs only release capital. The LGD limb moves it **either way**, because
+the (c) blend is not bounded below by the (a) flat floor it replaces: Art. 164(4)(c)(iv)
+gives financial collateral a 0% LGDS. Measured with `apply_lgd_floor`, EAD 100,000, own
+LGD 3%: commercial cover of 40,000 alone gives 0.22 (was 0.05); 60,000 cash plus 40,000
+property gives 0.04, and 80,000 cash plus 20,000 property or 95,000 cash gives the own
+estimate 0.03 (each was 0.05). With own LGD 1% and 95,000 cash the floor is the blend
+itself, 0.015.
+
+The UK-location limb of Art. 154(4A)(b) and 163(1)(b) is still not implementable — no
+property-country carrier reaches the IRB branch (P1.337).
+
+!!! warning "Known residual — capital understatement, not fixed by P1.324"
+    The positive commercial evidence is `property_type` alone, and the hierarchy leaves it
+    null when the shop reaches the exposure only through `collateral_links`, through a
+    non-parent ancestor facility, through a `contingent` beneficiary
+    (`add_collateral_ltv` reads direct pledges to `exposure` / `loan` only), or under a
+    commercial `collateral_type` synonym. Such a commercial-only `retail_mortgage` leg stays
+    on the residential limbs. That is **not** conservative. With own LGD 3%, 40%
+    commercial cover and R = 0.15, the risk weight the residential limbs give against the
+    correct other-retail one is 10.00% vs 11.90% at PD 0.30%, 10.00% vs 27.57% at PD 1%,
+    and 12.44% vs 54.75% at PD 3%. Only below a PD of about 0.24% do the residential limbs
+    give the higher figure. Recorded for a follow-up item.
+
 !!! note "Scope of Corporate vs Retail Floors"
     Corporate LGD floors (Art. 161(5)) and retail LGD floors (Art. 164(4)) are separate
     regulatory provisions. Institution exposures are restricted to **F-IRB only** under
@@ -163,7 +229,9 @@ risk-weighted exposure amounts for non-defaulted exposures which are retail expo
 secured by UK residential immovable property are greater than or equal to 10% of the
 exposure value ... (following application of any post model adjustments calculated under
 point (b) of Article 146(3))". The parenthetical puts limb (a) inside the comparison and
-nothing else. The floor is the pack scalar `mortgage_rw_floor`.
+nothing else. The floor is the pack scalar `mortgage_rw_floor`. It reaches non-defaulted
+`retail_mortgage` legs except those secured only on commercial property (see
+[Retail Secured Only on Commercial Property](#retail-secured-only-on-commercial-property-p1324)).
 
 !!! note "Sequencing corrected (P1.325)"
     An earlier revision of this page said the floor is applied first and both scalars

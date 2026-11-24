@@ -365,10 +365,11 @@ def apply_pd_floor(
     Apply PD floor based on configuration.
 
     CRR (Art. 163): 0.03% for all classes
-    Basel 3.1 (CRE30.55): Differentiated by class
+    Basel 3.1 (CRE30.55): Differentiated by class (values from the ``pd_floors`` pack entry)
         - Corporate/SME: 0.05%
-        - Retail mortgage: 0.05%
-        - QRRE revolvers: 0.10%, transactors: 0.03%
+        - Retail mortgage: 0.10% (Art. 163(1)(b)) — except a retail_mortgage secured
+          only on commercial property, which takes the (c) other-retail floor (P1.324)
+        - QRRE revolvers: 0.10%, transactors: 0.05%
         - Retail other: 0.05%
 
     Args:
@@ -404,9 +405,11 @@ def apply_lgd_floor(
         - Retail QRRE unsecured: 50% (Art. 164(4)(b)(i))
         - Financial: 0%, Receivables: 10%
         - RRE: 10%, CRE: 10%, Other physical: 15%
-        - Secured / PARTIALLY secured (all classes bar retail_mortgage): the
-          Art. 230/231 LGD* blend of those LGDS values with the class LGDU
-          (Art. 161(5)(b) corporates & institutions, Art. 164(4)(c) retail)
+        - Secured / PARTIALLY secured (all classes bar a residential-secured
+          retail_mortgage): the Art. 230/231 LGD* blend of those LGDS values with
+          the class LGDU (Art. 161(5)(b) corporates & institutions, Art. 164(4)(c)
+          retail). A retail_mortgage secured only on commercial property is "not
+          within the scope of point (a)" and blends at the 30% retail LGDU (P1.324)
 
     LGD floors only apply to A-IRB own-estimate LGDs. F-IRB supervisory
     LGDs are regulatory values and don't need flooring.

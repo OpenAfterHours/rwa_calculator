@@ -16,6 +16,8 @@ Key responsibilities:
 - Apply the per-exposure short-term ECAI rating override.
 - Add property-collateral coverage, LTV metadata, and lending-group totals
   to the unified frame via ``.over()`` window allocation.
+- Flag every exposure residential real estate may secure, along every route
+  the CRM allocates collateral on (``re_collateral_may_be_residential``).
 - Carry the counterparty's country onto the equity exposures, which travel
   beside the unified frame and miss the classifier's attribute join.
 
@@ -34,6 +36,8 @@ References:
 - PRA PS1/26 Art. 124C: LTV for a property supplied without one (``re_ltv``)
 - PRA PS1/26 Art. 124K: collateral-level ADC / pre-sold flags
 - PRA PS1/26 Art. 124E(1)(a) / (4): the single primary-residence property flag
+- PRA PS1/26 Art. 147(5B)/(5C): residential-security flag for the Basel 3.1
+  retail IRB floors (``enrich_with_residential_security``)
 """
 
 from __future__ import annotations
@@ -48,7 +52,11 @@ from rwa_calc.contracts.errors import (
     misscoped_short_term_rating_warning,
     unsolicited_rating_not_filtered_warning,
 )
-from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.data.schemas import (
+    REAL_ESTATE_COLLATERAL_TYPES,
+    RESIDENTIAL_REAL_ESTATE_COLLATERAL_TYPES,
+)
+from rwa_calc.domain.enums import ExposureClass, PropertyType
 from rwa_calc.engine.entity_class_maps import entity_types_by_sa_class
 from rwa_calc.engine.hierarchy.facility_fx import build_facility_fx, with_facility_currency_factor
 from rwa_calc.engine.hierarchy.re_ltv import derive_missing_ltv
@@ -517,6 +525,83 @@ def enrich_with_property_coverage(
     )
 
     return exposures
+
+
+@cites("PS1/26, paragraph 147")
+def enrich_with_residential_security(
+    exposures: pl.LazyFrame,
+    collateral: pl.LazyFrame | None,
+    collateral_links: pl.LazyFrame | None,
+) -> pl.LazyFrame:
+    """
+    Flag every exposure that residential real estate may secure.
+
+    PS1/26 Art. 147(5B) assigns "retail exposures secured by residential
+    immovable property" to the (d)(ii) subclass and Art. 147(5C) sends every
+    other retail exposure to (d)(iii) other retail; the Basel 3.1 IRB floors
+    PS1/26 ties to residential security (Art. 154(4A)(b), 163(1)(b),
+    164(4)(a)) read this flag, through
+    ``engine/irb/formulas.py::commercial_only_property_security_expr``, to keep
+    a ``retail_mortgage`` row on them unless it is secured on commercial
+    property ALONE (P1.324).
+
+    ``re_collateral_may_be_residential`` is True where a collateral row that is,
+    or may be, residential property reaches the exposure:
+
+    - a row is residential when ``property_type`` is ``residential``, or its
+      ``collateral_type`` is a residential synonym
+      (``RESIDENTIAL_REAL_ESTATE_COLLATERAL_TYPES``); and it MAY be residential
+      when it is real estate of any recognised spelling
+      (``REAL_ESTATE_COLLATERAL_TYPES``) not reported as ``commercial`` — an
+      ADC or unreported property type is not evidence that it is not a house;
+    - it reaches the exposure along every route the CRM allocates collateral
+      on: pledged directly (exposure / loan / contingent, or an unrecognised
+      beneficiary type, as the CRM reads it), at the parent facility or ANY
+      ancestor facility (the CRM's Art. 230-231 cascade over the facility
+      tree), at the obligor, and at each ``collateral_links`` beneficiary at
+      its own level. The collateral row's own beneficiary counts too, even
+      where the links table re-routes the item.
+
+    It records presence, not recognition: a house that the CRM does not credit
+    (ineligible, or a zero link slice) still counts, because the floors ask
+    what secures the exposure, and a wrongly residential row only keeps the
+    treatment it had before P1.324. It is never weighted and never depends on
+    input row order, unlike ``residential_collateral_value`` (drawn-basis, 0
+    on an undrawn row) and ``property_type`` (keep-first).
+
+    It reads only the ``collateral`` and ``collateral_links`` tables; with no
+    usable collateral table it is False everywhere.
+
+    Args:
+        exposures: Unified exposures with ``exposure_reference``,
+            ``parent_facility_reference``, ``counterparty_reference`` and the
+            ``ancestor_facilities`` closure (parent + every ancestor to root;
+            absent -> the immediate parent only)
+        collateral: Collateral with beneficiary, ``collateral_type`` and
+            ``property_type`` columns
+        collateral_links: The optional M:N collateral -> beneficiary table
+
+    Returns:
+        Exposures with ``re_collateral_may_be_residential`` added (Boolean,
+        never null)
+    """
+    items = _residential_security_items(collateral, collateral_links)
+    if items is None:
+        return exposures.with_columns(pl.lit(False).alias("re_collateral_may_be_residential"))
+
+    return allocate_multi_level(
+        exposures,
+        items,
+        values={},
+        basis=pl.lit(0.0),
+        level_of=beneficiary_level_expr(unknown="direct"),
+        levels=(
+            LevelSpec("direct", "exposure_reference", pro_rata=False),
+            LevelSpec("facility", "parent_facility_reference", cascade=True),
+            LevelSpec("counterparty", "counterparty_reference", pro_rata=False),
+        ),
+        flag_values={"re_collateral_may_be_residential": pl.col("_rs_present").any()},
+    )
 
 
 def enrich_with_lending_group(
@@ -1069,6 +1154,55 @@ def _single_primary_residence_expr() -> pl.Expr:
     return (~pl.col("_re_pr_unattested") & ~pl.col("_re_pr_several") & (levels_linked == 1)).alias(
         "re_collateral_is_primary_residence"
     )
+
+
+def _residential_security_items(
+    collateral: pl.LazyFrame | None,
+    collateral_links: pl.LazyFrame | None,
+) -> pl.LazyFrame | None:
+    """The (beneficiary_type, beneficiary_reference) pairs residential RE may secure.
+
+    One item per collateral row that is, or may be, residential property (see
+    :func:`enrich_with_residential_security`) at its own beneficiary, plus one
+    per ``collateral_links`` row naming such an item at the link's beneficiary.
+    Returns ``None`` when the collateral table cannot be read, so the caller
+    writes a definite False.
+    """
+    required = {"beneficiary_reference", "beneficiary_type", "collateral_type", "property_type"}
+    if not has_required_columns(collateral, required):
+        return None
+
+    kind = pl.col("property_type").str.to_lowercase()
+    coll_type = pl.col("collateral_type").str.to_lowercase()
+    # A null term (no collateral_type) drops out of the filter, so no null fill.
+    may_be_residential = (
+        kind.eq_missing(PropertyType.RESIDENTIAL.value)
+        | coll_type.is_in(RESIDENTIAL_REAL_ESTATE_COLLATERAL_TYPES)
+        | (
+            coll_type.is_in(REAL_ESTATE_COLLATERAL_TYPES)
+            & kind.eq_missing(PropertyType.COMMERCIAL.value).not_()
+        )
+    )
+    residential = collateral.filter(may_be_residential)
+    pair = (
+        pl.col("beneficiary_type").cast(pl.String),
+        pl.col("beneficiary_reference").cast(pl.String),
+    )
+    items = residential.select(*pair)
+
+    link_columns = {"collateral_reference", "beneficiary_type", "beneficiary_reference"}
+    if has_required_columns(collateral_links, link_columns) and has_required_columns(
+        collateral, {"collateral_reference"}
+    ):
+        linked = collateral_links.join(
+            residential.select(pl.col("collateral_reference").cast(pl.String)).unique(),
+            left_on=pl.col("collateral_reference").cast(pl.String),
+            right_on="collateral_reference",
+            how="semi",
+        ).select(*pair)
+        items = pl.concat([items, linked], how="vertical")
+
+    return items.with_columns(pl.lit(True).alias("_rs_present"))
 
 
 def _add_ltv_defaults_for_missing_collateral(exposures: pl.LazyFrame) -> pl.LazyFrame:

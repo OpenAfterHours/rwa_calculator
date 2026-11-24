@@ -496,6 +496,12 @@ _IRB_DEFAULTS: dict[str, Any] = {
     "ava_amount": 0.0,
     "other_own_funds_reductions": 0.0,
     "exposure_volatility_haircut": 0.0,
+    # Property-security carriers the Basel 3.1 IRB floors read (P1.324): no
+    # property evidence, so a retail_mortgage case keeps the residential floors.
+    "property_type": None,
+    "residential_collateral_value_uncapped": 0.0,
+    "re_collateral_may_be_residential": False,
+    "is_uk_residential_mortgage_commitment": False,
 }
 
 #: Sentinel: "lgd_post_crm was not supplied, mirror lgd onto it".
@@ -511,6 +517,7 @@ _IRB_SCHEMA: dict[str, pl.DataType] = {
     "sme_size_metric_gbp": pl.Float64(),
     "turnover_m": pl.Float64(),
     "collateral_type": pl.String(),
+    "property_type": pl.String(),
 }
 
 

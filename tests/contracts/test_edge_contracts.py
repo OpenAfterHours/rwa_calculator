@@ -778,9 +778,11 @@ class TestUnguardedBlendedLGDFloorColumns:
         RE_SPLIT_EXIT_CCR_EDGE,
     )
 
-    # The ten columns as of P1.248. Pinned so that *widening* the expression is
-    # a deliberate act: add the column here only after confirming it is REQUIRED
-    # on all four edges above and updating the function's docstring.
+    # The ten columns as of P1.248, plus the four property-security carriers
+    # P1.324 added (a retail_mortgage secured only on commercial property is
+    # outside Art. 164(4)(a) and blends). Pinned so that *widening* the expression
+    # is a deliberate act: add the column here only after confirming it is
+    # REQUIRED on all four edges above and updating the function's docstring.
     _EXPECTED_READS = frozenset(
         {
             "ead_for_crm",
@@ -793,6 +795,10 @@ class TestUnguardedBlendedLGDFloorColumns:
             "crm_alloc_real_estate",
             "crm_alloc_other_physical",
             "crm_alloc_life_insurance",
+            "property_type",
+            "residential_collateral_value_uncapped",
+            "re_collateral_may_be_residential",
+            "is_uk_residential_mortgage_commitment",
         }
     )
 
@@ -808,7 +814,7 @@ class TestUnguardedBlendedLGDFloorColumns:
 
         Arrange: the live Basel 3.1 blend expression.
         Act:     derive its root column names.
-        Assert:  exactly the ten pinned names — a new unguarded read fails here
+        Assert:  exactly the fourteen pinned names — a new unguarded read fails here
                  and sends the author to the edge contract below.
         """
         actual = self._blend_root_names()

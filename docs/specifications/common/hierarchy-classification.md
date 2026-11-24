@@ -767,6 +767,42 @@ the Art. 124K(2) 100% weight was unreachable.
     "the borrower has substantial equity at risk", so a residential ADC
     exposure that qualifies only through it stays at the conservative 150%.
 
+### Residential-presence flag for the Basel 3.1 IRB retail floors (P1.324)
+
+The classifier puts every property-secured retail exposure in `retail_mortgage`,
+commercial security included — right for R = 0.15 (Art. 154(3), "secured by
+immovable property collateral"), the CRR Art. 164(4) 15% commercial LGD bucket and
+the OF 08.01 retail CRE sheets. Art. 147(5B), though, assigns only "retail exposures
+secured by residential immovable property" to the (d)(ii) subclass, and three
+Basel 3.1 IRB treatments read that subclass (see the
+[A-IRB specification](../basel31/airb-calculation.md#retail-secured-only-on-commercial-property-p1324)).
+
+To tell the two apart, `engine/hierarchy/enrich.py::enrich_with_residential_security`
+adds `re_collateral_may_be_residential`: True wherever a collateral row that is, or may
+be, residential property reaches the exposure. A row is residential when its
+`property_type` is `residential` or its `collateral_type` is a residential synonym
+(`data/schemas.py::RESIDENTIAL_REAL_ESTATE_COLLATERAL_TYPES`); a real-estate row of any
+recognised spelling (`REAL_ESTATE_COLLATERAL_TYPES`) not reported as `commercial`
+(ADC, or no type) may be residential. It follows every route the CRM allocates
+collateral on:
+
+| Route | How the flag reaches the exposure |
+|-------|-----------------------------------|
+| Direct pledge | `beneficiary_reference` = `exposure_reference` (an unrecognised beneficiary type reads as direct, as in the CRM) |
+| Facility pledge | the parent facility **or any ancestor** (`ancestor_facilities`, the CRM's cascade) |
+| Obligor pledge | `counterparty_reference` |
+| `collateral_links` | each link's beneficiary, at its own level, as well as the collateral row's own beneficiary |
+
+It is any-True per beneficiary and OR-ed across the levels, never weighted and
+independent of input row order. That is the difference from the two older carriers:
+`residential_collateral_value` is drawn-basis and immediate-parent only (0 on a
+facility's undrawn row, blind to a grandparent pledge, a link or a synonym-typed
+house), and `property_type` is keep-first (a house-and-shop security reads
+`commercial` when the shop comes first). It records presence, not recognition — an
+ineligible house still counts — and reads only the `collateral` and
+`collateral_links` tables; it is a definite False when no usable collateral table is
+supplied. It is required on every edge from `hierarchy_resolved` to `re_split_exit`.
+
 ### Art. 124(4) mixed-use splitting
 
 **Verbatim PDF quote (PS1/26 App 1, p.50, Art. 124(4)):**

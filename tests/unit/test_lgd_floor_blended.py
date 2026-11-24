@@ -38,6 +38,7 @@ from rwa_calc.engine.irb.formulas import (
 from rwa_calc.engine.irb.transforms import (
     apply_lgd_floor,
 )
+from tests.fixtures.contract_columns import pad_property_security
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -78,20 +79,22 @@ def _make_df(
     )
     if total_collateral_for_lgd is None:
         total_collateral_for_lgd = min(total, ead_for_crm)
-    return pl.LazyFrame(
-        {
-            "ead_gross": [ead_gross],
-            "ead_for_crm": [ead_for_crm],
-            "exposure_volatility_haircut": [exposure_volatility_haircut],
-            "exposure_class": [exposure_class],
-            "total_collateral_for_lgd": [total_collateral_for_lgd],
-            "crm_alloc_financial": [crm_alloc_financial],
-            "crm_alloc_covered_bond": [crm_alloc_covered_bond],
-            "crm_alloc_receivables": [crm_alloc_receivables],
-            "crm_alloc_real_estate": [crm_alloc_real_estate],
-            "crm_alloc_other_physical": [crm_alloc_other_physical],
-            "crm_alloc_life_insurance": [crm_alloc_life_insurance],
-        }
+    return pad_property_security(
+        pl.LazyFrame(
+            {
+                "ead_gross": [ead_gross],
+                "ead_for_crm": [ead_for_crm],
+                "exposure_volatility_haircut": [exposure_volatility_haircut],
+                "exposure_class": [exposure_class],
+                "total_collateral_for_lgd": [total_collateral_for_lgd],
+                "crm_alloc_financial": [crm_alloc_financial],
+                "crm_alloc_covered_bond": [crm_alloc_covered_bond],
+                "crm_alloc_receivables": [crm_alloc_receivables],
+                "crm_alloc_real_estate": [crm_alloc_real_estate],
+                "crm_alloc_other_physical": [crm_alloc_other_physical],
+                "crm_alloc_life_insurance": [crm_alloc_life_insurance],
+            }
+        )
     )
 
 
@@ -257,20 +260,22 @@ class TestBlendedExpressionDirect:
 
     def test_zero_ead_with_collateral_returns_zero(self):
         """Zero EAD but positive collateral: division guard returns 0."""
-        lf = pl.LazyFrame(
-            {
-                "ead_gross": [0.0],
-                "ead_for_crm": [0.0],
-                "exposure_volatility_haircut": [0.0],
-                "exposure_class": ["retail_other"],
-                "total_collateral_for_lgd": [50_000.0],
-                "crm_alloc_financial": [50_000.0],
-                "crm_alloc_covered_bond": [0.0],
-                "crm_alloc_receivables": [0.0],
-                "crm_alloc_real_estate": [0.0],
-                "crm_alloc_other_physical": [0.0],
-                "crm_alloc_life_insurance": [0.0],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "ead_gross": [0.0],
+                    "ead_for_crm": [0.0],
+                    "exposure_volatility_haircut": [0.0],
+                    "exposure_class": ["retail_other"],
+                    "total_collateral_for_lgd": [50_000.0],
+                    "crm_alloc_financial": [50_000.0],
+                    "crm_alloc_covered_bond": [0.0],
+                    "crm_alloc_receivables": [0.0],
+                    "crm_alloc_real_estate": [0.0],
+                    "crm_alloc_other_physical": [0.0],
+                    "crm_alloc_life_insurance": [0.0],
+                }
+            )
         )
         result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         assert result["floor"][0] == pytest.approx(0.0)
@@ -504,23 +509,25 @@ class TestBlendedFloorIntegration:
         total = crm_alloc_financial + crm_alloc_other_physical
         if total_collateral_for_lgd is None:
             total_collateral_for_lgd = min(total, ead_for_crm)
-        return pl.LazyFrame(
-            {
-                "lgd": [lgd],
-                "lgd_input": [lgd],
-                "exposure_class": [exposure_class],
-                "is_airb": [is_airb],
-                "ead_gross": [ead_gross],
-                "ead_for_crm": [ead_for_crm],
-                "exposure_volatility_haircut": [0.0],
-                "total_collateral_for_lgd": [total_collateral_for_lgd],
-                "crm_alloc_financial": [crm_alloc_financial],
-                "crm_alloc_covered_bond": [0.0],
-                "crm_alloc_receivables": [0.0],
-                "crm_alloc_real_estate": [0.0],
-                "crm_alloc_other_physical": [crm_alloc_other_physical],
-                "crm_alloc_life_insurance": [0.0],
-            }
+        return pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [lgd],
+                    "lgd_input": [lgd],
+                    "exposure_class": [exposure_class],
+                    "is_airb": [is_airb],
+                    "ead_gross": [ead_gross],
+                    "ead_for_crm": [ead_for_crm],
+                    "exposure_volatility_haircut": [0.0],
+                    "total_collateral_for_lgd": [total_collateral_for_lgd],
+                    "crm_alloc_financial": [crm_alloc_financial],
+                    "crm_alloc_covered_bond": [0.0],
+                    "crm_alloc_receivables": [0.0],
+                    "crm_alloc_real_estate": [0.0],
+                    "crm_alloc_other_physical": [crm_alloc_other_physical],
+                    "crm_alloc_life_insurance": [0.0],
+                }
+            )
         ).with_columns(pl.lit(collateral_type, dtype=pl.String).alias("collateral_type"))
 
     def test_airb_retail_other_blended_floor_applied(self):
@@ -585,24 +592,26 @@ class TestBlendedFloorIntegration:
 
     def test_retail_mortgage_uses_flat_floor(self):
         """retail_mortgage uses flat 5% floor (Art. 164(4)(a)), not blended."""
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.02],
-                "lgd_input": [0.02],
-                "exposure_class": ["retail_mortgage"],
-                "is_airb": [True],
-                "ead_gross": [100_000.0],
-                "ead_for_crm": [100_000.0],
-                "exposure_volatility_haircut": [0.0],
-                "total_collateral_for_lgd": [80_000.0],
-                "crm_alloc_financial": [0.0],
-                "crm_alloc_covered_bond": [0.0],
-                "crm_alloc_receivables": [0.0],
-                "crm_alloc_real_estate": [80_000.0],
-                "crm_alloc_other_physical": [0.0],
-                "crm_alloc_life_insurance": [0.0],
-                "collateral_type": ["residential_re"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.02],
+                    "lgd_input": [0.02],
+                    "exposure_class": ["retail_mortgage"],
+                    "is_airb": [True],
+                    "ead_gross": [100_000.0],
+                    "ead_for_crm": [100_000.0],
+                    "exposure_volatility_haircut": [0.0],
+                    "total_collateral_for_lgd": [80_000.0],
+                    "crm_alloc_financial": [0.0],
+                    "crm_alloc_covered_bond": [0.0],
+                    "crm_alloc_receivables": [0.0],
+                    "crm_alloc_real_estate": [80_000.0],
+                    "crm_alloc_other_physical": [0.0],
+                    "crm_alloc_life_insurance": [0.0],
+                    "collateral_type": ["residential_re"],
+                }
+            )
         )
         result = lf.pipe(apply_lgd_floor, B31).collect()
         # retail_mortgage → flat 5% floor for RRE collateral
@@ -638,20 +647,22 @@ class TestBlendedFloorEdgeCases:
 
     def test_null_allocation_columns(self):
         """Null allocation columns treated as zero."""
-        lf = pl.LazyFrame(
-            {
-                "ead_gross": [100_000.0],
-                "ead_for_crm": [100_000.0],
-                "exposure_volatility_haircut": [0.0],
-                "exposure_class": ["retail_other"],
-                "total_collateral_for_lgd": [50_000.0],
-                "crm_alloc_financial": [None],
-                "crm_alloc_covered_bond": [None],
-                "crm_alloc_receivables": [None],
-                "crm_alloc_real_estate": [None],
-                "crm_alloc_other_physical": [50_000.0],
-                "crm_alloc_life_insurance": [None],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "ead_gross": [100_000.0],
+                    "ead_for_crm": [100_000.0],
+                    "exposure_volatility_haircut": [0.0],
+                    "exposure_class": ["retail_other"],
+                    "total_collateral_for_lgd": [50_000.0],
+                    "crm_alloc_financial": [None],
+                    "crm_alloc_covered_bond": [None],
+                    "crm_alloc_receivables": [None],
+                    "crm_alloc_real_estate": [None],
+                    "crm_alloc_other_physical": [50_000.0],
+                    "crm_alloc_life_insurance": [None],
+                }
+            )
         )
         result = lf.with_columns(_lgd_floor_blended_expression(B31).alias("floor")).collect()
         # 50% physical + 50% unsecured = 0.5*15% + 0.5*30% = 22.5%

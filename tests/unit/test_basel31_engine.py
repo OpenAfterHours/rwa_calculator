@@ -45,6 +45,7 @@ from rwa_calc.engine.irb.transforms import (
     prepare_columns,
 )
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
+from tests.fixtures.contract_columns import pad_property_security
 from tests.fixtures.single_exposure import calculate_single_equity_exposure
 
 
@@ -203,11 +204,13 @@ class TestPDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """Basel 3.1: Corporate PD floor is 0.05%."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_class": ["CORPORATE"],
-                "pd": [0.001],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_class": ["CORPORATE"],
+                    "pd": [0.001],
+                }
+            )
         )
         result = lf.with_columns(
             _pd_floor_expression(basel31_config, has_transactor_col=False).alias("pd_floor")
@@ -219,11 +222,13 @@ class TestPDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """Basel 3.1: Corporate SME PD floor is 0.05%."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_class": ["CORPORATE_SME"],
-                "pd": [0.001],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_class": ["CORPORATE_SME"],
+                    "pd": [0.001],
+                }
+            )
         )
         result = lf.with_columns(
             _pd_floor_expression(basel31_config, has_transactor_col=False).alias("pd_floor")
@@ -235,11 +240,13 @@ class TestPDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """Basel 3.1: QRRE revolver PD floor is 0.10% (default)."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_class": ["RETAIL_QRRE"],
-                "pd": [0.001],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_class": ["RETAIL_QRRE"],
+                    "pd": [0.001],
+                }
+            )
         )
         result = lf.with_columns(
             _pd_floor_expression(basel31_config, has_transactor_col=False).alias("pd_floor")
@@ -251,11 +258,13 @@ class TestPDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """Basel 3.1: Retail mortgage PD floor is 0.10% (PRA Art. 163(1)(b) UK RRE)."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_class": ["RETAIL_MORTGAGE"],
-                "pd": [0.001],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_class": ["RETAIL_MORTGAGE"],
+                    "pd": [0.001],
+                }
+            )
         )
         result = lf.with_columns(
             _pd_floor_expression(basel31_config, has_transactor_col=False).alias("pd_floor")
@@ -267,11 +276,13 @@ class TestPDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """Basel 3.1: Retail other PD floor is 0.05%."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_class": ["RETAIL_OTHER"],
-                "pd": [0.001],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_class": ["RETAIL_OTHER"],
+                    "pd": [0.001],
+                }
+            )
         )
         result = lf.with_columns(
             _pd_floor_expression(basel31_config, has_transactor_col=False).alias("pd_floor")
@@ -283,11 +294,13 @@ class TestPDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """PD below the floor should be raised to the floor value."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_class": ["CORPORATE"],
-                "pd": [0.0001],  # 0.01%, below 0.05% floor
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_class": ["CORPORATE"],
+                    "pd": [0.0001],  # 0.01%, below 0.05% floor
+                }
+            )
         )
         pd_floor_expr = _pd_floor_expression(basel31_config, has_transactor_col=False)
         result = lf.with_columns(
@@ -300,11 +313,13 @@ class TestPDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """PD above the floor should remain unchanged."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_class": ["CORPORATE"],
-                "pd": [0.05],  # 5%, well above 0.05% floor
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_class": ["CORPORATE"],
+                    "pd": [0.05],  # 5%, well above 0.05% floor
+                }
+            )
         )
         pd_floor_expr = _pd_floor_expression(basel31_config, has_transactor_col=False)
         result = lf.with_columns(
@@ -400,15 +415,17 @@ class TestPDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """Basel 3.1: Multiple exposure classes get their own floors."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_class": [
-                    "CORPORATE",
-                    "RETAIL_QRRE",
-                    "RETAIL_MORTGAGE",
-                ],
-                "pd": [0.0001, 0.0001, 0.0001],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_class": [
+                        "CORPORATE",
+                        "RETAIL_QRRE",
+                        "RETAIL_MORTGAGE",
+                    ],
+                    "pd": [0.0001, 0.0001, 0.0001],
+                }
+            )
         )
         pd_floor_expr = _pd_floor_expression(basel31_config, has_transactor_col=False)
         result = lf.with_columns(
@@ -423,12 +440,14 @@ class TestPDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """Basel 3.1: QRRE transactor gets 0.05% floor (Art. 163(1)(c))."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_class": ["RETAIL_QRRE", "RETAIL_QRRE"],
-                "pd": [0.0001, 0.0001],
-                "is_qrre_transactor": [True, False],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_class": ["RETAIL_QRRE", "RETAIL_QRRE"],
+                    "pd": [0.0001, 0.0001],
+                    "is_qrre_transactor": [True, False],
+                }
+            )
         )
         pd_floor_expr = _pd_floor_expression(basel31_config, has_transactor_col=True)
         result = lf.with_columns(
@@ -442,17 +461,19 @@ class TestPDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """Basel 3.1: QRRE with null is_qrre_transactor defaults to revolver floor."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_class": ["RETAIL_QRRE"],
-                "pd": [0.0001],
-                "is_qrre_transactor": [None],
-            },
-            schema={
-                "exposure_class": pl.String,
-                "pd": pl.Float64,
-                "is_qrre_transactor": pl.Boolean,
-            },
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_class": ["RETAIL_QRRE"],
+                    "pd": [0.0001],
+                    "is_qrre_transactor": [None],
+                },
+                schema={
+                    "exposure_class": pl.String,
+                    "pd": pl.Float64,
+                    "is_qrre_transactor": pl.Boolean,
+                },
+            )
         )
         pd_floor_expr = _pd_floor_expression(basel31_config, has_transactor_col=True)
         result = lf.with_columns(
@@ -465,12 +486,14 @@ class TestPDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """is_qrre_transactor only affects QRRE exposures, not other classes."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_class": ["CORPORATE", "RETAIL_OTHER", "RETAIL_QRRE"],
-                "pd": [0.0001, 0.0001, 0.0001],
-                "is_qrre_transactor": [True, True, True],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_class": ["CORPORATE", "RETAIL_OTHER", "RETAIL_QRRE"],
+                    "pd": [0.0001, 0.0001, 0.0001],
+                    "is_qrre_transactor": [True, True, True],
+                }
+            )
         )
         pd_floor_expr = _pd_floor_expression(basel31_config, has_transactor_col=True)
         result = lf.with_columns(
@@ -918,13 +941,15 @@ class TestLGDFloors:
         get the standard 25% floor (not 50%). The 50% floor only applies
         to retail QRRE per Art. 164(4)(b)(i).
         """
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.10, 0.10, 0.10],
-                "collateral_type": ["unsecured", "unsecured", "unsecured"],
-                "seniority": ["subordinated", "senior", "subordinated"],
-                "exposure_class": ["CORPORATE", "CORPORATE", "INSTITUTION"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.10, 0.10, 0.10],
+                    "collateral_type": ["unsecured", "unsecured", "unsecured"],
+                    "seniority": ["subordinated", "senior", "subordinated"],
+                    "exposure_class": ["CORPORATE", "CORPORATE", "INSTITUTION"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(
@@ -943,12 +968,14 @@ class TestLGDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """Art. 161(5): Corporate subordinated floor 25% via _lgd_floor_expression."""
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.10, 0.10],
-                "seniority": ["subordinated", "senior"],
-                "exposure_class": ["CORPORATE", "CORPORATE"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.10, 0.10],
+                    "seniority": ["subordinated", "senior"],
+                    "exposure_class": ["CORPORATE", "CORPORATE"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression(
@@ -969,13 +996,15 @@ class TestLGDFloors:
         The 50% floor applies to all QRRE exposures regardless of seniority.
         Corporate exposures get 25% regardless of seniority (Art. 161(5)).
         """
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.10, 0.10, 0.10],
-                "collateral_type": ["unsecured", "unsecured", "unsecured"],
-                "seniority": ["subordinated", "subordinated", "senior"],
-                "exposure_class": ["retail_qrre", "CORPORATE", "retail_qrre"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.10, 0.10, 0.10],
+                    "collateral_type": ["unsecured", "unsecured", "unsecured"],
+                    "seniority": ["subordinated", "subordinated", "senior"],
+                    "exposure_class": ["retail_qrre", "CORPORATE", "retail_qrre"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(
@@ -1020,14 +1049,19 @@ class TestLGDFloors:
     ) -> None:
         """Art. 164(4)(a): Retail mortgage LGD floor is 5% (RRE-secured).
 
-        Without collateral_type column, retail_mortgage is assumed RRE-secured
-        and gets the 5% floor, not the corporate 25%.
+        Without collateral_type column, a retail_mortgage with no evidence of
+        commercial-only security (``pad_property_security``: null property_type)
+        is treated as RRE-secured and gets the 5% floor, not the corporate 25%.
+        A commercial-only one is pinned in
+        tests/unit/irb/test_p1_324_commercial_only_retail_floors.py (P1.324).
         """
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.02, 0.02],
-                "exposure_class": ["retail_mortgage", "CORPORATE"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.02, 0.02],
+                    "exposure_class": ["retail_mortgage", "CORPORATE"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression(basel31_config, has_exposure_class=True).alias("lgd_floor")
@@ -1045,11 +1079,13 @@ class TestLGDFloors:
 
         Applies regardless of seniority when exposure_class is available.
         """
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.10, 0.10],
-                "exposure_class": ["retail_qrre", "retail_qrre"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.10, 0.10],
+                    "exposure_class": ["retail_qrre", "retail_qrre"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression(basel31_config, has_exposure_class=True).alias("lgd_floor")
@@ -1062,11 +1098,13 @@ class TestLGDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """Art. 164(4)(b)(ii): Other retail unsecured LGD floor is 30%."""
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.10],
-                "exposure_class": ["retail_other"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.10],
+                    "exposure_class": ["retail_other"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression(basel31_config, has_exposure_class=True).alias("lgd_floor")
@@ -1081,12 +1119,14 @@ class TestLGDFloors:
 
         Corporate with RRE collateral gets 10% (Art. 161(5)).
         """
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.02, 0.02],
-                "collateral_type": ["residential_re", "residential_re"],
-                "exposure_class": ["retail_mortgage", "CORPORATE"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.02, 0.02],
+                    "collateral_type": ["residential_re", "residential_re"],
+                    "exposure_class": ["retail_mortgage", "CORPORATE"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
@@ -1106,12 +1146,14 @@ class TestLGDFloors:
 
         Corporate unsecured gets 25% (Art. 161(5)).
         """
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.10, 0.10],
-                "collateral_type": ["unsecured", "unsecured"],
-                "exposure_class": ["retail_other", "CORPORATE"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.10, 0.10],
+                    "collateral_type": ["unsecured", "unsecured"],
+                    "exposure_class": ["retail_other", "CORPORATE"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
@@ -1128,12 +1170,14 @@ class TestLGDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """Retail with financial collateral gets 0% floor (same LGDS as corporate)."""
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.10],
-                "collateral_type": ["financial_collateral"],
-                "exposure_class": ["retail_other"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.10],
+                    "collateral_type": ["financial_collateral"],
+                    "exposure_class": ["retail_other"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
@@ -1212,12 +1256,14 @@ class TestLGDFloors:
         Since retail_mortgage exposures are by definition RRE-secured (Art. 147(5A)(a)),
         'immovable' collateral on a retail_mortgage must use the 5% floor.
         """
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.02, 0.02],
-                "collateral_type": ["immovable", "immovable"],
-                "exposure_class": ["retail_mortgage", "CORPORATE"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.02, 0.02],
+                    "collateral_type": ["immovable", "immovable"],
+                    "exposure_class": ["retail_mortgage", "CORPORATE"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
@@ -1238,12 +1284,14 @@ class TestLGDFloors:
         The alias 'real_estate' is another common name for immovable property
         and must also route correctly.
         """
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.02],
-                "collateral_type": ["real_estate"],
-                "exposure_class": ["retail_mortgage"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.02],
+                    "collateral_type": ["real_estate"],
+                    "exposure_class": ["retail_mortgage"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
@@ -1257,12 +1305,14 @@ class TestLGDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """P1.8: collateral_type 'property' with retail_mortgage also gets 5%."""
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.02],
-                "collateral_type": ["property"],
-                "exposure_class": ["retail_mortgage"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.02],
+                    "collateral_type": ["property"],
+                    "exposure_class": ["retail_mortgage"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
@@ -1276,12 +1326,14 @@ class TestLGDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """P1.8 regression: corporate + immovable stays at 10% (Art. 161(5))."""
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.02],
-                "collateral_type": ["immovable"],
-                "exposure_class": ["CORPORATE"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.02],
+                    "collateral_type": ["immovable"],
+                    "exposure_class": ["CORPORATE"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
@@ -1299,12 +1351,14 @@ class TestLGDFloors:
         Art. 164(4)(a) 5% only applies to retail_mortgage (RRE-secured).
         Other retail with RE collateral uses the same LGDS as corporate (10%).
         """
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.02],
-                "collateral_type": ["immovable"],
-                "exposure_class": ["retail_other"],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.02],
+                    "collateral_type": ["immovable"],
+                    "exposure_class": ["retail_other"],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(
@@ -1374,24 +1428,26 @@ class TestLGDFloors:
         basel31_config: CalculationConfig,
     ) -> None:
         """P1.8: Mixed batch with different collateral aliases all route correctly."""
-        lf = pl.LazyFrame(
-            {
-                "lgd": [0.02, 0.02, 0.02, 0.02, 0.02],
-                "collateral_type": [
-                    "residential_re",  # Explicit RRE
-                    "immovable",  # Generic — should use rre_floor
-                    "real_estate",  # Generic — should use rre_floor
-                    "commercial_re",  # Explicit CRE
-                    "immovable",  # Generic — corporate → 10%
-                ],
-                "exposure_class": [
-                    "retail_mortgage",
-                    "retail_mortgage",
-                    "retail_mortgage",
-                    "retail_mortgage",
-                    "CORPORATE",
-                ],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "lgd": [0.02, 0.02, 0.02, 0.02, 0.02],
+                    "collateral_type": [
+                        "residential_re",  # Explicit RRE
+                        "immovable",  # Generic — should use rre_floor
+                        "real_estate",  # Generic — should use rre_floor
+                        "commercial_re",  # Explicit CRE
+                        "immovable",  # Generic — corporate → 10%
+                    ],
+                    "exposure_class": [
+                        "retail_mortgage",
+                        "retail_mortgage",
+                        "retail_mortgage",
+                        "retail_mortgage",
+                        "CORPORATE",
+                    ],
+                }
+            )
         )
         result = lf.with_columns(
             _lgd_floor_expression_with_collateral(basel31_config, has_exposure_class=True).alias(

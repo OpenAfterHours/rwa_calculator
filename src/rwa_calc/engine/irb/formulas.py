@@ -31,7 +31,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
-from rwa_calc.domain.enums import ExposureClass
+from rwa_calc.domain.enums import ExposureClass, PropertyType
 from rwa_calc.engine.crm.expressions import lgd_star_exposure_basis_expr
 from rwa_calc.engine.irb.stats_backend import normal_cdf, normal_ppf
 from rwa_calc.engine.thresholds import regulatory_threshold
@@ -109,6 +109,65 @@ def firb_supervisory_lgd_values(pack: ResolvedRulepack) -> dict[str, Decimal]:
 # =============================================================================
 
 
+@cites("PS1/26, paragraph 147")
+def commercial_only_property_security_expr() -> pl.Expr:
+    """
+    True on a row whose property security is commercial with NO residential evidence.
+
+    PS1/26 Art. 147(5B) assigns "retail exposures secured by residential
+    immovable property" to the (d)(ii) subclass and Art. 147(5C) sends every
+    other retail exposure to (d)(iii) other retail. The classifier still puts a
+    retail exposure secured only on commercial property in ``retail_mortgage``
+    — correctly, for R = 0.15 (Art. 154(3) covers any immovable property), the
+    CRR Art. 164(4) 15% commercial bucket and the Basel 3.1 "secured by
+    commercial immovable property" COREP sheets — so the three Basel 3.1
+    treatments PS1/26 ties to RESIDENTIAL security read this predicate as well
+    as the class: the Art. 154(4A)(b) 10% RWEA floor, the Art. 163(1)(b) PD
+    floor and the Art. 164(4)(a) flat LGD floor (P1.324).
+
+    True only on POSITIVE commercial evidence — ``property_type == "commercial"``,
+    the linked property's type and the same carrier the COREP CRE sheets read
+    (keep-first by input row order, so it is the positive evidence only, never
+    the residential test) — and the ABSENCE of residential evidence on each of
+    the three carriers that can hold it:
+
+    - ``re_collateral_may_be_residential`` is False — no real estate that is,
+      or may be, residential reaches the exposure on any route the CRM
+      allocates collateral on: direct, the parent or any ancestor facility,
+      the obligor, or a ``collateral_links`` beneficiary; residential
+      ``collateral_type`` synonyms and real estate of unreported or ADC type
+      count (``engine/hierarchy/enrich.py::enrich_with_residential_security``).
+      It sees the house behind an undrawn row and behind a mixed security;
+    - ``residential_collateral_value_uncapped`` is not positive;
+    - ``is_uk_residential_mortgage_commitment`` is not True — the firm's own
+      attestation that the row is a UK residential mortgage commitment, which
+      the CCF stage reads; a row it puts there stays residential here.
+
+    In production the flag implies the value; the value is read as well so that
+    a frame carrying a residential value without the flag cannot read as
+    commercial-only. Any null leaves the result False: an unknown security keeps
+    the residential treatment it had before P1.324, so the predicate can only
+    move a row it can SHOW to be commercial-only. Reads four columns required on
+    every IRB-input edge, with no presence guard.
+
+    Known residual, and NOT a conservative one: the positive evidence is
+    ``property_type`` alone, which the hierarchy leaves null for a shop reached
+    only through ``collateral_links``, a non-parent ancestor facility, a
+    ``contingent`` beneficiary (``add_collateral_ltv`` reads direct pledges to
+    ``exposure`` / ``loan`` only) or a commercial ``collateral_type`` synonym. Such
+    a commercial-only row stays on the residential limbs, which UNDERSTATES RWEA
+    above a PD of about 0.24% (own LGD 3%, 40% cover: 10.00% against 27.57% at
+    PD 1%). Recorded for a follow-up item, not fixed here.
+    """
+    is_commercial = pl.col("property_type").str.to_lowercase() == PropertyType.COMMERCIAL.value
+    no_residential_evidence = (
+        pl.col("re_collateral_may_be_residential").not_()
+        & (pl.col("residential_collateral_value_uncapped") <= 0.0)
+        & pl.col("is_uk_residential_mortgage_commitment").eq_missing(True).not_()
+    )
+    return (is_commercial & no_residential_evidence).eq_missing(True)
+
+
 @cites("CRR Art. 160")
 @cites("CRR Art. 163")
 @cites("PS1/26, paragraph 163")
@@ -118,6 +177,7 @@ def _pd_floor_expression(
     has_transactor_col: bool = True,
     exposure_class_col: str = "exposure_class",
     transactor_col: str = "is_qrre_transactor",
+    read_property_security: bool = True,
     pack: ResolvedRulepack | None = None,
 ) -> pl.Expr:
     """
@@ -135,6 +195,15 @@ def _pd_floor_expression(
         - QRRE transactors: 0.05%, revolvers: 0.10% (Art. 163(1)(c))
         - Retail other: 0.05%
 
+    Art. 163(1)(b) is for "retail exposures secured by residential immovable
+    property", so a ``retail_mortgage`` row secured ONLY on commercial property
+    (:func:`commercial_only_property_security_expr`) takes the (c) "all other
+    retail exposures" floor (P1.324). The predicate is read only where the pack
+    gives the two subclasses different floors — under CRR's flat Art. 163(1)
+    0.03% it could not change the result, so the CRR expression is unchanged.
+    The UK-location limb of (b) is not implementable (no property-country
+    carrier, P1.337).
+
     Args:
         config: Calculation configuration
         has_transactor_col: Whether the LazyFrame has the transactor column.
@@ -150,6 +219,11 @@ def _pd_floor_expression(
             PD floors this is normally not relevant (guarantors are typically
             not QRRE), but the parameter is exposed for symmetry with
             ``exposure_class_col``.
+        read_property_security: Whether the row's property-security carriers
+            describe the class being floored. True for the borrower's own class
+            (the default); the guarantor-class floor passes False, because the
+            borrower's collateral says nothing about a comparable direct
+            exposure to the guarantor (Art. 163(4)(b)(ii)).
 
     Required columns (no presence guard — see below):
         - ``exposure_class_col``: always dereferenced.
@@ -189,10 +263,22 @@ def _pd_floor_expression(
 
     sovereign_value = ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value.upper()
     institution_value = ExposureClass.INSTITUTION.value.upper()
+    retail_mortgage_value = ExposureClass.RETAIL_MORTGAGE.value.upper()
+
+    # Art. 163(1)(c): a retail_mortgage secured only on commercial property is
+    # "other retail" for the PD floor (P1.324). Not read where the two floors
+    # coincide (CRR), nor for a guarantor's class.
+    commercial_only_mortgage = (
+        (exp_class == retail_mortgage_value) & commercial_only_property_security_expr()
+        if read_property_security and floors["retail_mortgage"] != floors["retail_other"]
+        else pl.lit(False)
+    )
 
     return (
         pl.when(exp_class.str.contains("QRRE"))
         .then(qrre_floor)
+        .when(commercial_only_mortgage)
+        .then(pl.lit(floors["retail_other"]))
         .when(exp_class.str.contains("MORTGAGE") | exp_class.str.contains("RESIDENTIAL"))
         .then(pl.lit(floors["retail_mortgage"]))
         .when(exp_class.str.contains("RETAIL"))
@@ -223,7 +309,10 @@ def _lgd_floor_expression(
     Under Basel 3.1: Differentiated floors for A-IRB by exposure class:
         Corporate (Art. 161(5)): 25% unsecured (senior & subordinated alike)
         Retail (Art. 164(4)):
-            - retail_mortgage: 5% (assumed RRE-secured)
+            - retail_mortgage: 5% (Art. 164(4)(a)) — unless secured only on
+              commercial property (:func:`commercial_only_property_security_expr`),
+              which is "not within the scope of point (a)" and takes the
+              other-retail 30% here (P1.324)
             - retail_qrre: 50% (Art. 164(4)(b)(i))
             - retail_other: 30% (Art. 164(4)(b)(ii))
 
@@ -241,12 +330,13 @@ def _lgd_floor_expression(
     if has_exposure_class:
         # Route by exposure class — retail gets Art. 164(4) floors
         exp_class = pl.col("exposure_class").cast(pl.String).str.to_lowercase()
+        residential_mortgage, commercial_only_mortgage = _retail_mortgage_security_masks(exp_class)
         return (
-            pl.when(exp_class.is_in(["retail_mortgage"]))
+            pl.when(residential_mortgage)
             .then(pl.lit(floors["retail_rre"]))  # 5% Art. 164(4)(a)
             .when(exp_class.is_in(["retail_qrre"]))
             .then(pl.lit(floors["retail_qrre_unsecured"]))  # 50% Art. 164(4)(b)(i)
-            .when(exp_class.is_in(["retail_other"]))
+            .when(exp_class.is_in(["retail_other"]) | commercial_only_mortgage)
             .then(pl.lit(floors["retail_other_unsecured"]))  # 30% Art. 164(4)(b)(ii)
             .otherwise(pl.lit(floors["unsecured"]))  # 25% Art. 161(5)
         )
@@ -279,6 +369,9 @@ def _lgd_floor_expression_with_collateral(
         - retail_qrre unsecured: 50% (Art. 164(4)(b)(i))
         - retail_other unsecured: 30% (Art. 164(4)(b)(ii))
         - retail + other collateral: same LGDS as corporate (0%/10%/10%/15%)
+    A retail_mortgage secured only on commercial property is outside point (a)
+    and floors as other retail: 30% unsecured, 10% on immovable property
+    (Art. 164(4)(b)(ii) / (c)(iv)(3); P1.324).
     Corporate floors use Art. 161(5): 25% unsecured, collateral-type LGDS.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
@@ -291,18 +384,20 @@ def _lgd_floor_expression_with_collateral(
     # Determine unsecured floor based on exposure class (retail vs corporate)
     if has_exposure_class:
         exp_class = pl.col("exposure_class").cast(pl.String).str.to_lowercase()
+        residential_mortgage, commercial_only_mortgage = _retail_mortgage_security_masks(exp_class)
         unsecured_floor = (
-            pl.when(exp_class.is_in(["retail_mortgage"]))
+            pl.when(residential_mortgage)
             .then(pl.lit(floors["retail_rre"]))  # 5% Art. 164(4)(a)
             .when(exp_class.is_in(["retail_qrre"]))
             .then(pl.lit(floors["retail_qrre_unsecured"]))  # 50% Art. 164(4)(b)(i)
-            .when(exp_class.is_in(["retail_other"]))
+            .when(exp_class.is_in(["retail_other"]) | commercial_only_mortgage)
             .then(pl.lit(floors["retail_other_unsecured"]))  # 30% Art. 164(4)(b)(ii)
             .otherwise(pl.lit(floors["unsecured"]))  # 25% Art. 161(5)
         )
-        # RRE collateral floor: 5% for retail_mortgage, 10% for corporate
+        # RRE collateral floor: 5% for a residential-secured retail_mortgage,
+        # 10% (immovable property LGDS) for everything else
         rre_floor = (
-            pl.when(exp_class.is_in(["retail_mortgage"]))
+            pl.when(residential_mortgage)
             .then(pl.lit(floors["retail_rre"]))  # 5% Art. 164(4)(a)
             .otherwise(pl.lit(floors["residential_real_estate"]))  # 10% Art. 161(5)
         )
@@ -368,7 +463,12 @@ def _lgd_floor_blended_expression(
         - retail_qrre: 50% (Art. 164(4)(b)(i))
 
     Does NOT apply to:
-        - retail_mortgage (flat 5% floor per Art. 164(4)(a))
+        - retail_mortgage (flat 5% floor per Art. 164(4)(a)) — EXCEPT one secured
+          only on commercial property (:func:`commercial_only_property_security_expr`),
+          which is "not within the scope of point (a)" and blends on the
+          Art. 164(4)(c) other-retail LGDU of 30% (P1.324). The blend is not
+          bounded below by the flat floor it replaces: cover that is mostly
+          financial collateral (0% LGDS) floors such a row BELOW 5%
         - exposures with no recognised protection — Art. 161(5)(a) /
           164(4)(b) flat unsecured floors govern, so the expression returns
           null and the caller falls back to the single-type floor
@@ -386,7 +486,7 @@ def _lgd_floor_blended_expression(
     only ever lower the floor, and an unflagged election would be
     indistinguishable from missing data.
 
-    Deferred: the blend deny-list is ``["retail_mortgage"]`` only, so
+    Deferred: the blend deny-list is the residential-secured ``retail_mortgage`` only, so
     ``residential_mortgage`` / ``commercial_mortgage`` would blend if they ever
     reached an IRB row. Unreachable today — both are SA re-splitter outputs
     (PS1/26 Art. 124C-124K) and never carry an IRB approach.
@@ -394,27 +494,31 @@ def _lgd_floor_blended_expression(
     Returns null — deferring to whichever single-type / flat floor expression the
     caller built (``_lgd_floor_expression_with_collateral`` when
     ``collateral_type`` is on the frame, else ``_lgd_floor_expression``) — in
-    exactly two cases: the exposure is ``retail_mortgage``, or it carries no
-    recognised collateral. There is NO third "columns absent" case.
+    exactly two cases: the exposure is a residential-secured ``retail_mortgage``,
+    or it carries no recognised collateral. There is NO third "columns absent"
+    case.
 
-    Required columns — NOT runtime-guarded. This expression references ten
+    Required columns — NOT runtime-guarded. This expression references fourteen
     columns unconditionally, and a frame missing any of them raises
     ``ColumnNotFoundError`` at collect rather than falling back:
 
         ead_for_crm, exposure_volatility_haircut, total_collateral_for_lgd,
         exposure_class, crm_alloc_{financial,covered_bond,receivables,
-        real_estate,other_physical,life_insurance}
+        real_estate,other_physical,life_insurance}, property_type,
+        residential_collateral_value_uncapped, re_collateral_may_be_residential,
+        is_uk_residential_mortgage_commitment
 
     (``ead_gross`` is no longer among them — the Art. 230(1) basis replaced it.)
 
     Production safety comes from the **crm_exit edge contract**, not from a
-    guard: all ten are declared REQUIRED on ``CRM_EXIT_EDGE`` (inherited by
-    ``RE_SPLIT_EXIT_EDGE``), so the sealed IRB branch input always carries them.
+    guard: all fourteen are declared REQUIRED on ``CRM_EXIT_EDGE`` (the four
+    property-security carriers via the inherited hierarchy columns; all inherited
+    by ``RE_SPLIT_EXIT_EDGE``), so the sealed IRB branch input always carries them.
     Unlike the sibling single-type expressions — which the callers gate behind
     ``if "collateral_type" in schema_names`` — neither call site
     (``apply_irb_formulas`` here, ``apply_lgd_floor`` / ``_lgd_floored_expr`` in
     ``engine/irb/transforms.py``) guards this set. Direct callers that hand-roll
-    a narrow frame must therefore supply all ten themselves; the test helpers
+    a narrow frame must therefore supply all of them themselves; the test helpers
     ``tests/fixtures/contract_columns.py::pad_crm_exit_defaults`` and
     ``tests/fixtures/single_exposure.py`` exist for that and pad the rest;
     ``exposure_class`` is the exception, which ``pad_crm_exit_defaults``
@@ -499,10 +603,13 @@ def _lgd_floor_blended_expression(
     # eligibility gate evaluates null and the caller falls back to the flat /
     # single-type floor — the conservative branch. No null fill here.
     exp_class = pl.col("exposure_class").cast(pl.String).str.to_lowercase()
+    _, commercial_only_mortgage = _retail_mortgage_security_masks(exp_class)
     lgdu_expr = (
         pl.when(exp_class.is_in(["retail_qrre"]))
         .then(pl.lit(floors["retail_qrre_unsecured"]))  # 50%
-        .when(exp_class.is_in(["retail_other"]))
+        # A commercial-only retail_mortgage is other retail: Art. 164(4)(c)(iii)
+        # substitutes 30% for LGDU, not the corporate 25% (P1.324).
+        .when(exp_class.is_in(["retail_other"]) | commercial_only_mortgage)
         .then(pl.lit(floors["retail_lgdu"]))  # 30%
         .otherwise(pl.lit(floors["unsecured"]))  # 25% Art. 161(5)(b)(iii)
     )
@@ -514,14 +621,16 @@ def _lgd_floor_blended_expression(
     # Art. 161(5)(b) (corporates and institutions) and Art. 164(4)(c) (retail
     # other / QRRE) both mandate the Art. 230/231 LGD* blend for secured AND
     # PARTIALLY secured exposures wherever the firm takes the funded credit
-    # protection into account. ``retail_mortgage`` is the sole carve-out — a
-    # flat 5% floor per Art. 164(4)(a), independent of collateral composition.
+    # protection into account. A ``retail_mortgage`` secured on residential
+    # property is the sole carve-out — a flat 5% floor per Art. 164(4)(a),
+    # independent of collateral composition. One secured ONLY on commercial
+    # property is "not within the scope of point (a)" and blends (P1.324).
     #
     # ``has_collateral`` is exactly the Art. 161(5)(a)/(b) fork: nothing
     # recognised means the firm "chooses not to take into account funded credit
     # protection", so the flat unsecured floor governs and this expression
     # returns null for the caller's single-type fallback.
-    is_blended_eligible = ~exp_class.is_in(["retail_mortgage"])
+    is_blended_eligible = ~exp_class.is_in(["retail_mortgage"]) | commercial_only_mortgage
     has_collateral = total_coll > 0
 
     return pl.when(is_blended_eligible & has_collateral).then(blended).otherwise(pl.lit(None))
@@ -1402,6 +1511,20 @@ def _is_retail_class_expr() -> pl.Expr:
         .str.to_uppercase()
         .str.contains("RETAIL")
     )
+
+
+def _retail_mortgage_security_masks(exp_class: pl.Expr) -> tuple[pl.Expr, pl.Expr]:
+    """Split ``retail_mortgage`` by its security for the Art. 164(4) LGD floors.
+
+    Returns ``(residential, commercial_only)``: the rows Art. 164(4)(a)'s flat 5%
+    reaches, and the rows secured only on commercial property that it does not
+    (:func:`commercial_only_property_security_expr`, P1.324). ``exp_class`` is the
+    lowercased class string; a null class leaves both masks null, so neither
+    branch fires and the caller's fallback governs, as before.
+    """
+    is_mortgage = exp_class.is_in(["retail_mortgage"])
+    commercial_only = commercial_only_property_security_expr()
+    return is_mortgage & commercial_only.not_(), is_mortgage & commercial_only
 
 
 def _is_retail_dilution_expr() -> pl.Expr:

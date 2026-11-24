@@ -16,13 +16,14 @@ floor once, in OF 02.00 row 0010 column 0030 (p.29), and defines OF 08.01 col
 binding floor's shortfall over ``rwa_final`` (``engine/aggregator/_floor.py``);
 every template RWEA reads the un-floored ``rwa_pre_floor`` instead.
 
-``facility-share-binding`` is the one registered run whose floor binds (shortfall
-397,708.71 on three F-IRB corporate legs since P1.367 took the max over the
-whole book; 453,708.71 under the former modelled-subset formula); the supervisory
-register banks that set as ``BINDING_FLOOR_RUNS`` and the shapes each state
-reaches as ``FLOOR_STATE_SHAPES``. The three forced cases reach the states no
-registered run does — slotting, A-IRB retail, defaulted, LFSE and SA-CCR rows
-under a binding floor — by giving the firm an Art. 62(c) SA T2 credit (OF-ADJ =
+``facility-share-binding`` is the registered run whose floor binds on F-IRB rows
+(shortfall 397,708.71 on three F-IRB corporate legs since P1.367 took the max
+over the whole book; 453,708.71 under the former modelled-subset formula), and
+``retail-cre`` (P1.324) binds on A-IRB retail rows; the supervisory register
+banks that set as ``BINDING_FLOOR_RUNS`` and the shapes each state reaches as
+``FLOOR_STATE_SHAPES``. The three forced cases reach the states no registered
+run does — slotting, defaulted, LFSE and SA-CCR rows under a binding floor, and
+A-IRB retail beside other classes — by giving the firm an Art. 62(c) SA T2 credit (OF-ADJ =
 12.5 x the credit), a real engine run with nothing edited. They are test-local:
 the register's other legs never see them, which is the gap
 ``FLOOR_STATE_SHAPES`` records as owed.

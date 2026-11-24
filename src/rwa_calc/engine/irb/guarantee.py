@@ -729,6 +729,7 @@ def _apply_parameter_substitution(
         config,
         has_transactor_col=False,
         exposure_class_col="guarantor_exposure_class",
+        read_property_security=False,
         pack=pack,
     )
     guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)
@@ -1068,6 +1069,7 @@ def _apply_double_default(
         config,
         has_transactor_col=False,
         exposure_class_col="guarantor_exposure_class",
+        read_property_security=False,
         pack=pack,
     )
     guarantor_pd_floored_dd = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr_dd)
@@ -1182,6 +1184,7 @@ def _adjust_expected_loss(
             config,
             has_transactor_col=False,
             exposure_class_col="guarantor_exposure_class",
+            read_property_security=False,
             pack=pack,
         )
         guarantor_pd_floored = pl.max_horizontal(pl.col("guarantor_pd"), pd_floor_expr)

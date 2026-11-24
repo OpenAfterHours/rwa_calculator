@@ -1402,12 +1402,15 @@ its risk weight.
 > out of scope and the engine agrees at 0.00.
 >
 > That equality is the engine's closest available PROXY for the Art. 147(5B)(d)(ii)
-> subclass, not the subclass itself, and it is over-inclusive in one direction the
-> oracles do not currently sample: a *retail* exposure secured only on *commercial*
-> property is classified `retail_mortgage` upstream — `hierarchy/enrich.py`
-> computes `property_collateral_value` over both property kinds by design — and
-> still takes the floor. That residual is conservative (the floor can only raise
-> RWEA) and is tracked as its own item.
+> subclass, not the subclass itself. A *retail* exposure secured only on
+> *commercial* property is classified `retail_mortgage` upstream —
+> `hierarchy/enrich.py` computes `property_collateral_value` over both property
+> kinds by design — but since P1.324 the floor gate also requires NOT
+> `commercial_only_property_security_expr`, so such a row no longer takes the floor.
+> The residual (OWNER: P1.484): a commercial-only security reached only through
+> collateral links, a non-parent ancestor facility, a contingent beneficiary or a
+> commercial collateral-type synonym leaves `property_type` null and keeps the
+> residential limbs, which understates capital above a PD of about 0.24%.
 
 ## ORC-142 — Residential mortgage on non-UK property (PS1/26)
 

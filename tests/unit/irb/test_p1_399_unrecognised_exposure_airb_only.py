@@ -31,6 +31,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from tests.fixtures.contract_columns import pad_property_security
 
 from rwa_calc.contracts.config import CalculationConfig, PostModelAdjustmentConfig
 from rwa_calc.domain.enums import ApproachType
@@ -51,17 +52,19 @@ def _legs(*approaches: ApproachType) -> pl.LazyFrame:
     the only difference between two legs is the approach.
     """
     count = len(approaches)
-    return pl.LazyFrame(
-        {
-            "exposure_reference": [f"LEG_{i}" for i in range(count)],
-            "approach": [approach.value for approach in approaches],
-            "exposure_class": ["corporate"] * count,
-            "rwa": [BASE_RWEA] * count,
-            "risk_weight": [0.50] * count,
-            "ead_final": [2_000.0] * count,
-            "expected_loss": [10.0] * count,
-            "is_defaulted": pl.Series([False] * count, dtype=pl.Boolean),
-        }
+    return pad_property_security(
+        pl.LazyFrame(
+            {
+                "exposure_reference": [f"LEG_{i}" for i in range(count)],
+                "approach": [approach.value for approach in approaches],
+                "exposure_class": ["corporate"] * count,
+                "rwa": [BASE_RWEA] * count,
+                "risk_weight": [0.50] * count,
+                "ead_final": [2_000.0] * count,
+                "expected_loss": [10.0] * count,
+                "is_defaulted": pl.Series([False] * count, dtype=pl.Boolean),
+            }
+        )
     )
 
 

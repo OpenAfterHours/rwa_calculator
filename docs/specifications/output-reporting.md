@@ -154,7 +154,7 @@ Standardised (`engine/aggregator/aggregator.py::_art147_reporting_class`; P1.366
 - Col 0125: Of which: defaulted exposure value
 - Col 0251: RWEA pre-adjustments
 - Col 0252: Adjustment for post-model adjustments
-- Col 0253: Adjustment for mortgage RW floor
+- Col 0253: Adjustment for mortgage RW floor — the Art. 154(4A)(b) add-on, which reaches retail secured by residential immovable property only; on the retail CRE sheets (0018 / 0019) a leg secured only on commercial property reports 0 here (P1.324; [A-IRB specification](basel31/airb-calculation.md#retail-secured-only-on-commercial-property-p1324))
 - Col 0254: Unrecognised exposure adjustments (Art. 153(5A)(b), 154(4A)(c)) — not reported for F-IRB or slotting sheets (PS1/26 Annex II p.112); empty on those sheets and their Total 0002 in OF 08.01 and OF 08.02 (`c08_sheets.py::sheet_spec`). The engine adds the adjustment to Advanced IRB legs only (Art. 166D(6), P1.399), so column 0260 on those sheets still equals 0251 + 0252 + 0253
 - Col 0260: Risk-weighted exposure amount **after** adjustments — equals col 0251 adjusted for cols 0252 to 0254 (i.e. `0251 + 0252 + 0253 + 0254`). This is the post-adjustment RWEA that flows into OF 02.00's IRB class rows (0271–0410, column 0010; each is one data point with this cell on the class's sheet) and through them into rows 0240, 0040 and 0010. Source: PS1/26 Annex II §3.3.1, p. 112.
 - Col 0265: Of which: exposure value for non-defaulted

@@ -52,7 +52,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
-from tests.fixtures.contract_columns import pad_crm_exit_defaults
+from tests.fixtures.contract_columns import pad_crm_exit_defaults, pad_property_security
 
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.engine.irb import IRBCalculator
@@ -103,7 +103,9 @@ def _floor_for(
     column: str = "exposure_class",
 ) -> float:
     """Evaluate ``_pd_floor_expression`` for one exposure-class label."""
-    frame = pl.LazyFrame({column: [exposure_class]}, schema_overrides={column: pl.String})
+    frame = pad_property_security(
+        pl.LazyFrame({column: [exposure_class]}, schema_overrides={column: pl.String})
+    )
     expr = _pd_floor_expression(
         config,
         has_transactor_col=False,

@@ -201,6 +201,8 @@ def pad_crm_exit_defaults(lf: pl.LazyFrame) -> pl.LazyFrame:
     if additions:
         lf = lf.with_columns(additions)
     names |= {name for name in _SIMPLE_DEFAULTS if name not in names}
+    # The property-security carriers the Basel 3.1 IRB floors read (P1.324).
+    lf = pad_property_security(lf)
 
     derived: list[pl.Expr] = []
     if "ead_final" in names:  # noqa: SIM108 — three-way source resolution
@@ -226,6 +228,35 @@ def pad_crm_exit_defaults(lf: pl.LazyFrame) -> pl.LazyFrame:
     if derived:
         lf = lf.with_columns(derived)
     return lf
+
+
+#: The property-security carriers ``engine/irb/formulas.py::
+#: commercial_only_property_security_expr`` reads (P1.324), with the neutral
+#: "no property evidence" values that keep a row on its pre-P1.324 treatment.
+_PROPERTY_SECURITY_DEFAULTS: dict[str, pl.Expr] = {
+    "property_type": pl.lit(None, dtype=pl.String),
+    "residential_collateral_value_uncapped": pl.lit(0.0),
+    "re_collateral_may_be_residential": pl.lit(False),
+    "is_uk_residential_mortgage_commitment": pl.lit(False),
+}
+
+
+def pad_property_security(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Add the IRB floors' property-security carriers where a hand frame lacks them.
+
+    The Basel 3.1 PD / LGD / mortgage-RW floors read four columns that every
+    IRB-input edge declares REQUIRED, with no presence guard, to tell a
+    residential-secured ``retail_mortgage`` from a commercial-only one. A narrow
+    test frame that calls those floors directly must carry them; this pads only
+    the absent ones, with "no property evidence" (a null ``property_type``), so
+    the row keeps the treatment it had before P1.324. A test that is ABOUT the
+    property security sets the columns itself.
+    """
+    names = set(lf.collect_schema().names())
+    additions = [
+        expr.alias(name) for name, expr in _PROPERTY_SECURITY_DEFAULTS.items() if name not in names
+    ]
+    return lf.with_columns(additions) if additions else lf
 
 
 def pad_slotting_branch_defaults(lf: pl.LazyFrame) -> pl.LazyFrame:

@@ -34,6 +34,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
 )
 from rwa_calc.domain.enums import ApproachType, ExposureClass
+from rwa_calc.engine.irb.formulas import commercial_only_property_security_expr
 from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
@@ -170,9 +171,10 @@ def apply_post_model_adjustments(
     adjustments for known model deficiencies. Three RWEA components:
 
     1. Mortgage RW floor: min risk weight for **non-defaulted** retail
-       exposures secured by residential immovable property (Art. 154(4A)(b),
-       via the ``retail_mortgage`` class as an over-inclusive proxy for the
-       Art. 147(5B)(d)(ii) subclass — see the scope comment below)
+       exposures secured by residential immovable property (Art. 154(4A)(b):
+       the ``retail_mortgage`` class LESS the rows secured only on commercial
+       property, which Art. 147(5C) puts in other retail — see the scope
+       comment below)
     2. General PMA: an additive amount, base x pma_rwa_scalar (Art. 146(3)(b))
     3. Unrecognised exposure: base x unrecognised_exposure_scalar, on Advanced
        IRB legs only (Art. 166D(6))
@@ -274,16 +276,25 @@ def apply_post_model_adjustments(
     #      above). Modelled risk_weight/rwa are NOT proxies for it: an A-IRB
     #      defaulted mortgage with LGD > BEEL has RW > 0.
     #   2. "retail exposures secured by ... residential immovable property" — the
-    #      Art. 147(5B)(d)(ii) subclass. RETAIL_MORTGAGE is the engine's closest
-    #      available proxy for that subclass, over-inclusive of retail exposures
-    #      secured by commercial property (property_collateral_value spans both).
-    #      The over-inclusion is conservative; correcting it is a separate item.
+    #      Art. 147(5B)(d)(ii) subclass. RETAIL_MORTGAGE also holds retail
+    #      exposures secured only on COMMERCIAL property (it must, for R = 0.15
+    #      under Art. 154(3) and the COREP CRE sheets), so the class is narrowed
+    #      by commercial_only_property_security_expr (P1.324). That predicate
+    #      fires only on positive commercial evidence with no residential
+    #      evidence on any of its three carriers, so an undrawn, drawn=0,
+    #      label-only or mixed-security residential mortgage, and one whose house
+    #      arrives through collateral_links, an ancestor facility or a type
+    #      synonym, keeps the floor. The earlier comment here called the
+    #      over-inclusion "conservative"; it over-stated RWEA only, and removing
+    #      it releases capital (sign-off P1.324).
     # The third limb of (4A)(b) — UK-situated property — is not implementable: no
-    # property-country carrier exists on the sealed edge.
+    # property-country carrier exists on the sealed edge (P1.337).
     # Adjustment = max(0, floor_rw - modelled_rw) × EAD
     is_mortgage = (
-        pl.col("exposure_class").cast(pl.String) == ExposureClass.RETAIL_MORTGAGE.value
-    ) & (pl.col("is_defaulted").eq_missing(True).not_())
+        (pl.col("exposure_class").cast(pl.String) == ExposureClass.RETAIL_MORTGAGE.value)
+        & (pl.col("is_defaulted").eq_missing(True).not_())
+        & commercial_only_property_security_expr().not_()
+    )
 
     # Art. 154(4A) makes (a), (b) and (c) three ADDITIVE increases to one common
     # base — "the total risk-weighted exposure amounts calculated under

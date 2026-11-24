@@ -16,6 +16,7 @@ from decimal import Decimal
 import polars as pl
 import pytest
 from tests.fixtures.contract_columns import pad_crm_exit_defaults as _pad
+from tests.fixtures.contract_columns import pad_property_security
 from tests.fixtures.recon_ledger import LedgerShimCorepGenerator
 from tests.unit.reporting.corep._irb_sheet_frames import OF08_CORPORATE_NON_SME_FIRB
 
@@ -260,28 +261,30 @@ class TestELGuaranteeAdjustment:
         self, b31_config: CalculationConfig
     ) -> None:
         """The PMA-to-guarantee chain reports all EL carriers post CRM."""
-        lf = pl.LazyFrame(
-            {
-                "exposure_reference": ["EXP001"],
-                "pd": [0.01],
-                "lgd": [0.45],
-                "ead_final": [1_000_000.0],
-                "maturity": [2.5],
-                "exposure_class": ["corporate"],
-                "exposure_class_applied": ["corporate"],
-                "approach": ["foundation_irb"],
-                "approach_applied": ["foundation_irb"],
-                "rwa": [1_000_000.0],
-                "risk_weight": [1.00],
-                "expected_loss": [4_500.0],
-                "is_defaulted": [False],
-                "guaranteed_portion": [600_000.0],
-                "unguaranteed_portion": [400_000.0],
-                "guarantor_entity_type": ["institution"],
-                "guarantor_cqs": [1],
-                "guarantor_approach": ["irb"],
-                "guarantor_pd": [0.002],
-            }
+        lf = pad_property_security(
+            pl.LazyFrame(
+                {
+                    "exposure_reference": ["EXP001"],
+                    "pd": [0.01],
+                    "lgd": [0.45],
+                    "ead_final": [1_000_000.0],
+                    "maturity": [2.5],
+                    "exposure_class": ["corporate"],
+                    "exposure_class_applied": ["corporate"],
+                    "approach": ["foundation_irb"],
+                    "approach_applied": ["foundation_irb"],
+                    "rwa": [1_000_000.0],
+                    "risk_weight": [1.00],
+                    "expected_loss": [4_500.0],
+                    "is_defaulted": [False],
+                    "guaranteed_portion": [600_000.0],
+                    "unguaranteed_portion": [400_000.0],
+                    "guarantor_entity_type": ["institution"],
+                    "guarantor_cqs": [1],
+                    "guarantor_approach": ["irb"],
+                    "guarantor_pd": [0.002],
+                }
+            )
         )
 
         calculated = lf.pipe(apply_post_model_adjustments, b31_config).pipe(

@@ -49,6 +49,7 @@ from rwa_calc.engine.hierarchy.enrich import (
     attach_obligor_country_to_equity,
     enrich_with_lending_group,
     enrich_with_property_coverage,
+    enrich_with_residential_security,
 )
 from rwa_calc.engine.hierarchy.facility_undrawn import calculate_facility_undrawn
 from rwa_calc.engine.hierarchy.graph import (
@@ -194,6 +195,9 @@ class HierarchyResolver:
 
         # .over() window functions avoid group_by + join-back plan tree branching
         exposures = self._enrich_with_property_coverage(exposures, property_collateral)
+        # PS1/26 Art. 147(5B): residential security on every route the CRM
+        # allocates collateral on, links and the facility cascade included (P1.324).
+        exposures = enrich_with_residential_security(exposures, collateral, data.collateral_links)
         exposures = self._enrich_with_lending_group(exposures, data.lending_mappings)
 
         # Derive lending_group_totals for bundle API contract

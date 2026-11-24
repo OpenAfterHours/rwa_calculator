@@ -244,6 +244,11 @@ def calculate_single_irb_exposure(
         "provision_allocated": [0.0],
         "ava_amount": [0.0],
         "other_own_funds_reductions": [0.0],
+        # Property-security carriers (P1.324): no property evidence.
+        "property_type": [None],
+        "residential_collateral_value_uncapped": [0.0],
+        "re_collateral_may_be_residential": [False],
+        "is_uk_residential_mortgage_commitment": [False],
     }
 
     if turnover_m is not None:
@@ -268,6 +273,7 @@ def calculate_single_irb_exposure(
             "lgd": pl.Float64,
             "purchased_receivables_subtype": pl.String,
             "sme_size_metric_gbp": pl.Float64,
+            "property_type": pl.String,
         },
     ).lazy()
     require_exposure_class_values(df, "irb_branch")

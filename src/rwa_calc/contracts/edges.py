@@ -984,6 +984,24 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "commercial_collateral_value_uncapped": EdgeColumn(dtype=pl.Float64),
         "has_facility_property_collateral": EdgeColumn(dtype=pl.Boolean),
         "re_collateral_non_qualifying": EdgeColumn(dtype=pl.Boolean),
+        # Real estate that is, or may be, residential reaches the exposure
+        # (P1.324; ``enrich.enrich_with_residential_security``). Presence, never
+        # weighted, independent of row order, read on the routes the CRM
+        # allocates collateral on: direct, the parent or ANY ancestor facility,
+        # the obligor, and each ``collateral_links`` beneficiary. Unlike
+        # ``residential_collateral_value`` (drawn-basis, 0 on an undrawn row) and
+        # ``property_type`` (keep-first), it sees the house behind an undrawn row,
+        # a mixed security, a link, a root-facility pledge and a residential
+        # ``collateral_type`` synonym. The Basel 3.1 IRB floors read it to keep a
+        # residential-secured retail row on the Art. 154(4A)(b) / 163(1)(b) /
+        # 164(4)(a) limbs. Required: the hierarchy always emits it (False with no
+        # usable collateral table).
+        "re_collateral_may_be_residential": EdgeColumn(
+            dtype=pl.Boolean,
+            citation="PS1/26 Art. 147(5B)",
+            null_meaning="unknown (e.g. a synthetic CCR row): read as possibly residential, "
+            "so a commercial-typed row stays on the residential limbs",
+        ),
         # Collateral-level ADC flags, any-True per beneficiary and OR-ed across
         # the direct / facility / counterparty levels (review RE-01 / RE-02).
         # The classifier ORs ``re_collateral_is_adc`` into ``is_adc`` and carries

@@ -343,7 +343,7 @@ drives the following downstream treatments:
 | **Supporting factors** (`engine/supporting_factors.py:295,300`) | Defaulted exposures **excluded** from SME supporting factor (0.7619) | CRR Art. 501 |
 | **EL vs provisions** (`engine/aggregator/_el_summary.py:90–96`) | `is_defaulted` partitions Pool A (non-defaulted) and Pool C/D (defaulted) for Art. 159(3) two-branch rule | CRR/B31 Art. 159 |
 | **COREP reporting** (`reporting/corep/{c07,c08,c09}.py`) | Defaulted rows in C 07.00 / C 08.01 / C 08.02 / C 09.01 | PS1/26 Annex II |
-| **Pillar III reporting** (`reporting/pillar3/{cr5,cr6,cms1,cms2}.py`) | CR5 defaulted 300% bucket; CR6 defaulted obligors forced to the 100% PD band (derived allocation column); CMS1/CMS2 defaulted columns | PS1/26 Annex XXII/XXIV |
+| **Pillar III reporting** (`reporting/pillar3/{cr5,cr6,cms1,cms2}.py`) | CR5 row 10 "Exposures in default", banded at the Art. 127 risk weight the exposure takes (CR5 has no 300% column); CR6 defaulted obligors forced to the 100% PD band (derived allocation column); CMS1/CMS2 defaulted columns | PS1/26 Annex XXII/XXIV |
 
 ---
 

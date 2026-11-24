@@ -23,6 +23,7 @@ Templates:
 References:
     CRR Part 8 (Art. 438, 444, 452, 453)
     PRA PS1/26 Disclosure (CRR) Part, Art. 456, Art. 2a
+    PRA PS1/26 Annex XIX (UKB CR4/CR5 published layouts), Annex XX (their instructions)
     PRA PS1/26 Annex XXII (CR9/CR9.1 back-testing instructions)
 """
 
@@ -111,18 +112,6 @@ _LBL_COL_EW_AVG_PD_POST_FLOOR = "Exposure-weighted average PD (%) — post input
 _GRP_RISK_WEIGHT = "Risk weight"
 _GRP_EXPOSURE_BREAKDOWN = "Exposure breakdown"
 _GRP_FUNDED_CP = "Funded credit protection"
-
-
-# ---------------------------------------------------------------------------
-# Letter-ref helper (used for CR5 risk-weight bucket columns)
-# ---------------------------------------------------------------------------
-
-
-def _letter_ref(i: int) -> str:
-    """Convert 0-based index to letter ref: 0->a, 25->z, 26->aa, 27->ab."""
-    if i < 26:
-        return chr(ord("a") + i)
-    return "a" + chr(ord("a") + i - 26)
 
 
 # ---------------------------------------------------------------------------
@@ -294,69 +283,99 @@ B31_CR4_ROWS.append(P3Row("17", "Total", is_total=True))
 # ---------------------------------------------------------------------------
 # CR5 — SA Risk Weight Allocation (Art. 444(e))
 # ---------------------------------------------------------------------------
+#
+# Every CR5 column carries the letter its published template gives it, written
+# out beside its weight rather than computed from a position: the Basel 3.1
+# template skips a letter, so a positional letter is wrong from that point on.
+# A band is (published column ref, risk weight, label).
+
+# UK CR5 (CRR Annex XX, docs/assets/crr-annex-xx-instructions-regarding-disclosure.PDF
+# page index 3): columns "a - o Risk weight" (fourteen named weights a-n plus the
+# Other column o), then "p Total" and "q Of which unrated".
+_CRR_CR5_BANDS: tuple[tuple[str, float, str], ...] = (
+    ("a", 0.00, "0%"),
+    ("b", 0.02, "2%"),
+    ("c", 0.04, "4%"),
+    ("d", 0.10, "10%"),
+    ("e", 0.20, "20%"),
+    ("f", 0.35, "35%"),
+    ("g", 0.50, "50%"),
+    ("h", 0.70, "70%"),
+    ("i", 0.75, "75%"),
+    ("j", 1.00, "100%"),
+    ("k", 1.50, "150%"),
+    ("l", 2.50, "250%"),
+    ("m", 3.70, "370%"),
+    ("n", 12.50, "1250%"),
+)
+_CRR_CR5_TRAILING_REFS: tuple[str, str, str] = ("o", "p", "q")
+
+# UKB CR5 (PS1/26 Annex XIX, sheet 'UKB CR5', rows 11-12 of the published workbook,
+# fetched by scripts/download_docs.py as
+# docs/assets/ps1-26-annex-xix-credit-risk-sa-disclosure-templates.xlsx and linked
+# from docs/assets/ps126app1.pdf para 6.50; Annex XX gives the column ranges
+# "a - ac Risk weight", "ad Total", "ae Of which unrated"). The risk-weight block is
+# 27 named weights plus "Others" at ac, and the template does NOT use the letter z:
+# 250% is y and 400% is aa. No PS1/26 rule assigns 300%, so there is no 300% column;
+# a leg at a weight the template does not name is reported in "Others" (ac).
+_B31_CR5_BANDS: tuple[tuple[str, float, str], ...] = (
+    ("a", 0.00, "0%"),
+    ("b", 0.02, "2%"),
+    ("c", 0.04, "4%"),
+    ("d", 0.10, "10%"),
+    ("e", 0.15, "15%"),
+    ("f", 0.20, "20%"),
+    ("g", 0.25, "25%"),
+    ("h", 0.30, "30%"),
+    ("i", 0.35, "35%"),
+    ("j", 0.40, "40%"),
+    ("k", 0.45, "45%"),
+    ("l", 0.50, "50%"),
+    ("m", 0.60, "60%"),
+    ("n", 0.65, "65%"),
+    ("o", 0.70, "70%"),
+    ("p", 0.75, "75%"),
+    ("q", 0.80, "80%"),
+    ("r", 0.85, "85%"),
+    ("s", 1.00, "100%"),
+    ("t", 1.05, "105%"),
+    ("u", 1.10, "110%"),
+    ("v", 1.30, "130%"),
+    ("w", 1.35, "135%"),
+    ("x", 1.50, "150%"),
+    ("y", 2.50, "250%"),
+    # z: not a column of the published template.
+    ("aa", 4.00, "400%"),
+    ("ab", 12.50, "1250%"),
+)
+_B31_CR5_TRAILING_REFS: tuple[str, str, str] = ("ac", "ad", "ae")
 
 CRR_CR5_RISK_WEIGHTS: list[tuple[float, str]] = [
-    (0.00, "0%"),
-    (0.02, "2%"),
-    (0.04, "4%"),
-    (0.10, "10%"),
-    (0.20, "20%"),
-    (0.35, "35%"),
-    (0.50, "50%"),
-    (0.70, "70%"),
-    (0.75, "75%"),
-    (1.00, "100%"),
-    (1.50, "150%"),
-    (2.50, "250%"),
-    (3.70, "370%"),
-    (12.50, "1250%"),
+    (rate, label) for _ref, rate, label in _CRR_CR5_BANDS
 ]
-
 B31_CR5_RISK_WEIGHTS: list[tuple[float, str]] = [
-    (0.00, "0%"),
-    (0.02, "2%"),
-    (0.04, "4%"),
-    (0.10, "10%"),
-    (0.15, "15%"),
-    (0.20, "20%"),
-    (0.25, "25%"),
-    (0.30, "30%"),
-    (0.35, "35%"),
-    (0.40, "40%"),
-    (0.45, "45%"),
-    (0.50, "50%"),
-    (0.60, "60%"),
-    (0.65, "65%"),
-    (0.70, "70%"),
-    (0.75, "75%"),
-    (0.80, "80%"),
-    (0.85, "85%"),
-    (1.00, "100%"),
-    (1.05, "105%"),
-    (1.10, "110%"),
-    (1.30, "130%"),
-    (1.35, "135%"),
-    (1.50, "150%"),
-    (2.50, "250%"),
-    (3.00, "300%"),
-    (4.00, "400%"),
-    (12.50, "1250%"),
+    (rate, label) for _ref, rate, label in _B31_CR5_BANDS
 ]
 
 
 def _build_cr5_columns(
-    rw_list: list[tuple[float, str]],
+    bands: tuple[tuple[str, float, str], ...],
+    trailing_refs: tuple[str, str, str],
     *,
     is_b31: bool,
 ) -> list[P3Column]:
-    """Build CR5 columns from a risk-weight band list."""
-    cols: list[P3Column] = []
-    for i, (_, label) in enumerate(rw_list):
-        cols.append(P3Column(_letter_ref(i), label, _GRP_RISK_WEIGHT))
-    n = len(rw_list)
-    cols.append(P3Column(_letter_ref(n), "Other/Deducted", _GRP_RISK_WEIGHT))
-    cols.append(P3Column(_letter_ref(n + 1), "Total"))
-    cols.append(P3Column(_letter_ref(n + 2), "Of which: unrated"))
+    """Build the CR5 columns at their published refs.
+
+    Order is the bands, then Other, Total and Of which unrated (``trailing_refs``),
+    then (Basel 3.1 only) the ba-bd exposure breakdown. ``cr5.build_cr5_spec``
+    pairs the band columns with the band list by position, so this order is a
+    contract; the refs themselves are the published letters, never derived.
+    """
+    other_ref, total_ref, unrated_ref = trailing_refs
+    cols = [P3Column(ref, label, _GRP_RISK_WEIGHT) for ref, _rate, label in bands]
+    cols.append(P3Column(other_ref, "Other/Deducted", _GRP_RISK_WEIGHT))
+    cols.append(P3Column(total_ref, "Total"))
+    cols.append(P3Column(unrated_ref, "Of which: unrated"))
     if is_b31:
         cols.extend(
             [
@@ -369,8 +388,12 @@ def _build_cr5_columns(
     return cols
 
 
-CRR_CR5_COLUMNS: list[P3Column] = _build_cr5_columns(CRR_CR5_RISK_WEIGHTS, is_b31=False)
-B31_CR5_COLUMNS: list[P3Column] = _build_cr5_columns(B31_CR5_RISK_WEIGHTS, is_b31=True)
+CRR_CR5_COLUMNS: list[P3Column] = _build_cr5_columns(
+    _CRR_CR5_BANDS, _CRR_CR5_TRAILING_REFS, is_b31=False
+)
+B31_CR5_COLUMNS: list[P3Column] = _build_cr5_columns(
+    _B31_CR5_BANDS, _B31_CR5_TRAILING_REFS, is_b31=True
+)
 
 # CR5 rows are the same as CR4 rows under CRR (byte-identical).
 CRR_CR5_ROWS: list[P3Row] = CRR_CR4_ROWS
@@ -1084,18 +1107,28 @@ CCR2_ROWS: list[P3Row] = [
 # CCR3 — SA-CCR EAD by risk weight (Art. 444(e))
 # ---------------------------------------------------------------------------
 #
-# Allocates the SA-CCR EAD across the SA risk-weight bands: one ROW per band
-# (mirroring CR5's band rates), plus an "Other" catch-all and a Total row. CCR3
-# reuses the CR5 risk-weight band lists so the band boundaries stay
-# framework-consistent. The single EAD column carries each band's CCR EAD.
+# Allocates the SA-CCR EAD across the SA risk-weight bands: one ROW per band,
+# plus an "Other" catch-all and a Total row. The single EAD column carries each
+# band's CCR EAD. CRR reuses the UK CR5 band list.
+#
+# Basel 3.1 keeps its own band list. This in-repo CCR3 is not the published
+# UKB CCR3, which is a grid of exposure-class rows 1-10 against risk-weight
+# columns a-p, q Others and r Total (PS1/26 Annex XXV,
+# docs/assets/ps1-26-annex-xxv-ccr-disclosure-templates.xlsx). Laying it out as
+# published is a separate item. Until then its rows stay as they were before
+# UKB CR5 dropped its 300% column (D4.80): the UKB CR5 bands plus a 300% row,
+# numbered 1-30. They are not renumbered now only to be renumbered again when
+# the published layout lands.
 
 CCR3_COLUMNS: list[P3Column] = [
     P3Column("a", "Exposure value post-CRM (EAD)"),
 ]
 
+_B31_CCR3_RISK_WEIGHTS: list[tuple[float, str]] = sorted([*B31_CR5_RISK_WEIGHTS, (3.00, "300%")])
+
 CCR3_RISK_WEIGHTS: dict[str, list[tuple[float, str]]] = {
     "CRR": CRR_CR5_RISK_WEIGHTS,
-    "BASEL_3_1": B31_CR5_RISK_WEIGHTS,
+    "BASEL_3_1": _B31_CCR3_RISK_WEIGHTS,
 }
 
 
@@ -1109,8 +1142,8 @@ def _build_ccr3_rows(rw_list: list[tuple[float, str]]) -> list[P3Row]:
     return rows
 
 
-CRR_CCR3_ROWS: list[P3Row] = _build_ccr3_rows(CRR_CR5_RISK_WEIGHTS)
-B31_CCR3_ROWS: list[P3Row] = _build_ccr3_rows(B31_CR5_RISK_WEIGHTS)
+CRR_CCR3_ROWS: list[P3Row] = _build_ccr3_rows(CCR3_RISK_WEIGHTS["CRR"])
+B31_CCR3_ROWS: list[P3Row] = _build_ccr3_rows(CCR3_RISK_WEIGHTS["BASEL_3_1"])
 
 
 # ---------------------------------------------------------------------------

@@ -239,7 +239,8 @@ class TestTemplateDefinitions:
         assert len(CRR_CR5_RISK_WEIGHTS) == 14
 
     def test_cr5_b31_risk_weight_count(self):
-        assert len(B31_CR5_RISK_WEIGHTS) == 28
+        # PS1/26 Annex XIX UKB CR5: 27 named weights (a-y, aa, ab; no z) + Others at ac.
+        assert len(B31_CR5_RISK_WEIGHTS) == 27
 
     def test_cr5_crr_columns_include_total_and_unrated(self):
         refs = [c.ref for c in CRR_CR5_COLUMNS]

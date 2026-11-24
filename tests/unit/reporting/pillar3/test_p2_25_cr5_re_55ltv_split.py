@@ -29,11 +29,11 @@ References:
     - Art. 124L: residual portion → counterparty risk weight (natural person → 75%)
     - PRA PS1/26 Annex XX: UKB CR5 template instructions, RW band allocation
 
-B31 CR5 column refs (28 risk-weight bands, zero-indexed via _letter_ref):
-    index  5 → 0.20 (20%) → "f"  (secured row)
-    index 15 → 0.75 (75%) → "p"  (residual row)
-    index 28 → "ac" Other/Deducted
-    index 29 → "ad" Total
+B31 CR5 column refs (the published UKB CR5 letters, PS1/26 Annex XIX; z is unused):
+    0.20 (20%) → "f"  (secured row)
+    0.75 (75%) → "p"  (residual row)
+    "ac" Others (Other/Deducted)
+    "ad" Total
 """
 
 from __future__ import annotations
@@ -63,14 +63,13 @@ from tests.fixtures.p2_25.p2_25 import (
 from tests.fixtures.recon_ledger import LedgerShimPillar3Generator
 
 # ---------------------------------------------------------------------------
-# B31 CR5 structural constants (derived from _build_cr5_columns / _letter_ref)
+# CR5 structural constants (the published Total column of each template)
 # ---------------------------------------------------------------------------
 
-# B31 has 28 risk-weight bands (indices 0-27).
-# Total column = _letter_ref(28+1) = _letter_ref(29) = "ad"
+# UKB CR5 (PS1/26 Annex XIX): 27 named weights a-y, aa, ab, Others ac, Total "ad".
 _B31_CR5_TOTAL_COL: str = "ad"
 
-# CRR has 14 risk-weight bands. Total = _letter_ref(15) = "p"
+# UK CR5 (CRR Annex XX): 14 named weights a-n, Other o, Total "p".
 _CRR_CR5_TOTAL_COL: str = "p"
 
 

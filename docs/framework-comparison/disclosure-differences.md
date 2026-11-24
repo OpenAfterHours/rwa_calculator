@@ -31,7 +31,7 @@ summarises the key differences. For complete column and row definitions, see the
 | **OV1 equity rows** | Row UK 4a (equity simple RW) | Rows 11-14 (IRB transitional, CIU fund approaches) |
 | **OV1 output floor** | Not applicable | Row 26 (floor multiplier), row 27 (floor adjustment) |
 | **Pre-floor RWEA / ratios** | Not applicable | UKB **KM1** rows 4a / 5b / 6b / 7b — *not* OV1 (this calculator does not produce KM1) |
-| **CR5 risk weight columns** | 15 buckets (a-o) | 29 buckets (a-ac) — adds 14 granular weights |
+| **CR5 risk weight columns** | 15 columns (a-o): 14 named weights at a-n, Others at o | 28 columns (a-ac): 27 named weights at a-y and aa-ab, Others at ac — no column z and no 300%; adds 14 granular weights and drops 370% |
 | **CR5 exposure breakdown** | Total only (p, q) | Total + on-BS/off-BS/avg CCF/total (ad-ae, ba-bd) |
 | **CR6 PD allocation** | Based on estimated PD | Based on **pre-input-floor** PDs |
 | **CR6 RWEA** | Includes supporting factors | Includes **post-model adjustments**; no supporting factors |
@@ -96,7 +96,7 @@ Column structure unchanged (a-f).
 
 | Change | Col(s) | Description |
 |--------|--------|-------------|
-| **Expanded** | a-ac | 29 risk weight buckets (was a-o, 15 buckets). Adds 15%, 25%, 30%, 40%, 45%, 60%, 65%, 80%, 85%, 105%, 110%, 130%, 135%, 400%. Removes 370%. |
+| **Expanded** | a-ac | 28 columns (was a-o, 15 columns): 27 named risk weights at a-y and aa-ab (was 14 at a-n) plus Others at ac (was o). The template has no column z and no 300% weight — 250% is y, 400% is aa. Adds 15%, 25%, 30%, 40%, 45%, 60%, 65%, 80%, 85%, 105%, 110%, 130%, 135%, 400%. Removes 370%. Layout per PS1/26 Annex XIX, sheet 'UKB CR5'. |
 | **Renamed** | ad | Total (was col p) |
 | **Renamed** | ae | Of which: unrated (was col q) |
 | **Added** | ba | On-BS exposure amount (pre-CF/CRM) |

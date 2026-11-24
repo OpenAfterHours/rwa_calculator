@@ -273,7 +273,8 @@ exposure class. It reveals the distribution of risk across the portfolio.
 
     | Col | Column | Description |
     |-----|--------|-------------|
-    | a-ac | Risk weights 0%-1250% | Exposure value allocated to each risk weight (**29 buckets**) |
+    | a-y, aa-ab | Risk weights 0%-1250% | Exposure value allocated to each of the **27** named risk weights. The template has no column z: 250% is y, 400% is aa |
+    | ac | Others | Exposure value at a weight no column names (the residual of Total) |
     | ad | Total | Total exposure value post CRM and post CF |
     | ae | Of which: unrated | Exposures without ECAI credit assessment |
     | **ba** | **On-BS exposure amount** | On-BS after provisions (pre-CF/CRM) |
@@ -283,8 +284,10 @@ exposure class. It reveals the distribution of risk across the portfolio.
 
     Key changes:
 
-    - Risk weight buckets expand from **15 to 29** — adds 15%, 25%, 30%, 40%, 45%,
-      60%, 65%, 80%, 85%, 105%, 110%, 130%, 135%, 400% (removes 370%)
+    - Named risk weights expand from **14 to 27** (each template also has an
+      Others column) — adds 15%, 25%, 30%, 40%, 45%, 60%, 65%, 80%, 85%, 105%,
+      110%, 130%, 135%, 400% (removes 370%). There is no 300% column; the
+      layout is PS1/26 Annex XIX, sheet 'UKB CR5'
     - New columns **ba-bd** provide an on-BS/off-BS breakdown with average CCF
     - Split reporting for regulatory real estate (portion up to 55% LTV vs above)
     - Currency mismatch exposures reported against the weight that would apply

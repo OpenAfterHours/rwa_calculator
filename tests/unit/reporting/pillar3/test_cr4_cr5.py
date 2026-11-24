@@ -448,7 +448,7 @@ class TestCR5CurrencyMismatchBucketing:
         retail_row = bundle.cr5.filter(pl.col("row_ref") == "8")
         assert len(retail_row) == 1
 
-        # "ac" is Other/Deducted in B31 (n=28 bands → index 28 → chr('a'+28-26)='ac')
+        # "ac" is Others (Other/Deducted) in the published UKB CR5 (PS1/26 Annex XIX)
         ead_in_other = retail_row["ac"][0]
         assert ead_in_other != pytest.approx(100_000.0), (
             f"Mismatch row EAD (100_000) must NOT be in Other/Deducted ('ac'), "

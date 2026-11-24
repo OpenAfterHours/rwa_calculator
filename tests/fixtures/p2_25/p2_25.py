@@ -28,9 +28,9 @@ Scenario design (P2.25 — UKB CR5 sub-rows 9f / 9g):
     Row 9 Total still equals parent EAD (1,000,000); the sub-rows are "of which"
     memo rows and are NOT double-counted into grand Total row 17.
 
-    B31 risk-weight band indices (B31_CR5_RISK_WEIGHTS, zero-based):
-        index 5  → 0.20 (20%) → column ref "f"
-        index 15 → 0.75 (75%) → column ref "p"
+    B31 risk-weight band columns (published UKB CR5 refs, templates._B31_CR5_BANDS):
+        0.20 (20%) → column ref "f"
+        0.75 (75%) → column ref "p"
 
     RWEA check (informational, not asserted by CR5):
         secured:  550,000 × 0.20 =  110,000
@@ -104,9 +104,9 @@ MATERIALLY_DEPENDENT: bool = False
 PROPERTY_LTV: float = 1.0
 
 # --- B31 CR5 column refs ---
-# B31_CR5_RISK_WEIGHTS (28 bands), zero-indexed:
-#   index 5  → 0.20 (20%) → _letter_ref(5)  = "f"
-#   index 15 → 0.75 (75%) → _letter_ref(15) = "p"
+# Published UKB CR5 column refs (PS1/26 Annex XIX; templates._B31_CR5_BANDS):
+#   0.20 (20%) → "f"
+#   0.75 (75%) → "p"
 B31_COL_SECURED: str = "f"  # 20% band — secured row lands here
 B31_COL_RESIDUAL: str = "p"  # 75% band — residual row lands here
 

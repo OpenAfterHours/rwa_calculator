@@ -9,16 +9,19 @@ Pipeline position:
 findings — trust, the known-defect floor, the baseline's status, and (once
 banked) the two-way set ratchet per ladder — and exits non-zero if any fired. Until this
 file nothing called ``check()``, ``ratchet()``, ``known_defect_floor()`` or
-``render_summary()``, and the committed baseline is ``UNBANKED``, so the nightly
-cannot reach the ``BANKED`` branch or the return-0 path either. A gate that has
-never been seen to pass cannot be shown to tell a good run from a bad one
+``render_summary()``, and until the first bank (from the 2026-11-23 nightly's
+scorecards) the committed baseline was ``UNBANKED``, so the nightly could not
+reach the ``BANKED`` branch or the return-0 path either. A gate that has never
+been seen to pass cannot be shown to tell a good run from a bad one
 (``.claude/LESSONS.md`` B9), and a gate whose branches have never been seen to
-fire can lose one silently in a refactor.
+fire can lose one silently in a refactor. A banked nightly still only ever shows
+the branches its own campaign happens to reach — on a clean night, none of the
+``BANKED`` findings.
 
 So this pins both halves, on synthetic ``Board`` objects with no pipeline run:
 
 - a trust-clean, floor-clean ``BANKED`` pair whose sets equal the baseline returns
-  0 — the one state the nightly has never produced;
+  0 — the state no nightly reached before the first bank;
 - each of the 18 finding kinds, perturbed ALONE on top of that clean pair, returns
   1 with exactly one finding that names it — per ladder where the check is per
   ladder, so a check that only ever looked at one ladder fails too. The
@@ -48,7 +51,7 @@ what makes a lost check red.
 
 References:
 - scripts/injection_ratchet.py — ``check``, ``render_summary``
-- docs/development/defect-injection.md — "The ratchet, and its deferred baseline"
+- docs/development/defect-injection.md — "The ratchet, and its baseline"
 - .claude/LESSONS.md B9 — a gate must be seen to pass and to fail
 """
 
@@ -89,7 +92,7 @@ _LIVE_ID = _LIVE[0]
 
 
 # =============================================================================
-# The clean pair, and the one state the nightly has never produced
+# The clean pair, and the one state no nightly reached before the first bank
 # =============================================================================
 
 

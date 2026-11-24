@@ -5,14 +5,16 @@ name: Nightly Defect Injection
 # mutant into `src/` at a time, walks a ladder of gates cheapest-first, and
 # records which gate — if any — went red. See docs/development/defect-injection.md.
 #
-# WHAT THIS WORKFLOW DOES NOT DO YET: it does not gate on a detection rate,
-# because no detection rate has ever been measured. The campaign has never been
-# run end to end. `scripts/injection_baseline.json` is committed in an explicitly
-# UN-BANKED state and `scripts/injection_ratchet.py --check` exits NON-ZERO while
-# it stays that way, so this workflow is red-by-design until the first campaign is
-# measured and banked. That is deliberate: a workflow claiming to gate on a number
-# nobody has measured would be worse than no workflow. The blockers, and the exact
-# banking command, are recorded in the baseline file and in the doc.
+# WHAT IT GATES ON: the banked verdict SETS, never the rate. The first baseline
+# in `scripts/injection_baseline.json` was banked from the scheduled run of
+# 2026-11-23 (run 45160106928, master at 845b4e6): both ladders trust-clean, 20
+# DETECTED / 0 ESCAPED / 2 UNREACHABLE each, the two UNREACHABLE being the
+# `expect_unreachable` decay mutants. Until then the baseline was UN-BANKED and
+# this workflow went red every night by design, which is an alarm that always
+# fires (.claude/LESSONS.md B9): a real new escape could not be told apart from
+# the standing red. Red now means a finding: a trust failure, the known-defect
+# floor, or a banked set that moved — an improvement included, which is banked
+# deliberately with the command in the baseline file and the doc.
 #
 # It is scheduled rather than per-PR because a campaign is hours of runner time —
 # 22 mutants, each probed for reachability and then walked up to nine gates — and
@@ -43,9 +45,9 @@ on:
   schedule:
     - cron: '17 2 * * *'
 
-  # Hand-triggerable, and that matters more than the cron for now: the FIRST real
-  # run will be a manual one, once the reachability-control and quiet-tree
-  # blockers clear, and its output is what gets banked as the baseline.
+  # Hand-triggerable, to re-measure after a deliberate catalogue or gate change
+  # and bank the result without waiting for the cron. A runner always checks out a
+  # clean tree, so the quiet-tree concern of a local run does not arise here.
   #
   # Deliberately no inputs. A filtered campaign (`--mutants`, `--categories`)
   # cannot be banked — the ratchet refuses a scorecard that does not carry a
@@ -71,13 +73,14 @@ jobs:
     # The 6-hour hosted-runner ceiling would cancel the job opaquely. Failing at
     # 330 minutes with our own timeout is legible in the log instead.
     #
-    # UNMEASURED: nobody has run a full campaign, so the real wall clock is
-    # unknown. If a leg hits this ceiling, the fix is NOT to raise it past 360 —
-    # it is to shard the catalogue across more matrix legs. `--resume` is not a
-    # shortcut for this: it merges into an earlier scorecard at the same `--out`,
-    # but each leg here starts from a fresh checkout with no earlier file, and
-    # the ratchet takes one scorecard per ladder — so sharding still needs a step
-    # that combines the legs' scorecards before the ratchet reads them.
+    # Measured on 2026-11-23 (run 45160106928), 22 mutants: legacy 1h23m, full
+    # 3h04m, so the full leg has ~2h25m of headroom and each new mutant costs it
+    # roughly 8 minutes. If a leg hits this ceiling, the fix is NOT to raise it
+    # past 360 — it is to shard the catalogue across more matrix legs. `--resume`
+    # is not a shortcut for this: it merges into an earlier scorecard at the same
+    # `--out`, but each leg here starts from a fresh checkout with no earlier file,
+    # and the ratchet takes one scorecard per ladder — so sharding still needs a
+    # step that combines the legs' scorecards before the ratchet reads them.
     timeout-minutes: 330
     strategy:
       # Both ladders run to completion even if one fails. `legacy` is the BEFORE
@@ -103,9 +106,18 @@ jobs:
         run: uv run python tests/fixtures/generate_all.py
 
       # Before spending hours: prove every mutant still applies. `old` must occur
-      # exactly once in its target and the replacement must not be a no-op. This
-      # is what stops the catalogue rotting silently as the code moves underneath
-      # it, and it costs seconds.
+      # exactly once in its target and the replacement must not be a no-op. It
+      # costs seconds. The same check runs on every PR as
+      # tests/contracts/test_defect_catalogue_applies.py, so drift should be red on
+      # the change that causes it; this step catches anything that reached master
+      # without that suite (it died here on five nights, 2026-11-17 to -21).
+      #
+      # That test is SKIPPED inside the campaign below: the `contracts` rung
+      # collects it while a mutant is applied, when the mutant's own `old` string
+      # is gone by construction. `injected()` exports DEFECT_INJECTION_MUTANT to
+      # every gate for exactly that window and the test skips under it; without
+      # the skip it went red on every mutant that reached the rung. This step is
+      # what still runs the check on the clean tree.
       - name: Catalogue self-test
         run: uv run python scripts/defect_injection.py --self-test
 
@@ -174,10 +186,10 @@ jobs:
           merge-multiple: true
           path: nightly-injection
 
-      # Rendered and uploaded BEFORE the gate runs, on purpose. `--check` is
-      # expected to fail while the baseline is un-banked, and the board — the
-      # detection rate, the mean tier of detection, and the ESCAPED list — is the
-      # artefact that has to survive that failure.
+      # Rendered and uploaded BEFORE the gate runs, on purpose. When `--check`
+      # fails, the board — the detection rate, the mean tier of detection, and the
+      # ESCAPED list — is the artefact that has to survive that failure, because it
+      # is what says which mutant moved.
       - name: Render the combined before/after board
         run: |
           uv run python scripts/injection_ratchet.py --summary \
@@ -193,13 +205,21 @@ jobs:
 
       # THE GATE, and the last step so its exit code is the job's verdict.
       #
-      # It fails on any of: a catalogue mutant with no verdict, a mutant whose
-      # reachability contradicts its `expect_unreachable` flag (which is what
-      # licenses every "not detected" verdict), any gate that TIMED OUT (neither
-      # a pass nor a failure — a gate that never finished, so the harness scores
-      # a mutant no gate caught while one timed out UNPROVEN, never ESCAPED or
-      # UNREACHABLE), any UNPROVEN or ERROR verdict, known-defect detection below
-      # 90%, an un-banked baseline, or any movement in the banked verdict sets.
+      # It fails on any of: a catalogue mutant with no verdict; a mutant flagged
+      # `expect_unreachable` that the PROBE finds reachable (the dead-path control
+      # is what licenses every "not detected" verdict); a mutant expected to be
+      # reachable whose VERDICT is UNREACHABLE (no gate caught it and the probe saw
+      # nothing); any gate that TIMED OUT (neither a pass nor a failure — a gate
+      # that never finished, so the harness scores a mutant no gate caught while
+      # one timed out UNPROVEN, never ESCAPED or UNREACHABLE); any UNPROVEN or
+      # ERROR verdict; known-defect detection below 90%; an un-banked baseline; or
+      # any movement in the banked verdict sets.
+      #
+      # The reachability check is one-sided on the probe. An expected-reachable
+      # mutant that a gate catches passes whatever the probe says, so the
+      # reachable control's REACHABLE result is not enforced: a contradicted probe
+      # in that direction is listed under `expectation_mismatches` in the
+      # scorecard and the campaign log, and nothing gates on it.
       #
       # Invoked as the script rather than through pytest so the exit code is the
       # gate's own — the pattern the template-coverage and coverage-ratchet jobs

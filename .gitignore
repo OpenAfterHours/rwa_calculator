@@ -30,9 +30,13 @@ docs/assets/*.zip
 # coverage_report.py full output (3 MB; the ratchet baseline lives in arch_metrics.json)
 scripts/coverage_metrics.json
 
-# defect_injection.py campaign output, and the checkpoint it renames over it
+# defect_injection.py campaign output and the checkpoint it renames over it, and
+# the nightly's downloaded scorecards and boards (injection_ratchet.py reads them
+# from here; only the banked baseline, scripts/injection_baseline.json, is ever
+# committed)
 scripts/defect_scorecard.json
 scripts/defect_scorecard.json.partial
+nightly-injection/
 
 # /brag-slim launch-video output (.claude/skills/brag-slim)
 brag-output*/

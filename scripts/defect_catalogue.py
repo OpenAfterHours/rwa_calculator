@@ -23,13 +23,26 @@ descending order of evidential weight:
 Two entries are deliberate **controls**:
 
 - ``control-unreachable-output-floor-full`` mutates a rulepack scalar that is
-  only read under an election nothing exercises. It MUST come back UNREACHABLE.
-  If the scorecard reports it as an escape, the reachability probe is broken and
-  every other "not detected" verdict is suspect. This is not hypothetical: the
-  same mutation once produced 52/52 passing floor properties, which read as
-  proof the properties were vacuous. They were not; the path was dead.
+  only read under an election no RUNS portfolio makes. The reachability probe MUST
+  find it unreachable. In the trust check this control, like every
+  ``expect_unreachable`` mutant, is judged on the probe, not on the verdict:
+  ``injection_ratchet.py --check`` fails if the probe calls it reachable, and a
+  gate may still catch it. One does: a unit test makes the election itself and
+  calls the production helper that reads the scalar, so the path is dead to the
+  probe's RUNS matrix, not to the test suite. If the probe calls it reachable,
+  the probe is broken and every other "not detected" verdict is suspect. This is
+  not hypothetical: the same mutation once produced 52/52 passing floor
+  properties, which read as proof the properties were vacuous. They were not; the
+  path was dead to every portfolio they ran. The banked set ratchet is separate
+  and judges its VERDICT like any other mutant's: if that unit test went, the
+  control would fall from DETECTED to UNREACHABLE and the nightly would go red.
 - ``control-reachable-output-floor-schedule`` mutates the step that IS read, so
-  the pair distinguishes "no gate covers this" from "nothing ran".
+  the pair distinguishes "no gate covers this" from "nothing ran". Its REACHABLE
+  result is NOT enforced: the trust check fails an expected-reachable mutant
+  only when it scores UNREACHABLE (no gate caught it and the probe saw nothing),
+  so while a gate catches this control, ``--check`` passes whatever the probe
+  says. The harness still lists a contradicted probe under
+  ``expectation_mismatches``.
 
 Adding a mutant is one entry here. The runner never needs to change.
 """
@@ -384,14 +397,21 @@ CATALOGUE: tuple[Mutant, ...] = (
             '    "output_floor_pct_full_MUTANT": ScalarParam(\n'
             '        name="output_floor_pct_full",'
         ),
-        summary="Rulepack scalar read only under an election nothing exercises",
+        summary="Rulepack scalar read only under an election no RUNS portfolio makes",
         rationale=(
-            "MUST come back UNREACHABLE. This entry is consumed only when a firm "
-            "elects skip_transitional on OutputFloorConfig, which no test does. "
-            "Mutating it once produced 52/52 passing floor properties, which read "
-            "as proof they were vacuous -- they were not, the path was dead. If "
-            "the scorecard calls this an escape, the probe is broken and every "
-            "other 'not detected' verdict in the report is unsafe."
+            "The reachability PROBE must find this unreachable; the trust check "
+            "judges it on the probe, not on the verdict (the banked set ratchet "
+            "still judges its verdict). This entry is consumed only when a firm "
+            "elects skip_transitional on OutputFloorConfig, which no RUNS portfolio "
+            "does. A gate may still catch it, and one does: "
+            "tests/unit/rulebook/test_output_floor_features.py makes the election "
+            "and calls engine/aggregator/aggregator.py::_output_floor_pct, which "
+            "reads this key -- so the path is dead to the probe, not to the test "
+            "suite. Mutating it once produced 52/52 passing floor properties, which "
+            "read as proof they were vacuous -- they were not, the path was dead to "
+            "every portfolio they ran. If the probe calls this reachable, the probe "
+            "is broken and every other 'not detected' verdict in the report is "
+            "unsafe."
         ),
         expect_unreachable=True,
     ),
@@ -404,9 +424,10 @@ CATALOGUE: tuple[Mutant, ...] = (
         summary="The output-floor schedule step that IS read, raised to 95%",
         rationale=(
             "The reachable twin of the control above. Same article, same pack, "
-            "same kind of edit -- but this one is on the live path, so it must be "
-            "REACHABLE. The pair is what distinguishes 'no gate covers this' from "
-            "'nothing ran'.\n\n"
+            "same kind of edit -- but this one is on the live path, so the probe "
+            "should find it REACHABLE (reported under expectation_mismatches if "
+            "not; the ratchet gates only on an UNREACHABLE verdict). The pair is "
+            "what distinguishes 'no gate covers this' from 'nothing ran'.\n\n"
             "The direction is load-bearing and was got wrong first time. The "
             "reporting date (2027-06-01) selects this step, so the entry is "
             "unambiguously live -- but the floor does not BIND on the rich "

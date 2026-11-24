@@ -1,21 +1,104 @@
 {
   "_comment": "Detection-rate baseline for the defect-injection campaign (scripts/injection_ratchet.py --check, run nightly by .github/workflows/nightly-injection.yml). Two-way ratchet on three ABSOLUTE id sets per ladder: detected_ids may not LOSE a member, escaped_ids may not GAIN one, unreachable_ids may not GAIN one. The headline detection rate is deliberately NOT gated: it is detected/(detected+escaped) with UNREACHABLE excluded from both halves, so its denominator moves with its numerator and a mutant drifting onto a dead path makes absolute detection FALL while the rate RISES (.claude/LESSONS.md B8 \u2014 ratchet the accumulator, never a ratio of it). unreachable_ids is ratcheted for exactly that reason. Never edit this file by hand and never widen a set to clear a red gate: --bank rewrites it from measured scorecards and refuses to bank one that failed a trust check.",
-  "status": "UNBANKED",
-  "unbanked_reason": "The campaign has never been run end to end, so no detection rate exists. Nobody can currently say whether the estate's rate is 40% or 90% \u2014 the harness was built to answer that and has not yet been able to. This file is committed in its un-banked state on purpose: --check reads status UNBANKED and exits NON-ZERO with the banking command, so the un-measured state is loud rather than silently green. An unrecognised status is also treated as un-banked, so a typo cannot read as banked.",
+  "status": "BANKED",
+  "_note": "First bank, P5.18: the scheduled nightly of 2026-11-23 (run 45160106928, master at 845b4e6), the first trust-clean campaign. Each ladder: 20 of 22 mutants DETECTED, 0 ESCAPED, 2 UNREACHABLE (generic-correlation-decay and generic-retail-correlation-decay, both expect_unreachable); known-defect floor 4/4 on both. Detection 20/20 including the controls, 18/18 without. The night before (run 45009671834, 65a1d65) scored every mutant identically, and run 45395025802 (2026-11-24, 1b7642c) gave the same verdict, caught_by and reachable values for all 22 on both ladders.",
   "known_defect_floor": 0.9,
   "bank_command": "uv run python scripts/injection_ratchet.py --bank --note '<why this baseline moved>' --ladder legacy --ladder full",
-  "blockers": [
-    {
-      "task": "probe-unreachable catalogue entries",
-      "summary": "With the reachability probe made deterministic (2026-11-14), 11 of the 22 catalogue mutants move nothing in the RUNS matrix: the 3 flagged expect_unreachable, as designed, and 8 the catalogue expects to be reachable - known-c02-phantom-class-key, known-p3-empty-class-tuple, known-sovereign-ladder-flattened, lessons-e3-subtotal-double-count, generic-firb-corporate-stranded, generic-benefit-cap-inverted, generic-b31-institution-cqs2, generic-scaling-regime-inverted. Gates still run on all of them (a unit test reaches paths no portfolio does), but any that NO gate catches scores UNREACHABLE and fails the trust check until it is re-targeted at a live site or a RUNS portfolio exercises its path. Two causes seen so far: C 02.00 rows that are empty in every RUNS portfolio (the A-IRB institutions and F-IRB specialised-lending lookups), and engine/irb/formulas.py::calculate_irb_rwa, a scalar wrapper the pipeline never calls.",
-      "state": "Open - measured with --reachability-only; which of the 8 a gate catches is settled by the next campaign."
-    },
-    {
-      "task": "0.1",
-      "summary": "The campaign mutates src/, one file at a time, and refuses to start if any catalogue target is dirty in git. It therefore cannot run while any agent is editing src/, and its failures would be misattributed if it did.",
-      "state": "Open \u2014 the first bankable run needs a quiet tree, which is why the first run is a manual workflow_dispatch rather than a nightly."
+  "provenance": {
+    "banked_utc": "2026-11-24T18:57:39Z",
+    "git_commit": "131f2d3a",
+    "catalogue_mutants": 22,
+    "ladders": {
+      "legacy": {
+        "interpreter": "uv run",
+        "gates": [
+          "arch_check",
+          "unit",
+          "contracts",
+          "acceptance",
+          "reporting"
+        ],
+        "runtime_seconds": 4945.9,
+        "detection_rate_reported": 1.0,
+        "mean_tier_of_detection": 3.2
+      },
+      "full": {
+        "interpreter": "uv run",
+        "gates": [
+          "arch_check",
+          "oracle",
+          "properties",
+          "unit",
+          "contracts",
+          "acceptance",
+          "reporting",
+          "coverage_report",
+          "impact_report"
+        ],
+        "runtime_seconds": 11030.2,
+        "detection_rate_reported": 1.0,
+        "mean_tier_of_detection": 2.4
+      }
     }
-  ],
-  "provenance": null,
-  "ladders": {}
+  },
+  "ladders": {
+    "legacy": {
+      "detected_ids": [
+        "control-reachable-output-floor-schedule",
+        "control-unreachable-output-floor-full",
+        "generic-b31-institution-cqs2",
+        "generic-benefit-cap-inverted",
+        "generic-corporate-correlation-high",
+        "generic-corporate-correlation-low",
+        "generic-cqs-cast-dropped",
+        "generic-firb-corporate-stranded",
+        "generic-firb-institution-key",
+        "generic-irb-scaling-factor",
+        "generic-maturity-adjustment-b",
+        "generic-retail-correlation",
+        "generic-scaling-regime-inverted",
+        "known-c02-phantom-class-key",
+        "known-c02-stranded-subclass",
+        "known-p3-empty-class-tuple",
+        "known-sovereign-ladder-flattened",
+        "lessons-b1-dead-carrier",
+        "lessons-d4-missing-cast",
+        "lessons-e3-subtotal-double-count"
+      ],
+      "escaped_ids": [],
+      "unreachable_ids": [
+        "generic-correlation-decay",
+        "generic-retail-correlation-decay"
+      ]
+    },
+    "full": {
+      "detected_ids": [
+        "control-reachable-output-floor-schedule",
+        "control-unreachable-output-floor-full",
+        "generic-b31-institution-cqs2",
+        "generic-benefit-cap-inverted",
+        "generic-corporate-correlation-high",
+        "generic-corporate-correlation-low",
+        "generic-cqs-cast-dropped",
+        "generic-firb-corporate-stranded",
+        "generic-firb-institution-key",
+        "generic-irb-scaling-factor",
+        "generic-maturity-adjustment-b",
+        "generic-retail-correlation",
+        "generic-scaling-regime-inverted",
+        "known-c02-phantom-class-key",
+        "known-c02-stranded-subclass",
+        "known-p3-empty-class-tuple",
+        "known-sovereign-ladder-flattened",
+        "lessons-b1-dead-carrier",
+        "lessons-d4-missing-cast",
+        "lessons-e3-subtotal-double-count"
+      ],
+      "escaped_ids": [],
+      "unreachable_ids": [
+        "generic-correlation-decay",
+        "generic-retail-correlation-decay"
+      ]
+    }
+  }
 }

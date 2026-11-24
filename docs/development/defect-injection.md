@@ -8,35 +8,61 @@ cheapest-first, stops at the first gate that goes red, and records which one. Th
 output is a detection rate, the mean tier at which detection happens, and — the
 part that actually matters — **the list of defects nothing caught**.
 
-## Status: the mechanism exists, the number does not
+## Status: measured, and banked
 
-**No campaign has ever been run end to end, so the estate's detection rate is
-unknown.** Nobody can currently say whether it is 40% or 90%. The harness was
-built to answer that and has not yet been able to; the reasons are two concrete
-blockers, both recorded below with their task references.
+The first trust-clean campaign was the scheduled nightly of **2026-11-23** (run
+45160106928, `master` at `845b4e6`), and its two scorecards are the first banked
+baseline in `scripts/injection_baseline.json`. The night before (run 45009671834,
+`65a1d65`) scored every mutant identically.
 
-Read that as a standing correction to anything on this page that sounds like a
-result. The numbers used in the explanations here are *worked examples* — the
-only figures anyone has actually measured are the reachability verdicts of a
-handful of individual mutants, gathered while debugging the probe. In particular
-`scripts/defect_scorecard.json`, which is checked in, is the output of a
-`--reachability-only` run over **one** mutant, not a campaign: every verdict in
-it is `PROBED`, and the ratchet refuses it.
+| Ladder | Mutants | DETECTED | ESCAPED | UNREACHABLE | Detection rate | Mean tier | Wall clock |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `legacy` | 22 | 20 | 0 | 2 | 100% | 3.2 | 1h23m |
+| `full` | 22 | 20 | 0 | 2 | 100% | 2.4 | 3h04m |
 
-The mechanism is nonetheless wired, gated and reviewable: the nightly workflow
-runs both ladders, publishes the board, and a ratchet fails **non-zero** for as
-long as the baseline stays un-banked. It is red by design until the first
-campaign is measured. A workflow claiming to gate on a number nobody has
-measured would be worse than no workflow.
+The known-defect floor is 4/4 on both ladders. The two `UNREACHABLE` mutants are
+`generic-correlation-decay` and `generic-retail-correlation-decay`, both flagged
+`expect_unreachable`. The before/after pair differs in *where* detection happens,
+not in whether it does: `legacy` catches 18 mutants in `tests/unit` and 2 in
+`tests/acceptance`; `full` catches 7 in the oracle, 2 in the property suite, 9 in
+`tests/unit` and 2 in `tests/acceptance`.
+
+Read the 100% for what it is, not for the claim the plan wants to make:
+
+- **It counts the two controls.** Both come back `DETECTED` (a gate catches the
+  dead-path control, see [The two controls](#the-two-controls)). Without them it is
+  18/18.
+- **It is measured over the catalogue, not over the escapes.** The plan's target
+  is ≥ 90% on *escape-log-derived* mutants, and every entry in
+  `docs/development/escape-log.md` is meant to become one. The log has 62 dated
+  entries; the catalogue holds 4 `known_defect` mutants. "Every mutant we wrote
+  is caught" is not "we catch 100% of realistic defects", and growing the
+  catalogue is the work queue this number points at.
+- **The `coverage_report` rung cannot go red on a defect.** The ladder invokes
+  `scripts/coverage_report.py` without `--check`, and that script exits 0 unless
+  `--check` or `--update-baseline` is passed, so tier 7 goes red only if the
+  script crashes. No detection has ever landed there.
+- **Nothing checks that each gate is green on the unmutated tree.** A gate that
+  was already red would score every mutant reaching it `DETECTED` and still pass
+  the trust checks. For the banked run the two `UNREACHABLE` mutants stayed green
+  on every rung of both ladders, which shows each rung was green on an
+  effectively unmutated tree, but that is incidental, not checked.
+
+The ratchet now gates on the banked verdict sets, so a red nightly means a
+finding (see [The ratchet](#the-ratchet-and-its-baseline)). Until the bank it went
+red every night on the un-banked baseline alone, which made it an alarm that
+always fires: a real new escape could not have been told apart from the standing
+red (`.claude/LESSONS.md` B9).
 
 | File | Role |
 |---|---|
 | `scripts/defect_catalogue.py` | The mutants. Adding one is a single entry; the runner never changes. |
 | `scripts/defect_injection.py` | The runner: safety, reachability probe, ladder, scorecard. |
-| `scripts/defect_scorecard.json` | Generated. The checked-in copy is a one-mutant probe run, not a campaign. |
+| `scripts/defect_scorecard.json` | A local run's default output. Git-ignored; never committed. |
 | `scripts/injection_ratchet.py` | Renders the board (`--summary`), gates it (`--check`), banks it (`--bank`). |
-| `scripts/injection_baseline.json` | The banked verdict sets. Currently `status: UNBANKED`. |
+| `scripts/injection_baseline.json` | The banked verdict sets, one per ladder. |
 | `.github/workflows/nightly-injection.yml` | Runs both ladders nightly, publishes the artefacts, runs the gate. |
+| `tests/contracts/test_defect_catalogue_applies.py` | The catalogue self-test, run on every PR and skipped inside the campaign's own gates. |
 
 ## Running it
 
@@ -181,8 +207,10 @@ and the red rung is a measured catch.
 Mutating the rulepack's `output_floor_pct_full` from 0.725 to 0.100 once left
 52 of 52 output-floor properties passing. That reads as proof the properties
 were vacuous. They were not — that scalar is only consumed when a firm elects
-`skip_transitional` on `OutputFloorConfig`, which no test does. The mutation
-applied perfectly to a **dead path**.
+`skip_transitional` on `OutputFloorConfig`, which none of those properties did
+and no RUNS portfolio does. The mutation applied perfectly to a path that is
+**dead to every pipeline run the probe makes**. It is not dead to the unit
+suite, which makes the election directly (see [The two controls](#the-two-controls)).
 
 Without a reachability probe, that mutant scores as an escape and the headline
 rate is fiction in the pessimistic direction. So every mutant is probed for
@@ -213,23 +241,54 @@ if the two captures disagree.
 
 ### The two controls
 
-The catalogue carries a matched pair whose verdicts prove the probe still works:
+The catalogue carries a matched pair whose probe results are meant to prove the
+probe still works:
 
-- `control-unreachable-output-floor-full` — the dead scalar above. **Must** come
-  back `UNREACHABLE`. If the scorecard ever calls it an escape, the probe is
-  broken and every other "not detected" verdict in the report is unsafe.
+- `control-unreachable-output-floor-full` — the dead scalar above. The probe
+  **must** find it unreachable. If the scorecard ever calls it an escape, the
+  probe is broken and every other "not detected" verdict in the report is unsafe.
 - `control-reachable-output-floor-schedule` — the schedule step that *is* read.
-  **Must** come back `REACHABLE`.
+  The probe should find it reachable.
 
-Both are judged on the **probe's** result (`reachable` in the scorecard), not on
-the verdict. A gate may still catch the dead-path control: its pack key is listed
-by name in `scripts/generate_regulatory_tables.py`, so renaming it can turn the
-docs freshness test red. That is a detection, not a broken probe. Any mutant whose probe result contradicts its
-`expect_unreachable` flag is reported under **expectation mismatches**, which is
-the signal that the catalogue has rotted against the code. `injection_ratchet.py --check` fails on any such
-mismatch, independently of the baseline: while a control disagrees with its flag
-there is no licence to believe any non-detection verdict, so there is nothing
-worth ratcheting.
+The gate checks only the first half of that pair.
+
+**In the trust check, the dead-path control is judged on the probe's result**
+(`reachable` in the scorecard), not on the verdict, and so is every other mutant
+flagged `expect_unreachable`. `injection_ratchet.py --check` fails if any of them
+probes reachable, independently of the baseline: while a dead-path control
+disagrees with its flag there is no licence to believe any non-detection verdict,
+so there is nothing worth ratcheting. A gate may still catch the dead-path
+control, and one does: in the banked run it is `DETECTED` on both ladders by
+`tests/unit/rulebook/test_output_floor_features.py::test_helper_matches_config_get_floor_percentage[on0-True]`.
+That case makes the `skip_transitional` election itself and calls the production
+helper `engine/aggregator/aggregator.py::_output_floor_pct`, which reads
+`output_floor_pct_full` and fails on the renamed key. So the path is dead only to
+the probe's RUNS matrix, not to the test suite — the same situation as the six
+probe-unreachable mutants a gate catches (see
+[What the first bank was waiting on](#what-the-first-bank-was-waiting-on)). That
+is a detection, not a broken probe: the probe still finds that the mutant moves
+no template cell, which is all the control is there to show.
+
+"Judged on the probe" is true of the trust check only. Once a baseline is
+banked, the set ratchet judges every mutant's *verdict*, the controls included.
+If that unit test were deleted, the dead-path control would fall from `DETECTED`
+to `UNREACHABLE`: the trust check would still pass (the probe still finds it
+dead, as flagged), and the nightly would go red on `DETECTED` and `UNREACHABLE`
+both regressing.
+
+**The reachable control's `REACHABLE` result is not enforced.** A mutant the
+catalogue expects to be reachable is judged on its *verdict*: it fails the trust
+check only when it scores `UNREACHABLE`, meaning no gate caught it *and* the
+probe saw nothing. The reachable control is `DETECTED` on both ladders, so if the
+probe stopped seeing it, `--check` would still pass. The same rule is why six
+mutants that probe unreachable but are caught by a gate do not block a bank (see
+[What the first bank was waiting on](#what-the-first-bank-was-waiting-on)).
+
+The harness still records every probe result that contradicts its flag, in
+either direction, under `expectation_mismatches` in the scorecard, and prints
+them as **EXPECTATION MISMATCHES** in the campaign log. That list is the signal
+that the catalogue has rotted against the code, but nothing gates on its
+expected-reachable half.
 
 ### Reachable is not the same as observable
 
@@ -279,6 +338,25 @@ One `Mutant(...)` entry. `old` must appear **exactly once** in `target` — the
 self-test enforces presence and uniqueness, which is what stops the catalogue
 rotting silently as the code moves underneath it. Set `expect_unreachable=True`
 if the mutant is a deliberate dead-path control.
+
+The self-test runs on every PR, as
+`tests/contracts/test_defect_catalogue_applies.py`, so a change that moves a
+mutant's `old` string goes red where it is made. The fix is to re-target the
+mutant at the code's new home, never to restore the old source. A re-targeted
+mutant can score differently, and the next nightly says so.
+
+It runs everywhere **except inside the campaign's own gates**. The `contracts`
+rung collects that file while a mutant is applied, and on that tree the applied
+mutant's `old` string is gone by construction, so the self-test would go red on
+every mutant that reached the rung. That would be a detection of the harness, not
+of the defect, and it would make `ESCAPED` and `UNREACHABLE` impossible verdicts.
+So `injected()` names the applied mutant in the `DEFECT_INJECTION_MUTANT`
+environment variable for exactly as long as it is applied, every gate inherits
+it, and the self-test skips under it. A value that names no catalogue mutant is
+refused rather than skipped, so a stray variable cannot switch the per-PR check
+off. Nothing is lost by the skip: the nightly runs the same self-test on the
+clean tree as its first step, and `injected()` refuses a mutant whose `old`
+string does not occur exactly once.
 
 A new mutant makes the banked baseline stale by construction: it appears in no
 banked set, so `--check` reports it and demands a re-bank. That is the intended
@@ -331,8 +409,8 @@ where the guards do not fire and the manual recovery is the only recovery.
 ## The nightly
 
 `.github/workflows/nightly-injection.yml` runs the campaign at **02:17 UTC
-daily**, and is also `workflow_dispatch`-able by hand — which matters more than
-the cron for now, because the first real run will be a manual one.
+daily**, and is also `workflow_dispatch`-able by hand, to re-measure after a
+deliberate catalogue or gate change without waiting for the cron.
 
 Why that time. GitHub's hosted-runner fleet is busiest during US and European
 working hours, and scheduled workflows are queued rather than guaranteed. 02:17
@@ -373,9 +451,9 @@ result fails the job rather than reading as a clean run:
 
 Each board is also appended to the run's `$GITHUB_STEP_SUMMARY`, so the result is
 readable in the GitHub UI without downloading anything. The combined board is
-rendered and uploaded **before** the gate runs, on purpose: `--check` is expected
-to fail while the baseline is un-banked, and the board is the artefact that has
-to survive that failure.
+rendered and uploaded **before** the gate runs, on purpose: when `--check` fails,
+the board is the artefact that has to survive that failure, because it says
+which mutant moved.
 
 There are no `workflow_dispatch` inputs. A filtered campaign (`--mutants`,
 `--categories`) is not bankable — the ratchet refuses a scorecard that does not
@@ -384,11 +462,13 @@ though they did not exist. Debugging runs belong on a developer machine.
 
 The campaign job carries `timeout-minutes: 330`, under the 6-hour hosted-runner
 ceiling so the timeout is ours and legible rather than GitHub's opaque cancel.
-**The real wall clock is unmeasured.** If a leg hits that ceiling the fix is not
-to raise it past 360 — it is to shard the catalogue across more matrix legs, and
-to combine the shards' scorecards into one complete file before banking.
+Measured on 2026-11-23 with 22 mutants: `legacy` 1h23m, `full` 3h04m. The full
+leg therefore has about 2h25m of headroom, at roughly 8 minutes per mutant. If a
+leg hits the ceiling the fix is not to raise it past 360 — it is to shard the
+catalogue across more matrix legs, and to combine the shards' scorecards into one
+complete file before banking.
 
-## The ratchet, and its deferred baseline
+## The ratchet, and its baseline
 
 `scripts/injection_ratchet.py --check` is the gate. It runs four groups of
 checks, reports all of them, and exits non-zero if any failed — deliberately not
@@ -407,7 +487,10 @@ compared against a baseline:
 
 - every catalogue mutant carries a verdict (a filtered or sharded run does not);
 - no verdicts for mutants absent from the catalogue (a stale scorecard);
-- no mutant's reachability contradicts its `expect_unreachable` flag;
+- no mutant flagged `expect_unreachable` probes reachable, and no other mutant
+  scores `UNREACHABLE` — one direction is judged on the probe, the other on the
+  verdict, so the reachable control is not enforced (see
+  [The two controls](#the-two-controls));
 - no gate `TIMEOUT` anywhere;
 - no verdict outside `DETECTED` / `ESCAPED` / `UNREACHABLE` (an `ERROR`, a
   `PROBED`, or an `UNPROVEN` resting on a timed-out gate);
@@ -425,10 +508,11 @@ plainly. With four known-defect mutants, "≥ 90%" is arithmetically "all four" 
 mutant counts **against** the floor: it means the twin site is dead, and we
 cannot demonstrate the estate would catch a defect that already got through once.
 
-**3. The baseline.** `scripts/injection_baseline.json` currently carries
-`status: UNBANKED`, and `--check` fails on that alone — loudly, printing the
-reason, the blockers, and the banking command. An unrecognised status is treated
-as un-banked too, never as banked, so a typo cannot read as a green gate.
+**3. The baseline.** A baseline carrying `status: UNBANKED` fails `--check` on
+that alone — loudly, printing the reason, the blockers, and the banking command.
+That was the file's state until the first bank (2026-11-23 scorecards). An
+unrecognised status is treated as un-banked too, never as banked, so a typo
+cannot read as a green gate.
 
 **4. The two-way set ratchet**, once banked. Per ladder:
 
@@ -445,16 +529,22 @@ deliberately (`.claude/LESSONS.md` E1).
 ### How the gate itself is tested
 
 While the baseline is `UNBANKED`, `--check` can never pass: the status is itself
-a finding, reported alongside whatever else fails. So the nightly cannot reach
-the `BANKED` branch, and cannot see the gate pass. A gate that has never been
-seen to pass cannot be shown to tell a good run from a bad one, so
+a finding, reported alongside whatever else fails. Until the first bank
+(2026-11-23 scorecards) the nightly therefore could not reach the `BANKED`
+branch, and could not see the gate pass. A banked nightly sees the gate pass,
+but it still reaches only the branches its own campaign happens to trip — on a
+clean night, none of the `BANKED` findings. A gate that has never been seen to
+pass cannot be shown to tell a good run from a bad one, and a branch that has
+never been seen to fire can be lost silently, so
 `tests/contracts/test_injection_ratchet_gate.py` drives `check()` directly with
 synthetic boards — no campaign, no pipeline run:
 
 - a trust-clean, floor-clean `BANKED` pair whose sets equal the baseline must
   exit **0**;
 - each of the **18** kinds of finding — the missing ladder, the six trust
-  checks (the reachability one in both directions, so seven kinds), the floor,
+  checks (the reachability one in both directions: an `expect_unreachable`
+  mutant that *probes* reachable, and any other mutant whose *verdict* is
+  `UNREACHABLE` — so seven kinds), the floor,
   `UNBANKED`, an unrecognised status, a `BANKED` baseline with no entry for a
   ladder, and the three regressions and three `BANK REQUIRED` improvements of
   the set ratchet — is introduced **alone** on top of that clean pair, on each
@@ -507,16 +597,26 @@ gate is stated on three absolute id sets and the rate is reported only.
 set grow silently is the single move that lets the published rate improve while
 the estate's measured coverage shrinks.
 
-### Banking the first baseline
+### Banking a baseline
 
-Once both blockers below are clear, dispatch the workflow by hand, download the
-two scorecards, and bank them:
+Bank from a nightly (or dispatched) run whose ratchet job failed **only** on the
+movement you mean to bank. Download that run's two scorecards into
+`nightly-injection/`, which is git-ignored, check them, bank them, and check
+again:
 
 ```bash
+gh run download <run-id> -n injection-scorecard-legacy -D nightly-injection
+gh run download <run-id> -n injection-scorecard-full -D nightly-injection
+uv run python scripts/injection_ratchet.py --check --ladder legacy --ladder full
 uv run python scripts/injection_ratchet.py --bank \
-  --note 'First measured campaign: <what the numbers were and why they are trustworthy>' \
+  --note '<run id, measured sha, what moved and why it is trustworthy>' \
   --ladder legacy --ladder full
+uv run python scripts/injection_ratchet.py --check --ladder legacy --ladder full   # exits 0
 ```
+
+Read the first `--check` before banking: every finding it prints is what the bank
+will make permanent. Read the gate excerpts in the scorecard too (`.claude/LESSONS.md`
+C12): a detection is only evidence if the test that went red fits the mutant.
 
 `--ladder` takes a ladder NAME, not a path. The scorecards are read from fixed
 locations under `nightly-injection/` (see `_SCORECARD_PATHS`), so put the
@@ -528,6 +628,29 @@ rather than sanitised — see the note above `_SCORECARD_PATHS`.
 indistinguishable from one someone widened to clear a red gate. `--bank` refuses
 a scorecard that failed any trust check — a baseline banked from fiction would
 enshrine that fiction as the thing every future run is measured against.
+
+Three mechanics the bank has to respect:
+
+- **`provenance.git_commit` is the commit the bank is written on**, read from the
+  local `git rev-parse HEAD`, not the commit the scorecards measured. Scorecards
+  written since P5.46 carry their measured `commit`, but `--bank` does not read
+  it (and the 2026-11-23 scorecards predate the field), so put the run id and the
+  measured sha in `--note`.
+- **The catalogue you bank against must hold the mutations that were measured.**
+  The trust checks compare mutant *ids* only. A mutant re-targeted under its old
+  id after the measured commit — a new `target`, `old` or `new` — still banks
+  cleanly, with a verdict for a mutation that no longer exists, and nothing
+  flags it. Before banking, check that
+  `git diff <measured-sha> -- scripts/defect_catalogue.py` changes none of those
+  fields (or `expect_unreachable`, `id`, `category`); a change to `summary` or
+  `rationale` text alone does not matter. If one did change, bank from a run
+  measured after it.
+- **The bank has to reach `master` before the nightly can go green.** `schedule`
+  fires only on the default branch, so a bank sitting on a feature branch leaves
+  every nightly measuring against the old baseline.
+
+The first baseline was banked from run 45160106928 (2026-11-23, `845b4e6`); its
+`_note` records the numbers in [Status](#status-measured-and-banked).
 
 To render or re-render a board without gating anything:
 
@@ -542,44 +665,46 @@ Like `--bank`, it reads the scorecards from `nightly-injection/` and, with
 
 `--summary` is a renderer, not a gate. `--check` is the gate.
 
-## Two blockers before the first bankable run
+## What the first bank was waiting on
 
-Both are real, both are recorded in `scripts/injection_baseline.json` under
-`blockers`, and both are owned elsewhere. Do not rediscover them.
+Two blockers were recorded in the un-banked baseline. Neither, in the end,
+blocked a bank from a CI scorecard.
 
 **Probe-unreachable catalogue entries.** With the probe deterministic, 11 of the
-22 mutants move nothing in the RUNS matrix (measured with `--reachability-only`,
-2026-11-14):
-- **3 by design:** the flagged `expect_unreachable` mutants.
-- **8 the catalogue expects to be reachable:**
-  - three of the four known defects (`known-c02-phantom-class-key`,
-    `known-p3-empty-class-tuple`, `known-sovereign-ladder-flattened`);
-  - `lessons-e3-subtotal-double-count`;
-  - `generic-firb-corporate-stranded`, `generic-benefit-cap-inverted`,
-    `generic-b31-institution-cqs2` and `generic-scaling-regime-inverted`.
+22 mutants moved nothing in the RUNS matrix (measured with `--reachability-only`,
+2026-11-14): the 3 flagged `expect_unreachable`, and 8 the catalogue expects to
+be reachable. Two of the 8, `lessons-e3-subtotal-double-count` and
+`generic-b31-institution-cqs2`, were re-targeted on 2026-11-20 and now probe
+reachable (see "Catalogue drift" below). In the banked run the other 6 still move
+nothing in the RUNS matrix, and every one is `DETECTED` by a gate on both ladders:
 
-`lessons-e3-subtotal-double-count` and `generic-b31-institution-cqs2` were
-re-targeted on 2026-11-20 and now probe reachable (see "Catalogue drift" below),
-which leaves 6 of the 8. The other 6 were all caught by a gate in the
-2026-11-16 campaign, so they do not fail the trust check.
+| Mutant | Target | Caught by (both ladders) | Why the probe sees nothing |
+|---|---|---|---|
+| `known-c02-phantom-class-key` | `reporting/corep/c02.py` | `tests/unit`, C 02.00 published identity `v0211_m` | the A-IRB institutions row, empty in every RUNS portfolio |
+| `generic-firb-corporate-stranded` | `reporting/corep/c02.py` | `tests/unit`, C 02.00 published identity `v0210_m` | the F-IRB specialised-lending row, empty in every RUNS portfolio |
+| `generic-scaling-regime-inverted` | `engine/irb/formulas.py` | `tests/unit`, `test_crr_irb.py` | `calculate_irb_rwa`, a scalar wrapper the pipeline never calls |
+| `known-p3-empty-class-tuple` | `reporting/pillar3/templates.py` | `tests/acceptance`, `test_p2_54_ciu_class_o.py` | not yet investigated |
+| `known-sovereign-ladder-flattened` | `engine/sa/rgla.py` | `tests/unit`, `test_rgla_risk_weights.py[crr]` | not yet investigated |
+| `generic-benefit-cap-inverted` | `engine/sa/rw_adjustments.py` | `tests/acceptance`, `test_p1_239_art_232_third_party_deposit.py` | not yet investigated |
 
-Two causes so far:
-- C 02.00 rows that are empty in every RUNS portfolio (the A-IRB institutions and
-  F-IRB specialised-lending lookups).
-- `engine/irb/formulas.py::calculate_irb_rwa`, a scalar wrapper the pipeline
-  never calls.
-
-Gates still run on all of them. Any mutant that **no** gate catches scores
-`UNREACHABLE` and fails the trust check until it is re-targeted at a live site,
-or a RUNS portfolio exercises its path.
+The trust check fails a mutant the catalogue expects to be reachable only when
+it scores `UNREACHABLE` — no gate caught it *and* the probe saw nothing — so
+these six do not block a bank. They are still coverage gaps in the
+`.claude/LESSONS.md` B5 sense (a registered portfolio, a dead cell). Two causes
+so far, covering three of the six: C 02.00 rows that are empty in every RUNS
+portfolio, and a scalar wrapper the pipeline never calls. Why the probe sees
+nothing for the other three (Pillar 3 templates, the RGLA ladder, the CRM
+benefit cap) has not been investigated. If a gate ever stops catching one of
+them, it scores `UNREACHABLE` and the trust check fails until it is re-targeted
+at a live site or a RUNS portfolio exercises its path.
 
 **A quiet tree** (task `0.1`). The campaign mutates `src/` one file at a time and
-refuses to start if any catalogue target is dirty in git, so it cannot run while
-anyone is editing `src/` — and if it did, their failures would score as
-detections. This is why the first bankable run is a manual dispatch on a quiet
-`master` rather than an ordinary nightly.
+refuses to start if any catalogue target is dirty in git, so a **local** run
+cannot happen while anyone is editing `src/` — and if it did, their failures
+would score as detections. That never applied to the nightly: a GitHub runner
+checks out a fresh copy of the commit it measures.
 
-Two more, now closed:
+Two more, closed earlier:
 - **The interpreter override.** The harness hardcoded `uv run` for every gate.
   On a runner where `uv` cannot spawn, every gate returned non-zero, every mutant
   scored `DETECTED`, and the campaign would have published a fabricated ~100%
@@ -590,9 +715,8 @@ Two more, now closed:
   `control-unreachable-output-floor-full` included, probed reachable because the
   digest was not deterministic (above). It was recorded as a docs artefact moving
   under the probe, but the probe hashes template cells only. Fixed 2026-11-14:
-  under the stable probe, all three `expect_unreachable` mutants come back
-  `UNREACHABLE` and `control-reachable-output-floor-schedule` comes back
-  reachable.
+  under the stable probe, all three `expect_unreachable` mutants probe
+  unreachable and `control-reachable-output-floor-schedule` probes reachable.
 
 A run of the harness also used to leave `engine/irb/formulas.py` dirty. That file
 is committed with CRLF endings, and `injected` restored the decoded text rather
@@ -602,7 +726,8 @@ no longer refused on a dirty target.
 ### Catalogue drift (2026-11-17 to 2026-11-20)
 
 From 2026-11-17 every nightly died in the catalogue self-test, about 13 seconds
-in, because four mutants' `old` strings had moved under them:
+in, because four mutants' `old` strings had moved under them. The last was on
+2026-11-21, before the re-targeting reached `master`:
 
 - `lessons-b1-dead-carrier`: the CCF carrier ladder left `corep/c07.py` for
   `corep/ccf_buckets.py` (`CCF_CARRIERS`, now shared by C 07.00 and OF 08.01).
@@ -622,8 +747,11 @@ on every completed campaign before that:
   always `None`. It now has col 0110 deduct 0090 twice, the defect
   `_net_after_substitution` records.
 
-The self-test is the guard against the first kind; nothing but a campaign
-catches the second.
+The self-test is the guard against the first kind, and it now runs on every PR
+(`tests/contracts/test_defect_catalogue_applies.py`) as well as first thing in
+the nightly; it is skipped only inside the campaign's own gates, where the
+applied mutant is drift by construction (see [Adding a mutant](#adding-a-mutant)).
+Nothing but a campaign catches the second.
 
 ## Reading the board
 
@@ -637,7 +765,10 @@ measured.
 The escaped list is the deliverable. A detection rate is a number; its complement
 is a work queue. The plan's target is **≥ 90% on the known-defect mutants** —
 they have already escaped once, so failing to catch them is inexcusable — with a
-published, tracked figure on the generic set. Neither figure exists yet.
+published, tracked figure on the generic set. On the banked run both are 100%:
+4/4 known defects and 11/11 scored generic mutants, on each ladder. Both figures
+are over the catalogue's own mutants (see [Status](#status-measured-and-banked)
+for what that does and does not show).
 
 Three defects found while wiring the nightly were closed on 2026-11-23 (P5.46).
 Until then a mutant whose only catching gate timed out finished as `ESCAPED`, in

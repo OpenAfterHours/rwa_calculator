@@ -17,13 +17,14 @@ Three verdicts, not two
 The third category is not bookkeeping. Mutating the rulepack's
 ``output_floor_pct_full`` from 0.725 to 0.100 once left 52/52 floor properties
 passing, which read as proof they were vacuous -- they were not, the scalar is
-only consumed under an election no test makes. Without a reachability probe that
-mutant scores as an escape and the headline rate is fiction in the pessimistic
-direction. So every mutant is probed for whether it moves an output, and a mutant
-no gate catches is an escape only if it did. The probe never overrides a gate: it
-sees only the RUNS portfolios' templates, and a unit test that goes red on a path
-no portfolio exercises is still a detection. The catalogue carries two deliberate
-controls (one reachable, one not) whose PROBE results prove the probe still works.
+only consumed under an election no portfolio they ran makes. Without a
+reachability probe that mutant scores as an escape and the headline rate is
+fiction in the pessimistic direction. So every mutant is probed for whether it
+moves an output, and a mutant no gate catches is an escape only if it did. The
+probe never overrides a gate: it sees only the RUNS portfolios' templates, and a
+unit test that goes red on a path no portfolio exercises is still a detection.
+The catalogue carries two deliberate controls (one reachable, one not) whose
+PROBE results prove the probe still works.
 
 ``TIMEOUT`` is its own gate outcome and is never counted as a pass -- nor as the
 evidence for a verdict. "Every gate stayed green" is a claim about gates that
@@ -62,6 +63,13 @@ is dirty in git, so recovery is always ``git checkout -- <file>`` and no
 uncommitted work can be destroyed. Restoration is belt-and-braces: a context
 manager with ``try/finally``, an ``atexit`` hook, and a post-restore verification
 that the bytes really came back.
+
+While a mutant is applied, ``DEFECT_INJECTION_MUTANT`` names it in the
+environment every gate inherits. The one test that reads it is the per-PR
+catalogue self-test (``tests/contracts/test_defect_catalogue_applies.py``), which
+skips: on a mutated tree the applied mutant's ``old`` string is gone by
+construction, so without the marker the ``contracts`` rung went red on every
+mutant that reached it -- a detection of the harness, not of the defect.
 
 The spawn pre-flight
 --------------------
@@ -423,6 +431,15 @@ def ladder_for(name: str) -> tuple[str, tuple[Gate, ...]]:
 # =============================================================================
 
 
+#: Set by ``injected`` to the applied mutant's id for exactly as long as it is
+#: applied, so every gate spawned in that window inherits it. A gate has no other
+#: way to tell a campaign's deliberately mutated tree from a drifted one, and the
+#: per-PR catalogue self-test must not score the former: it would go red on every
+#: mutant that reached the ``contracts`` rung, which makes ESCAPED and UNREACHABLE
+#: impossible verdicts. Read it through ``mutant_under_campaign``, never directly.
+MUTANT_ENV_VAR = "DEFECT_INJECTION_MUTANT"
+
+
 class DirtyTree(RuntimeError):
     """Refuse to mutate a file that already has uncommitted work in it."""
 
@@ -460,6 +477,10 @@ def injected(mutant: Mutant) -> Iterator[None]:
     Three independent guarantees, because a half-restored ``src/`` is the worst
     thing this script could leave behind: ``finally``, an ``atexit`` hook armed
     for the duration, and a byte-comparison after restoring.
+
+    For the same duration ``MUTANT_ENV_VAR`` names the mutant, so the gates run
+    inside this context can tell a campaign's mutated tree from a drifted one.
+    Its previous value is put back on exit.
     """
     path = _REPO_ROOT / mutant.target
     if mutant.target not in targets():
@@ -484,11 +505,17 @@ def injected(mutant: Mutant) -> Iterator[None]:
         if path.read_bytes() != original_bytes:
             path.write_bytes(original_bytes)
 
+    previous_marker = os.environ.get(MUTANT_ENV_VAR)
     atexit.register(_restore)
     try:
         path.write_text(original.replace(mutant.old, mutant.new), encoding="utf-8", newline=newline)
+        os.environ[MUTANT_ENV_VAR] = mutant.id
         yield
     finally:
+        if previous_marker is None:
+            os.environ.pop(MUTANT_ENV_VAR, None)
+        else:
+            os.environ[MUTANT_ENV_VAR] = previous_marker
         _restore()
         atexit.unregister(_restore)
         if path.read_bytes() != original_bytes:
@@ -496,6 +523,26 @@ def injected(mutant: Mutant) -> Iterator[None]:
                 f"{mutant.id}: FAILED TO RESTORE {mutant.target}. "
                 f"Run: git checkout -- {mutant.target}"
             )
+
+
+def mutant_under_campaign() -> Mutant | None:
+    """The catalogue mutant a running campaign has applied to this tree, or ``None``.
+
+    Read from ``MUTANT_ENV_VAR``, which only ``injected`` sets. A value that names
+    no catalogue mutant raises ``ValueError`` rather than reading as "no
+    campaign": the per-PR self-test skips on this marker, so a stray or misspelt
+    value must not be able to switch that test off silently.
+    """
+    marker = os.environ.get(MUTANT_ENV_VAR, "")
+    if not marker:
+        return None
+    for mutant in CATALOGUE:
+        if mutant.id == marker:
+            return mutant
+    raise ValueError(
+        f"{MUTANT_ENV_VAR}={marker!r} names no mutant in scripts/defect_catalogue.py. "
+        "Only defect_injection.injected sets it, for the mutant it has applied; unset it."
+    )
 
 
 # =============================================================================

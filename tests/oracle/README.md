@@ -29,12 +29,13 @@ passes. That defect class belongs to this suite alone.
 |---|---|
 | `ORACLE_DERIVATIONS.md` | Narrative derivations with paragraph citations and full arithmetic. The independent source of truth. |
 | `derivations/` | The shadow calculator. Stdlib-only modules that recompute the expected values. **Never imports `rwa_calc`.** |
-| `derive.py` | Assembles the derivation records and writes `expected_values.json`. |
+| `derive.py` | Assembles the derivation records and writes `expected_values.json`, keeping a committed float wherever the fresh one differs only by float noise (see the update protocol). |
 | `expected_values.json` | Generated. Carries a SHA-256 hash of `ORACLE_DERIVATIONS.md` so the doc and JSON cannot drift apart. |
 | `drivers.py` | The only module here that imports `rwa_calc`. Supplies *inputs* to a calculator's `calculate_branch` — or, for phase O3, to the CRM stage and then the SA branch — and collects the row back. `run_pipeline` instead translates a record into raw input tables and runs the whole pipeline. Derives nothing. |
 | `test_oracle.py` | Pytest module. Compares engine output against the oracle within relative error 1e-6, asserts the doc-hash lock, and asserts the derivation modules never import the engine. |
 | `test_oracle_pipeline.py` | Pytest module. Runs a curated subset of the same records end to end through `PipelineOrchestrator` and holds the pipeline to the same expected values at the same tolerance, after asserting each run reaches the record's fact pattern. |
 | `test_supporting_factor_pins.py` | Pins the SME supporting-factor oracles in both regimes (ORC-038, ORC-087 under CRR; ORC-060, ORC-097 under Basel 3.1). Each must assert both its RWEA and its factor, and the engine must publish the factor, because `test_oracle.py` skips an unasserted key and a key the engine does not publish. |
+| `test_derive.py` | Pytest module. Asserts that running `derive.py` over the committed `expected_values.json` reproduces it exactly, and pins the float-noise splice that makes that possible. |
 
 ### Layout of `derivations/`
 
@@ -70,7 +71,7 @@ run per curated record, shared by that record's two tests.
 If the doc-hash test fails, see the failure message — it has the recovery recipe
 inline.
 
-## Two locks
+## Three locks
 
 1. **The doc hash.** `expected_values.json` embeds the SHA-256 of
    `ORACLE_DERIVATIONS.md`, LF-normalised. The doc and the JSON can only move
@@ -79,6 +80,13 @@ inline.
    module in `derivations/` plus `derive.py` and fails on any `rwa_calc` import.
    A value that came from the engine, however indirectly, is worthless as
    evidence about the engine.
+3. **Clean regeneration.** `test_derive.py::test_regeneration_reproduces_the_committed_file`
+   runs `derive.py` over a copy of the committed `expected_values.json` and
+   requires the same text back, under the interpreter's own normal CDF and
+   under each form the standard library has used. The doc hash covers only
+   `ORACLE_DERIVATIONS.md`; this lock covers the `derivations/` modules, so an
+   edit to them that was never re-derived fails here instead of shipping a JSON
+   the code no longer produces.
 
 ## When the oracle and the engine disagree
 
@@ -249,6 +257,30 @@ after a corresponding update to `ORACLE_DERIVATIONS.md`. Specifically:
 The hash is the contract. If you find yourself wanting to break it, the
 correct response is almost always "the engine has a bug" — that's the
 oracle suite doing its job.
+
+**Float noise is not a change, and you never restore it by hand.** The
+standard library's normal CDF is computed differently across Python versions
+(`0.5 * (1 + erf(x))` up to 3.13, `0.5 * erfc(-x)` from 3.14), so the IRB
+conditional PDs, and the risk weights and RWAs built on them, come out a few
+bits apart between the two interpreter families. A file committed from one
+family drifts on the other, so a plain rewrite would show untouched IRB records
+as changed. So `derive.py` reads the committed file first and, for every
+record present in both, keeps the committed float wherever the fresh float
+differs from it by at most `FLOAT_NOISE_RELATIVE` (1e-12, relative —
+sized from the CDF's granularity at the smallest published conditional PD, and
+six orders of magnitude below the 1e-6 test tolerance). Everything else is
+written as computed: a real value move, any non-float leaf (a `bool`, `int` or
+string never counts as noise), and any added or removed record or key. The
+script prints how many leaves it kept, so a regeneration says what it
+suppressed, and `test_derive.py` fails if the threshold is loosened towards the
+test tolerance — whether through the constant or through the comparison that
+applies it (a relative move of the tolerance divided by 1e5 must still be
+written). It runs the regeneration check under each CDF form as well as the
+interpreter's own, and pins the splice on a file built from the interpreter's
+own output, so neither check depends on which family wrote the committed file
+or which one runs the suite. A regeneration diff therefore always means a
+derivation changed. If you see one you cannot explain, it is a real change —
+explain it, do not revert it.
 
 ## Roadmap — phase O3 (credit risk mitigation)
 

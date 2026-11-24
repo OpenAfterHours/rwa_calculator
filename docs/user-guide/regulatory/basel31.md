@@ -809,9 +809,11 @@ Basel 3.1 significantly increases equity risk weights and removes IRB for equity
     in place of 250% / 400%, from 1 January 2027 to 31 December 2029. Subordinated
     debt (150%), CIUs, the central-bank type and Art. 133(6)(c) significant
     investments (`is_significant_investment`) keep their own weights: 250% for a
-    significant investment, except that one which is also higher risk is
-    weighted 400% on every date, where Art. 133(4) gives it paragraph 6's 250%
-    (an engine gap, `IMPLEMENTATION_PLAN.md` P1.393(b)). A firm
+    significant investment on every date, even when it is also higher risk
+    (Art. 133(4) gives way to paragraph 6). Higher risk means the Glossary test
+    (unlisted AND a business under five years); the `is_speculative` flag can
+    supply an unstated business age but cannot override a listing or an age of
+    five years or more. A firm
     with IRB permission — F-IRB, A-IRB **or slotting** — is outside this
     schedule, and its own Rules 4.5–4.6 are not implemented (neither the
     schedule for equity it held under Standardised permission, Rule 4.5(1), nor

@@ -68,7 +68,7 @@ class TestB31EquityRiskWeightTable:
         assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.SPECULATIVE] == Decimal("4.00")
 
     def test_private_equity_400_percent(self) -> None:
-        """Private equity should be 400% under B31 (Art. 133(5) higher risk)."""
+        """Private equity should be 400% under B31 (Art. 133(4) higher risk)."""
         assert B31_SA_EQUITY_RISK_WEIGHTS[EquityType.PRIVATE_EQUITY] == Decimal("4.00")
 
     def test_ciu_table_default_1250_percent(self) -> None:
@@ -112,26 +112,41 @@ class TestB31EquityCalculatorSAWeights:
         """B31 Art. 133(4): Speculative equity = 400%."""
         assert apply_b31_equity_weight_sa("speculative", is_speculative=True) == pytest.approx(4.00)
 
-    def test_is_speculative_flag_overrides_type(self) -> None:
-        """B31: is_speculative=True overrides listed type to 400%."""
-        assert apply_b31_equity_weight_sa("listed", is_speculative=True) == pytest.approx(4.00)
+    def test_is_speculative_flag_does_not_override_a_listing(self) -> None:
+        """B31 Art. 133(3): a listed leg flagged speculative is still 250%.
+
+        The Glossary "higher risk equity exposure" is one "not listed on a
+        recognised exchange" whose business is under five years old; there is no
+        speculative tier. The flag asserts the test holds, so it cannot put a
+        listed-type leg on the Art. 133(4) rung (P1.207 -- this test asserted
+        400% until then).
+        """
+        assert apply_b31_equity_weight_sa("listed", is_speculative=True) == pytest.approx(2.50)
 
     def test_government_supported_250_percent(self) -> None:
-        """B31 Art. 133(3): Government-supported equity = 250% (standard equity).
+        """B31 Art. 133(3): Government-supported equity of unknown age = 250% (standard equity).
 
-        B31 removed CRR Art. 133(3)(c) legislative 100% carve-out.
-        Art. 133(6) is an exclusion clause, not a risk weight.
+        B31 has no legislative-programme 100% weight and no government-supported
+        carve-out from the Glossary higher-risk test: with an evidenced business
+        age under five years it takes 400% (P1.393(c)). Unknown age is standard,
+        as for every non-private-equity type.
         """
         assert apply_b31_equity_weight_sa(
             "government_supported", is_government_supported=True
         ) == pytest.approx(2.50)
+
+    def test_government_supported_young_unlisted_400_percent(self) -> None:
+        """B31 Art. 133(4) + Glossary: unlisted government-supported, business 2y old = 400%."""
+        assert apply_b31_equity_weight_sa(
+            "government_supported", is_government_supported=True, business_age_years=2.0
+        ) == pytest.approx(4.00)
 
     def test_central_bank_zero_percent(self) -> None:
         """B31 Art. 133(6): Central bank equity = 0%."""
         assert apply_b31_equity_weight_sa("central_bank") == pytest.approx(0.00)
 
     def test_private_equity_400_percent(self) -> None:
-        """B31 Art. 133(5): Private equity = 400% (higher risk PE/VC)."""
+        """B31 Art. 133(4): unlisted private equity of unknown age = 400% (higher risk)."""
         assert apply_b31_equity_weight_sa("private_equity") == pytest.approx(4.00)
 
     def test_ciu_fallback_unlisted_1250_percent(self) -> None:

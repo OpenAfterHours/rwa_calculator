@@ -255,7 +255,7 @@ class SACalculator:
         treatment available via the dedicated equity_exposures input table:
         CIU look-through/mandate-based approaches, the PS1/26 General Provisions
         rules 4.2 / 4.3 transitional weights (2027-2029), type-specific weights
-        (central_bank 0%, subordinated_debt 150%, speculative 400%), and IRB
+        (central_bank 0%, subordinated_debt 150%, higher-risk 400%), and IRB
         Simple method (CRR).
 
         The check is based on the approach column containing equity values,
@@ -293,7 +293,7 @@ class SACalculator:
                         "Equity-class exposures detected in main exposure table. "
                         "These receive default SA equity risk weights (250% Basel 3.1 "
                         "Art. 133(3), 100% CRR Art. 133(2)). For type-specific weights "
-                        "(central_bank 0%, subordinated_debt 150%, speculative 400%), "
+                        "(central_bank 0%, subordinated_debt 150%, higher-risk 400%), "
                         "CIU approaches, the rules 4.2 / 4.3 transitional weights "
                         "(2027-2029), or IRB Simple, "
                         "use the dedicated equity_exposures input table."

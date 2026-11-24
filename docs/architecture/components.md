@@ -594,7 +594,7 @@ class EquityCalculatorProtocol(Protocol):
 
 The approach is determined by the firm's IRB permissions:
 
-- **SA (Article 133)**: Default approach. Risk weights based on equity type (central bank 0%, listed 100%, unlisted 250%, speculative 400%).
+- **SA (Article 133)**: Default approach. CRR: central bank 0%, significant investment 250% (Art. 48(4)), all other equity 100%. Basel 3.1: central bank 0%, subordinated debt 150%, CIU under Arts. 132-132C, significant investment 250% (Art. 133(6)(c)), higher-risk equity 400% (Glossary: unlisted AND business under five years), all other equity 250%.
 - **IRB Simple (Article 155)**: When IRB is permitted. Risk weights differ (private equity diversified 190%, exchange-traded 290%, other 370%).
 
 ```python

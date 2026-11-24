@@ -4,7 +4,7 @@ Equity Calculator for Equity Exposure RWA.
 Implements framework-dependent approaches:
 - CRR Article 133: Standardised Approach (SA) — 0%/100%/250%/400%
 - CRR Article 155: IRB Simple Risk Weight Method — 190%/290%/370%
-- Basel 3.1 Art. 133(3)-(5): SA only — 0%/150%/250%/400% (IRB removed)
+- Basel 3.1 Art. 133(3)-(6): SA only — 0%/150%/250%/400% (IRB removed)
 
 Pipeline position:
     CRMProcessor -> EquityCalculator -> Aggregation
@@ -28,6 +28,8 @@ Key responsibilities:
 
 Basel 3.1 key changes from CRR:
 - All standard equity (incl. government-supported): 100% -> 250% (Art. 133(3))
+- Higher risk equity (Glossary: unlisted AND business < 5 years): 400% (Art. 133(4))
+- Significant investments (Own Funds Art. 48(4)): 250% even if higher risk (Art. 133(6)(c))
 - CIU fallback: 1,250% (Art. 132(2), unchanged from CRR)
 - IRB equity removed (Art. 147A) — all equity uses SA
 - A firm without IRB permission on 31 December 2026 is ASSIGNED 160% / 190% /
@@ -109,6 +111,11 @@ _IRB_SIMPLE_EL = lookup_float_map(resolve("crr", date(2026, 1, 1)).lookup("equit
 _CRR_SIGNIFICANT_INVESTMENT_RW = scalar_value(
     resolve("crr", date(2026, 1, 1)).scalar_param("equity_significant_investment_rw")
 )
+# PS1/26 Art. 133(6)(c): the same Own Funds Art. 48(4) 250%, which displaces the
+# Art. 133(3) / (4) weights and the rules 4.2 / 4.3 transitional alike.
+_B31_SIGNIFICANT_INVESTMENT_RW = scalar_value(
+    resolve("b31", date(2027, 1, 1)).scalar_param("equity_significant_investment_rw")
+)
 
 # Art. 132(2): CIU fallback risk weight — 1,250% under both CRR and B31.
 # Punitive weight incentivises firms to use look-through or mandate-based approaches.
@@ -142,16 +149,17 @@ _EQUITY_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     "fund_reference": ColumnSpec(pl.String, required=False),
     "ciu_look_through_rw": ColumnSpec(pl.Float64, required=False),
     "fund_nav": ColumnSpec(pl.Float64, required=False),
-    # Years the underlying PE/VC business has existed; used by the B31
-    # Art. 133(4) higher-risk test (PRA PS1/26 Glossary p.5).
+    # Years the underlying business has existed; used by the B31 Art. 133(4)
+    # higher-risk test (PRA PS1/26 Glossary p.5).
     "business_age_years": ColumnSpec(pl.Float64, required=False),
     # CRR Art. 155(3): True -> firm has Art. 178 default-definition data so the
     # 1.5x PD/LGD scaling does NOT apply; False/null -> 1.5x scaling applies.
     "has_default_definition_info": ColumnSpec(pl.Boolean, default=False, required=False),
     # PS1/26 Art. 133(6)(c): a holding weighted 250% under Own Funds Art. 48(4)
-    # (a significant investment) is "within scope of paragraph 6", which the
-    # transitional rules 4.2 / 4.3 exclude by name. Read only by the
-    # transitional; absent or null means not such a holding.
+    # (a significant investment) is "within scope of paragraph 6": 250% ahead of
+    # the Art. 133(4) rung, and excluded by name from the transitional rules
+    # 4.2 / 4.3. CRR: the Art. 133(2) / 155(1) 250%. Absent or null means not
+    # such a holding.
     "is_significant_investment": ColumnSpec(pl.Boolean, default=False, required=False),
 }
 
@@ -622,7 +630,8 @@ class EquityCalculator:
 
         CRR Art. 133(2): 100% flat (with 0% for central bank);
             CIU via Art. 132 (1,250% fallback per Art. 132(2))
-        Basel 3.1 Art. 133(3)-(5): 250% / 400% / 150% (sub debt)
+        Basel 3.1 Art. 133(3)-(6): 250% / 400% / 150% (sub debt) / 250%
+            (Art. 133(6)(c) significant investment)
         """
         resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
         if resolved_pack.feature("equity_revised_sa_risk_weights"):
@@ -652,7 +661,7 @@ class EquityCalculator:
         - CIU: Art. 132 treatment (1,250% fallback, look-through, mandate-based)
         - Significant investment (``is_significant_investment``): 250%, the
           Art. 48(4) weight Art. 133(2) defers to (IV-06; see
-          ``_crr_significant_investment_expr``)
+          ``_significant_investment_expr``)
         - All other equity: 100% (Art. 133(2) flat)
 
         Note: PE/VC qualifying as high-risk is routed to Art. 128 (150%) via the
@@ -665,7 +674,7 @@ class EquityCalculator:
                 # CIU: approach-aware risk weights (Art. 132-132C)
                 .pipe(_append_ciu_branches)
                 # Art. 133(2) / Art. 48(4): significant investment = 250%
-                .when(_crr_significant_investment_expr())
+                .when(_significant_investment_expr())
                 .then(pl.lit(_CRR_SIGNIFICANT_INVESTMENT_RW))
                 # Art. 133(2): all other equity = 100%
                 .otherwise(pl.lit(_CRR_SA_RW[EquityType.OTHER]))
@@ -682,44 +691,52 @@ class EquityCalculator:
         """
         Apply Basel 3.1 PRA PS1/26 Art. 133 SA equity risk weights.
 
-        Risk weights (in priority order per classification decision tree):
+        Risk weights, in the order the chain resolves them:
         1. Central bank: 0%  (sovereign treatment)
         2. Subordinated debt / non-equity own funds: 150%  (Art. 133(5))
-        3. Speculative / higher risk: 400%  (Art. 133(4))
-        4. Higher-risk test (Art. 133(4) + Glossary p.5), for any equity that
-           is not central-bank / subordinated-debt / CIU / government-supported:
-           - unlisted (NOT is_exchange_traded) AND business_age_years < 5.0
-             (or null, treated conservatively) -> 400% (higher-risk)
-           - otherwise -> falls through to standard 250% (Art. 133(3))
-        5. CIU: approach-dependent  (Art. 132-132C)
-           - CIU fallback: 1,250%  (Art. 132(2))
-        6. All other standard equity (incl. government-supported, listed, and
-           long-established/exchange-traded equity): 250%  (Art. 133(3))
+        3. CIU: approach-dependent (Arts. 132-132C; fall-back 1,250%,
+           Art. 132(2)). Art. 112(2) Table A2 ranks CIUs (row 2) above equity
+           (row 3), so a CIU unit never reaches the Art. 133 ladder below,
+           whatever ``is_speculative`` or its business age say (P1.393(a)).
+        4. Art. 133(6)(c): a significant investment (``is_significant_investment``,
+           the non-deducted Own Funds Art. 48(4) holding) = 250%. Both Art.
+           133(3) and (4) give way to paragraph 6, so this holds even when the
+           leg is also higher risk (P1.393(b)). It sits after the
+           subordinated-debt branch: Art. 48(4) weights CET1 holdings, so an
+           SI-flagged subordinated-debt leg keeps its Art. 133(5) 150%.
+        5. Art. 133(4): a Glossary "higher risk equity exposure" = 400% -- not
+           listed on a recognised exchange AND a business under five years old
+           (``_b31_higher_risk_expr``).
+        6. Every other equity exposure, listed, long-established or
+           government-supported: 250%  (Art. 133(3)).
 
-        Note: B31 Art. 133(6) is an exclusion clause (own funds deductions,
-        Art. 89(3), Art. 48(4)) — NOT a risk weight assignment. CRR's 100%
-        legislative equity (Art. 133(3)(c)) has no equivalent in B31.
+        Art. 133(6)(a) (deducted amounts) is outside the engine's scope, and
+        (b) (the Own Funds Art. 89(3) 1,250%) has no input carrier. CRR's 100%
+        legislative-programme equity has no equivalent in Basel 3.1.
 
-        Rows 3 and 4 are one predicate, ``_b31_higher_risk_expr``, which the
-        rules 4.2 / 4.3 transitional reads too: the leg the transitional
-        treats as higher risk is exactly the leg this chain put on the
-        Art. 133(4) rung.
+        Rung 5 is one predicate, ``_b31_higher_risk_expr``, which the rules
+        4.2 / 4.3 transitional reads too: the leg the transitional treats as
+        higher risk is exactly the leg this chain put on the Art. 133(4) rung.
         """
         is_higher_risk = _b31_higher_risk_expr(exposures.collect_schema().names())
+        equity_type = pl.col("equity_type").str.to_lowercase()
 
         return exposures.with_columns(
             [
-                pl.when(pl.col("equity_type").str.to_lowercase() == "central_bank")
+                pl.when(equity_type == "central_bank")
                 .then(pl.lit(_B31_SA_RW[EquityType.CENTRAL_BANK]))
                 # Art. 133(5): subordinated debt / non-equity own funds = 150%
-                .when(pl.col("equity_type").str.to_lowercase() == "subordinated_debt")
+                .when(equity_type == "subordinated_debt")
                 .then(pl.lit(_B31_SA_RW[EquityType.SUBORDINATED_DEBT]))
-                # Art. 133(4): higher risk equity = 400% (speculative flag or
-                # type, or the Glossary unlisted-and-under-five-years test).
+                # CIU: approach-aware risk weights (Art. 132-132C), above the
+                # equity ladder per Art. 112(2) Table A2.
+                .pipe(_append_ciu_branches)
+                # Art. 133(6)(c): the Own Funds Art. 48(4) 250%, ahead of (4).
+                .when(_significant_investment_expr())
+                .then(pl.lit(_B31_SIGNIFICANT_INVESTMENT_RW))
+                # Art. 133(4): a Glossary higher risk equity exposure = 400%.
                 .when(is_higher_risk)
                 .then(pl.lit(_B31_SA_RW[EquityType.SPECULATIVE]))
-                # CIU: approach-aware risk weights (Art. 132-132C)
-                .pipe(_append_ciu_branches)
                 .otherwise(pl.lit(_B31_SA_RW[EquityType.OTHER]))
                 .alias("risk_weight"),
             ]
@@ -767,7 +784,7 @@ class EquityCalculator:
         # (each Art. 158(7) EL rate must pair with its Art. 155(2) RW bucket).
         eq_type = pl.col("equity_type").str.to_lowercase()
         is_central_bank = eq_type == "central_bank"
-        is_significant_investment = _crr_significant_investment_expr()
+        is_significant_investment = _significant_investment_expr()
         is_diversified_pe = _crr_diversified_private_equity_expr()
         is_exchange_traded = pl.col("is_exchange_traded") == True  # noqa: E712
         is_listed = eq_type == "listed"
@@ -1000,7 +1017,7 @@ class EquityCalculator:
         # Art. 155(1) excludes the Art. 48(4) 250% leg from the PD/LGD approach:
         # it takes the flat 250% (IV-06), no EL and no Art. 155(3) cap, and keeps
         # the equity class the K formula's corporate inputs overwrote.
-        is_significant_investment = _crr_significant_investment_expr()
+        is_significant_investment = _significant_investment_expr()
         exposures = exposures.with_columns(
             pl.when(is_significant_investment)
             .then(pl.lit(_CRR_SIGNIFICANT_INVESTMENT_RW))
@@ -1259,40 +1276,52 @@ def _has_irb_model_permission(config: CalculationConfig) -> bool:
 def _b31_higher_risk_expr(schema_names: Collection[str]) -> pl.Expr:
     """Art. 133(4): the one predicate that puts a Basel 3.1 equity leg on the 400% rung.
 
-    True for the ``is_speculative`` flag, the ``speculative`` type, and the
-    Glossary "higher risk equity exposure" test (p.5: "not listed on a
-    recognised exchange; and [...] whose business has existed for a period of
-    less than five years"), routed two ways:
+    The Glossary (p.5) defines a "higher risk equity exposure" as one that is
+    "(1) not listed on a recognised exchange; and (2) to an undertaking ('A')
+    whose business has existed for a period of less than five years". It has no
+    speculative tier and no government-supported carve-out. So a leg is higher
+    risk only when it is NOT listed -- neither ``is_exchange_traded`` nor of
+    type ``listed`` / ``exchange_traded`` -- and its business is young, which
+    is evidenced three ways:
 
+    - the firm asserts it: the ``is_speculative`` flag or the ``speculative``
+      type. The assertion supplies the age the row does not state, so it holds
+      while ``business_age_years`` is null or under five; it cannot override
+      an age evidenced at five years or more, nor a listing (P1.207);
     - unlisted private equity (diversified or not) whose business age is under
       five years OR unknown — a firm cannot claim the long-established
       carve-out without evidence of age;
-    - any other unlisted equity that is not central-bank, subordinated debt, a
-      CIU or government-supported, when its business age is evidenced (non-null)
-      and under five years.
+    - any other unlisted equity that is not central-bank, subordinated debt or
+      a CIU, when its business age is evidenced (non-null) and under five years.
+      Government-supported equity is in this route (P1.393(c)); unknown age is
+      standard, as for every non-private-equity type.
 
     Read by the Art. 133 weight chain and by the rules 4.2 / 4.3 transitional,
     so the transitional treats as higher risk exactly the legs that were
-    weighted as such. Callers outside the input contract may lack
-    ``is_exchange_traded`` / ``business_age_years``; absent means unlisted /
-    unknown age.
+    weighted as such. The chain resolves CIUs and Art. 133(6)(c) holdings
+    before this rung, and the transitional's scope excludes both, so neither
+    reads this predicate's verdict on them. Callers outside the input contract
+    may lack ``is_exchange_traded`` / ``business_age_years``; absent means not
+    exchange-traded / unknown age.
     """
     eq_type = pl.col("equity_type").str.to_lowercase()
     is_pe_or_pe_div = eq_type.is_in(
         [EquityType.PRIVATE_EQUITY, EquityType.PRIVATE_EQUITY_DIVERSIFIED]
     )
     is_dedicated_treatment = eq_type.is_in(
-        [
-            EquityType.CENTRAL_BANK,
-            EquityType.SUBORDINATED_DEBT,
-            EquityType.CIU,
-            EquityType.GOVERNMENT_SUPPORTED,
-        ]
+        [EquityType.CENTRAL_BANK, EquityType.SUBORDINATED_DEBT, EquityType.CIU]
     )
-    is_unlisted = (
-        ~pl.col("is_exchange_traded").fill_null(False)
-        if "is_exchange_traded" in schema_names
-        else pl.lit(True)
+    is_listed = (
+        eq_type.eq_missing(EquityType.LISTED.value)
+        | eq_type.eq_missing(EquityType.EXCHANGE_TRADED.value)
+        | (
+            pl.col("is_exchange_traded").eq_missing(True)
+            if "is_exchange_traded" in schema_names
+            else pl.lit(False)
+        )
+    )
+    is_asserted_young = pl.col("is_speculative").eq_missing(True) | eq_type.eq_missing(
+        EquityType.SPECULATIVE.value
     )
     has_age = "business_age_years" in schema_names
     is_young_or_unknown = (
@@ -1305,13 +1334,9 @@ def _b31_higher_risk_expr(schema_names: Collection[str]) -> pl.Expr:
         if has_age
         else pl.lit(False)
     )
-    is_glossary_higher_risk = is_unlisted & (
-        (is_pe_or_pe_div & is_young_or_unknown) | (~is_dedicated_treatment & is_young_evidenced)
-    )
-    return (
-        pl.col("is_speculative").eq_missing(True)
-        | eq_type.eq_missing(EquityType.SPECULATIVE.value)
-        | is_glossary_higher_risk
+    return ~is_listed & (
+        ((is_asserted_young | is_pe_or_pe_div) & is_young_or_unknown)
+        | (~is_dedicated_treatment & is_young_evidenced)
     )
 
 
@@ -1337,15 +1362,19 @@ def _standardised_transitional_scope_expr() -> pl.Expr:
 
 @cites("CRR Art. 133(2)")
 @cites("CRR Art. 155(1)")
-def _crr_significant_investment_expr() -> pl.Expr:
-    """CRR legs that take the Art. 48(4) 250% in place of their equity weight (IV-06).
+@cites("PS1/26, paragraph 133")
+def _significant_investment_expr() -> pl.Expr:
+    """Legs that take the Own Funds Art. 48(4) 250% in place of their equity weight.
 
     CRR Art. 133(2): "Equity exposures shall be assigned a risk weight of 100 %,
     unless they are required to be deducted in accordance with Part Two,
     assigned a 250 % risk weight in accordance with Article 48(4), ...". Art.
     155(1) applies the IRB equity approaches to equity "excluding those deducted
     in accordance with Part Two or subject to a 250 % risk weight in accordance
-    with Article 48", so the 250% holds on the SA, IRB-simple and PD/LGD paths.
+    with Article 48", so the 250% holds on the SA, IRB-simple and PD/LGD paths
+    (IV-06). PS1/26 Art. 133(3) and (4) both give way to paragraph 6, whose
+    point (c) is "exposures assigned a risk weight of 250% in accordance with
+    paragraph 4 of Own Funds (CRR) Part Article 48" (P1.393(b)).
     ``is_significant_investment`` is the firm's assertion that the leg is the
     non-deducted amount of a significant investment in a financial sector entity
     (the engine performs no deduction; the flag is documented that way).

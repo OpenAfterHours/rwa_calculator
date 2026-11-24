@@ -413,8 +413,13 @@ irrespective of the provision level.
 
 IRB equity approaches are **removed** — equity is SA-only under Basel 3.1, with a
 transitional schedule (see [slotting-changes.md](slotting-changes.md) for the phase-in
-entries). Legislative-programme equity and subordinated debt sit outside the standard
-and higher-risk buckets.
+entries). Subordinated debt sits outside the Art. 133(3)/(4) ladder (Art. 133(5)).
+Government-supported or legislative-programme equity has no Basel 3.1 carve-out: it is
+standard, or higher risk where the Glossary "higher risk equity exposure" test holds
+(unlisted and a business under five years old). The `is_speculative` flag or the
+`speculative` type supplies an unstated business age, but cannot override a listing
+or an evidenced age of five years or more; read `equity_sa_risk_weights` and the
+transitional entries for the weights.
 
 Other items are structurally unchanged from CRR.
 

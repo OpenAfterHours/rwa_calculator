@@ -1339,7 +1339,10 @@ RUNS: tuple[GateInput, ...] = (
     # are populated. Every earlier run held no direct equity or held it under an
     # IRB permission, so ``boe_b0710_2`` sat VACUOUS and rows 0371-0374 were null
     # estate-wide. Two legs move (listed; unlisted under five years) and two
-    # must not (Art. 133(5) subordinated debt; an Art. 133(6)(c) holding).
+    # must not (Art. 133(5) subordinated debt; an Art. 133(6)(c) holding). Five
+    # more pair the Art. 133 weight chain's edges (P1.207 / P1.393): speculative
+    # flags that do and do not survive the Glossary test, young
+    # government-supported equity, and a higher-risk Art. 133(6)(c) holding.
     #
     # Basel 3.1 only: CRR has no transitional. SA-only, no prior frame. A
     # CORRECT return of this book breaks four Bank rules the register banks as

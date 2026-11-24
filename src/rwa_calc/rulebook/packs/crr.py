@@ -726,8 +726,8 @@ ENTRIES: dict[str, RuleEntry] = {
     # (CRR) Part). Art. 155(1) excludes such amounts from the IRB equity
     # approaches, so the weight applies on the SA, IRB-simple and PD/LGD paths
     # alike; consumed by engine/equity/calculator.py for legs flagged
-    # ``is_significant_investment``. CRR-only entry: the Basel 3.1 chain is not
-    # changed here (PS1/26 Art. 133(6)(c) interplay is P1.393).
+    # ``is_significant_investment``. The Basel 3.1 pack carries its own entry of
+    # the same name, cited to PS1/26 Art. 133(6)(c) (P1.393(b)).
     "equity_significant_investment_rw": ScalarParam(
         name="equity_significant_investment_rw",
         value=Decimal("2.50"),

@@ -1221,10 +1221,11 @@ for a standalone future codemod. See the
 | `currency` | `String` | No | ISO 4217 currency code |
 | `carrying_value` | `Float64` | No | Balance sheet value |
 | `fair_value` | `Float64` | No | Mark-to-market value |
-| `is_speculative` | `Boolean` | No | Higher-risk equity (unlisted + business < 5yr) |
-| `is_exchange_traded` | `Boolean` | No | Listed on recognised exchange |
-| `is_government_supported` | `Boolean` | No | Government-supported programme |
-| `is_significant_investment` | `Boolean` | No | The firm's assertion that the row is the **non-deducted** amount of a significant investment (>10%) in a financial sector entity, risk weighted 250% under Own Funds Art. 48(4) (the engine performs no deduction). **CRR:** 250% on every equity path — Art. 133(2) defers to Art. 48(4) on SA, and Art. 155(1) excludes the leg from the IRB simple-RW and PD/LGD approaches, so on those paths it takes 250% (not 190% / 290% / 370% or the K formula), carries no Art. 158(7) EL and is sealed `equity_method = "irb_fixed_rw"` (COREP C 10.01 row 0110 / C 02.00 row 0420 Equity IRB; not CR10.5 simple-RW equity). A `ciu` or `central_bank` row keeps its own treatment whatever the flag says. **Basel 3.1:** removes the leg from the rules 4.2 / 4.3 transitional (Art. 133(6)(c)); its weight stays the Art. 133(3) / (4) chain (P1.393). Default `False`; null is not an assertion |
+| `is_speculative` | `Boolean` | No | The firm's assertion that the row is a Basel 3.1 Glossary "higher risk equity exposure" (not listed on a recognised exchange AND a business under five years old). It supplies the business age the row does not state, so it gives 400% (rule 4.3 weights in 2027-29) while `business_age_years` is null or under 5. It cannot contradict the row's own evidence: a listed row (`is_exchange_traded`, or `equity_type` `listed` / `exchange_traded`) or one with `business_age_years` >= 5 is 250% whatever the flag. Not read under CRR (flat 100%) |
+| `is_exchange_traded` | `Boolean` | No | Listed on recognised exchange. Under Basel 3.1 a row that is exchange-traded, or of `equity_type` `listed` / `exchange_traded`, is listed for the Glossary higher-risk test and is never higher risk |
+| `is_government_supported` | `Boolean` | No | Government-supported programme (informational; the weight follows `equity_type` and the Glossary test) |
+| `business_age_years` | `Float64` | No | Years the issuer's business has existed (Glossary "higher risk equity exposure", limb (2)). **Basel 3.1:** an unlisted row with an evidenced age under 5 is higher risk (400%), including `government_supported`; an evidenced age of 5 or more defeats `is_speculative` / the `speculative` type. Null: unlisted `private_equity` / `private_equity_diversified` are assumed young (400%), every other type is standard (250%) unless flagged speculative |
+| `is_significant_investment` | `Boolean` | No | The firm's assertion that the row is the **non-deducted** amount of a significant investment (>10%) in a financial sector entity, risk weighted 250% under Own Funds Art. 48(4) (the engine performs no deduction). **CRR:** 250% on every equity path — Art. 133(2) defers to Art. 48(4) on SA, and Art. 155(1) excludes the leg from the IRB simple-RW and PD/LGD approaches, so on those paths it takes 250% (not 190% / 290% / 370% or the K formula), carries no Art. 158(7) EL and is sealed `equity_method = "irb_fixed_rw"` (COREP C 10.01 row 0110 / C 02.00 row 0420 Equity IRB; not CR10.5 simple-RW equity). A `ciu` or `central_bank` row keeps its own treatment whatever the flag says. **Basel 3.1:** 250% on every reporting date (Art. 133(6)(c): Art. 133(3) and (4) give way to paragraph 6), so a significant investment that is also higher risk is not 400%, and rules 4.2 / 4.3 do not reach it. A `subordinated_debt` row keeps its Art. 133(5) 150%. Default `False`; null is not an assertion |
 | `ciu_approach` | `String` | No | CIU treatment selector — `"look_through"` (Art. 132(3)), `"mandate_based"` (Art. 132(4)), or `"fallback"` (1,250% per Art. 132(2)). When null the calculator selects based on data availability and falls back conservatively |
 | `ciu_mandate_rw` | `Float64` | No | Mandate-based RW (decimal) when `ciu_approach = "mandate_based"`. Calculated upstream from the fund's investment mandate |
 | `ciu_third_party_calc` | `Boolean` | No | True when the look-through RW has been calculated by an eligible third party (custodian / depositary / management company) per Art. 132(3) — relaxes the holding-level evidence requirement |
@@ -1238,13 +1239,13 @@ for a standalone future codemod. See the
 | Value | Risk Weight | Description |
 |-------|-------------|-------------|
 | `central_bank` | 0% | Central bank equity holdings (Art. 133(6)) |
-| `listed` | 100% | Exchange-traded equities |
-| `exchange_traded` | 100% | Listed on recognised exchange |
-| `government_supported` | 100% CRR / 250% B31 | Government-supported programme |
+| `listed` | 100% CRR / 250% B31 | Exchange-traded equities; never higher risk under Basel 3.1 (listed for the Glossary test) |
+| `exchange_traded` | 100% CRR / 250% B31 | Listed on recognised exchange; never higher risk under Basel 3.1 |
+| `government_supported` | 100% CRR / 250% B31 | Government-supported programme. Basel 3.1 has no carve-out from the Glossary test: unlisted with `business_age_years` < 5 is 400% |
 | `unlisted` | 250% | Unlisted equities |
 | `private_equity` | 250% | Private equity investments |
 | `private_equity_diversified` | 190% | Private equity in a sufficiently diversified portfolio (firm attestation). The only encoding of the CRR Art. 155(2) 190% simple RW and the Art. 165(2) 65% PD/LGD LGD; there is no separate diversification flag |
-| `speculative` | 400% | Higher-risk (unlisted + business < 5yr) |
+| `speculative` | 100% CRR / 400% B31 | Asserted higher-risk (unlisted + business < 5yr). Under Basel 3.1, as for `is_speculative`: 250% if the row is exchange-traded or `business_age_years` >= 5 |
 | `ciu` | Look-through | Collective investment undertakings |
 | `other` | 250% | Other equity exposures |
 

@@ -299,6 +299,8 @@ class TestSubordinatedDebtMixedBatch:
                 # Art. 132(4) unrestricted-access derogation (P1.258); this test
                 # builds its frame inline and bypasses the equity input contract.
                 "ciu_unrestricted_access": [None, None, None, None],
+                # PS1/26 Art. 133(6)(c) carrier, read by the Basel 3.1 chain.
+                "is_significant_investment": [False, False, False, False],
             }
         ).lazy()
 

@@ -1377,9 +1377,10 @@ EQUITY_EXPOSURE_SCHEMA: dict[str, ColumnSpec] = {
     "fund_reference": ColumnSpec(pl.String, required=False),
     "fund_nav": ColumnSpec(pl.Float64, required=False),
     # Number of years the underlying business has existed.
-    # Used by Basel 3.1 PE/VC higher-risk test (PRA PS1/26 Glossary p.5,
-    # Art. 133(4)): unlisted PE with business_age_years < 5.0 (or null,
-    # treated conservatively) routes to 400%; >= 5.0 routes to standard 250%.
+    # Used by the Basel 3.1 higher-risk test (PRA PS1/26 Glossary p.5,
+    # Art. 133(4)): an unlisted leg with business_age_years < 5.0 routes to
+    # 400% (unlisted PE also when null, treated conservatively); >= 5.0 routes
+    # to standard 250% even when flagged is_speculative.
     "business_age_years": ColumnSpec(pl.Float64, required=False, domain=_BUSINESS_AGE_DOMAIN),
     # CRR Art. 155(3): True -> institution has sufficient Art. 178 default-
     # definition data, so the 1.5x PD/LGD scaling does NOT apply. False/null ->

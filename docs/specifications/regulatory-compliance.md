@@ -46,7 +46,7 @@
 | Art. 127(1)–(1A) | Defaulted SA: provision-coverage split (100%/150%) | Done |
 | Art. 129 | Covered bond risk weights (rated Table 6A/Table 7, unrated derivation Art. 129(5)) | Done |
 | Art. 132–132B | CIU treatment (fallback 1,250%, mandate-based, look-through) | Done |
-| Art. 133 | Equity SA (listed 250%, speculative 400%) | Done |
+| Art. 133 | Equity SA (standard 250%, Glossary higher-risk 400%, subordinated debt 150%, Art. 133(6)(c) significant investment 250%) | Done |
 | Art. 143–154 | IRB approach revisions (PD/LGD floors, 1.06 removal) | Done |
 | Art. 147A | Model permissions and approach restrictions | Done |
 | Art. 153(5) | Revised slotting weights (maturity split removed) | Done |

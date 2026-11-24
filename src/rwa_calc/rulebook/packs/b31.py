@@ -682,6 +682,21 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("PS1/26", "133", "Art. 133(3)-(5) equity SA RW 250%/400%/150%"),
         default=Decimal("2.50"),
     ),
+    # PS1/26 Art. 133(6)(c): "exposures assigned a risk weight of 250% in
+    # accordance with paragraph 4 of Own Funds (CRR) Part Article 48" -- the
+    # non-deducted amount of a significant investment in a financial sector
+    # entity. Art. 133(3) and (4) both give way to paragraph 6, so the weight
+    # displaces the 400% higher-risk rung too, and rules 4.2 / 4.3 exclude such
+    # exposures by name. Consumed by engine/equity/calculator.py for legs
+    # flagged ``is_significant_investment`` (P1.393(b)); the CRR twin is the
+    # crr pack entry of the same name (CRR Art. 133(2)).
+    "equity_significant_investment_rw": ScalarParam(
+        name="equity_significant_investment_rw",
+        value=Decimal("2.50"),
+        citation=Citation(
+            "PS1/26", "133", "(6)(c) 250% for amounts risk weighted under Own Funds Art. 48(4)"
+        ),
+    ),
     # Basel 3.1 Art. 147A(1) IRB-approach restrictions: FSE/large-corp/institution
     # no A-IRB, sovereign-like + equity SA-only, IPRE/HVCRE slotting-only.
     # Overrides the CRR Feature; gates engine/classify/{approach,audit}.py.

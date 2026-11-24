@@ -319,6 +319,14 @@ def _equity_exposures() -> pl.DataFrame:
     No ``ciu_holdings`` row is needed — only ``look_through`` reads that table.
     ``ciu_third_party_calc`` is left defaulted: True would apply Art. 132(4)'s
     1.2x uplift and report 42% instead of 35%.
+
+    The row is also flagged ``is_speculative`` (P1.393(a)). Art. 112(2) Table A2
+    ranks CIUs (row 2) above equity (row 3), so a CIU unit takes its Art. 132
+    weight whatever the flag says; the flag changes nothing in a correct run, and
+    the goldens are what a correct run produces. Before the fix the Basel 3.1
+    chain put a flagged CIU on the Art. 133(4) 400% rung ahead of its CIU
+    branches, which would report this leg on row 0261 of the CIU sheet instead
+    of the 35% row, so the goldens now pin the precedence. CRR reads no flag.
     """
     rows: list[dict] = [
         {
@@ -330,6 +338,8 @@ def _equity_exposures() -> pl.DataFrame:
             "fair_value": CARRYING_CIU,
             "ciu_approach": "mandate_based",
             "ciu_mandate_rw": CIU_MANDATE_RW,
+            # P1.393(a): inert on a CIU (Table A2 precedence); see the docstring.
+            "is_speculative": True,
         }
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(EQUITY_EXPOSURE_SCHEMA))

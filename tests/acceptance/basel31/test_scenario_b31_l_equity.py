@@ -8,8 +8,11 @@ under PRA PS1/26 Art. 133 (amended), with IRB equity approaches removed
 SA equity weights (B31-L1 through B31-L9):
 - Art. 133(5): Subordinated debt / non-equity own funds 150%
 - Art. 133(3): Standard equity (listed, unlisted, exchange-traded, govt-supported) 250%
-- Art. 133(4): Higher-risk equity (speculative, PE/VC, young unlisted <5yr) 400%
-- Art. 133(6): Exclusion clause (own funds deductions, not a risk weight)
+- Art. 133(4): Higher-risk equity 400% -- the Glossary test, unlisted AND a
+  business under five years (asserted by the speculative flag / type, assumed
+  for unlisted PE of unknown age); a listed or 5y+ leg is 250% whatever the flag
+- Art. 133(6): Exclusion clause (own funds deductions, Art. 89(3), and the
+  Own Funds Art. 48(4) 250% for significant investments)
 - Central bank equity 0% (sovereign treatment)
 - CIU fallback: 1,250% (Art. 132(2))
 
@@ -219,8 +222,11 @@ class TestB31L5_GovernmentSupportedEquitySA:
     Input: equity_type=government_supported, is_government_supported=True, EAD=£400,000
     Expected: Art. 133(3) 250% → RWA = £1,000,000
 
-    B31 removed CRR Art. 133(3)(c) legislative 100% carve-out.
-    Art. 133(6) is an exclusion clause (own funds deductions), not a RW.
+    B31 has no legislative-programme 100% weight, and the Glossary higher-risk
+    test has no government-supported carve-out: this leg is 250% because its
+    business age is not supplied (unknown age is standard for every
+    non-private-equity type). With an evidenced age under five years and no
+    listing it would be 400% (P1.393(c)).
     """
 
     def test_b31_l5_risk_weight(self, equity_calculator, b31_config):
@@ -323,11 +329,15 @@ class TestB31L8_PrivateEquitySA:
         assert result["rwa"] == pytest.approx(600_000.0, rel=1e-4)
 
 
-class TestB31L9_IsSpeculativeFlagOverridesType:
+class TestB31L9_IsSpeculativeFlagCannotOverrideAListing:
     """
-    B31-L9: is_speculative flag overrides equity_type to higher-risk 400%.
+    B31-L9: the is_speculative flag cannot put a listed leg on the 400% rung.
     Input: equity_type=listed, is_speculative=True, EAD=£100,000
-    Expected: is_speculative flag → Art. 133(5) 400% overrides listed 250%
+    Expected: Art. 133(3) 250%. Art. 133(4) 400% is for a Glossary "higher risk
+    equity exposure" only -- "(1) not listed on a recognised exchange; and (2)
+    [...] whose business has existed for a period of less than five years". The
+    flag is the firm's assertion of that test; a listed type contradicts its
+    first limb (P1.207 -- until then this scenario expected 400%).
     """
 
     def test_b31_l9_risk_weight(self, equity_calculator, b31_config):
@@ -335,6 +345,17 @@ class TestB31L9_IsSpeculativeFlagOverridesType:
             equity_calculator,
             ead=Decimal("100000"),
             equity_type="listed",
+            is_speculative=True,
+            config=b31_config,
+        )
+        assert result["risk_weight"] == pytest.approx(2.50, abs=1e-4)
+
+    def test_b31_l9_unlisted_flagged_leg_keeps_400_percent(self, equity_calculator, b31_config):
+        """Guard: the same flag on an unlisted leg of unknown age still means 400%."""
+        result = calculate_single_equity_exposure(
+            equity_calculator,
+            ead=Decimal("100000"),
+            equity_type="other",
             is_speculative=True,
             config=b31_config,
         )
@@ -480,9 +501,10 @@ class TestB31L14_TransitionalGovernmentSupported:
     B31-L14: Government-supported equity under the Standardised Transitional Approach.
     Input: equity_type=government_supported, is_government_supported=True, EAD=£300,000
 
-    B31 removed CRR Art. 133(3)(c) legislative 100% carve-out, so
-    government-supported is ordinary Art. 133(3) equity and rule 4.2 assigns
-    it 160% in 2027 and 220% in 2029 (250% from 2030).
+    B31 has no legislative-programme 100% weight, so government-supported
+    equity of unknown business age is ordinary Art. 133(3) equity and rule 4.2
+    assigns it 160% in 2027 and 220% in 2029 (250% from 2030). An unlisted leg
+    with an evidenced age under five years would be higher risk (rule 4.3).
     """
 
     def test_b31_l14_year1_160_pct(self, equity_calculator, b31_2027_config):

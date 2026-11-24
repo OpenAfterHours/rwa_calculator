@@ -15,8 +15,15 @@ ps1-26-annex-ii-reporting-instructions.pdf):
   [...] disregarding the transitional provisions. However, the RWEA shall still
   reflect the transitional provisions." p.96 names the rows: 0250 for an
   Article 133(1)-(2) equity exposure, 0261 for a higher risk equity exposure.
-  So the 160% leg sits in row 0250 with RWEA 1,600,000 and the 220% leg in row
-  0261 with RWEA 1,100,000, and row 0280 "Other risk weights" holds nothing.
+  So each 160% leg sits in row 0250 and each 220% leg in row 0261, and row 0280
+  "Other risk weights" holds nothing.
+- WHICH RUNG. Art. 133(4) and the Glossary: higher risk is "(1) not listed on a
+  recognised exchange; and (2) [...] whose business has existed for a period of
+  less than five years". A speculative flag that contradicts the row (a listed
+  type, a ten-year business) leaves the leg in rows 0250 / 0372 (P1.207); an
+  unlisted government-supported leg under five years is higher risk, rows
+  0261 / 0371 (P1.393(c)); a higher-risk Art. 133(6)(c) significant investment
+  is 250% in row 0250 and outside the memorandum rows (P1.393(b)).
 - MEMORANDUM. p.97: "Institutions shall report all equity exposures to which the
   Standardised Transitional Approach for equities applies in these rows" — row
   0372 (rules 4.1 and 4.2, other equity) and row 0371 (rules 4.1 and 4.3, higher
@@ -51,14 +58,19 @@ from typing import TYPE_CHECKING
 import polars as pl
 import pytest
 from tests.fixtures.reporting_equity_transitional_portfolio import (
+    EQ_FLAGGED,
+    EQ_FLAGGED_AGED,
+    EQ_FLAGGED_LISTED,
+    EQ_GOV_YOUNG,
     EQ_LISTED,
+    EQ_SIG_YOUNG,
     EQ_SIGNIFICANT,
     EQ_SUB_DEBT,
     EQ_YOUNG,
-    EXPOSURE_LISTED,
-    EXPOSURE_SIGNIFICANT,
+    EQUITY_EXPOSURES,
     EXPOSURE_SUB_DEBT,
-    EXPOSURE_YOUNG,
+    RULE_4_2_REFERENCES,
+    RULE_4_3_REFERENCES,
     build_reporting_equity_transitional_bundle,
 )
 
@@ -87,10 +99,28 @@ _REPORTING_DATE = date(2027, 6, 1)
 _RULE_4_2_2027: float = 1.60
 _RULE_4_3_2027: float = 2.20
 
-_RWEA_LISTED: float = EXPOSURE_LISTED * _RULE_4_2_2027  # 1,600,000
-_RWEA_YOUNG: float = EXPOSURE_YOUNG * _RULE_4_3_2027  # 1,100,000
-_RWEA_SUB_DEBT: float = EXPOSURE_SUB_DEBT * 1.50  # 300,000, Art. 133(5)
-_RWEA_SIGNIFICANT: float = EXPOSURE_SIGNIFICANT * 2.50  # 750,000, Art. 133(6)(c)
+#: The applied weight of each equity leg in 2027 (see the portfolio's leg table).
+_APPLIED: dict[str, float] = {
+    **dict.fromkeys(RULE_4_2_REFERENCES, _RULE_4_2_2027),
+    **dict.fromkeys(RULE_4_3_REFERENCES, _RULE_4_3_2027),
+    EQ_SUB_DEBT: 1.50,  # Art. 133(5)
+    EQ_SIGNIFICANT: 2.50,  # Art. 133(6)(c)
+    EQ_SIG_YOUNG: 2.50,  # Art. 133(6)(c), although higher risk
+}
+_RWEA: dict[str, float] = {ref: EQUITY_EXPOSURES[ref] * _APPLIED[ref] for ref in _APPLIED}
+
+#: The legs each Article 133 row holds (Annex II p.96).
+_ROW_0250: tuple[str, ...] = (*RULE_4_2_REFERENCES, EQ_SIGNIFICANT, EQ_SIG_YOUNG)
+_ROW_0261: tuple[str, ...] = RULE_4_3_REFERENCES
+
+
+def _exposure(references: tuple[str, ...]) -> float:
+    return sum(EQUITY_EXPOSURES[ref] for ref in references)
+
+
+def _rwea(references: tuple[str, ...]) -> float:
+    return sum(_RWEA[ref] for ref in references)
+
 
 _BAND_ROWS: tuple[str, ...] = ("0240", "0250", "0261", "0280")
 _MEMO_ROWS: tuple[str, ...] = ("0371", "0372", "0373", "0374")
@@ -168,6 +198,11 @@ def total_sheet() -> str:
         (EQ_YOUNG, _RULE_4_3_2027, 4.00),
         (EQ_SUB_DEBT, 1.50, None),
         (EQ_SIGNIFICANT, 2.50, None),
+        (EQ_FLAGGED, _RULE_4_3_2027, 4.00),
+        (EQ_FLAGGED_LISTED, _RULE_4_2_2027, 2.50),
+        (EQ_FLAGGED_AGED, _RULE_4_2_2027, 2.50),
+        (EQ_GOV_YOUNG, _RULE_4_3_2027, 4.00),
+        (EQ_SIG_YOUNG, 2.50, None),
     ],
 )
 def test_the_book_holds_legs_off_the_ladder_beside_legs_on_it(
@@ -192,9 +227,9 @@ def test_the_book_holds_legs_off_the_ladder_beside_legs_on_it(
 @pytest.mark.parametrize(
     ("row_ref", "exposure", "rwea"),
     [
-        ("0240", EXPOSURE_SUB_DEBT, _RWEA_SUB_DEBT),
-        ("0250", EXPOSURE_LISTED + EXPOSURE_SIGNIFICANT, _RWEA_LISTED + _RWEA_SIGNIFICANT),
-        ("0261", EXPOSURE_YOUNG, _RWEA_YOUNG),
+        ("0240", EXPOSURE_SUB_DEBT, _RWEA[EQ_SUB_DEBT]),
+        ("0250", _exposure(_ROW_0250), _rwea(_ROW_0250)),
+        ("0261", _exposure(_ROW_0261), _rwea(_ROW_0261)),
     ],
 )
 def test_each_leg_is_reported_on_the_row_of_its_article_133_weight(
@@ -222,9 +257,7 @@ def test_the_band_rows_foot_to_row_0010(b31: tuple, equity_sheet: str, column: s
     banded = sum(float(_cell(corep, equity_sheet, ref, column) or 0.0) for ref in _BAND_ROWS)
 
     assert banded == pytest.approx(_cell(corep, equity_sheet, "0010", column))
-    assert _cell(corep, equity_sheet, "0010", "0220") == pytest.approx(
-        _RWEA_LISTED + _RWEA_YOUNG + _RWEA_SUB_DEBT + _RWEA_SIGNIFICANT
-    )
+    assert _cell(corep, equity_sheet, "0010", "0220") == pytest.approx(sum(_RWEA.values()))
 
 
 @pytest.mark.parametrize("row_ref", ["0250", "0261"])
@@ -250,12 +283,15 @@ def test_the_total_sheet_carries_the_same_equity_rows(
 
 @pytest.mark.parametrize(
     ("row_ref", "exposure", "rwea"),
-    [("0371", EXPOSURE_YOUNG, _RWEA_YOUNG), ("0372", EXPOSURE_LISTED, _RWEA_LISTED)],
+    [
+        ("0371", _exposure(RULE_4_3_REFERENCES), _rwea(RULE_4_3_REFERENCES)),
+        ("0372", _exposure(RULE_4_2_REFERENCES), _rwea(RULE_4_2_REFERENCES)),
+    ],
 )
 def test_the_standardised_transitional_memorandum_rows_carry_the_moved_legs(
     b31: tuple, equity_sheet: str, row_ref: str, exposure: float, rwea: float
 ) -> None:
-    """Only the moved legs: the Art. 133(6)(c) leg shares row 0250 and is not in row 0372."""
+    """Only the moved legs: the Art. 133(6)(c) legs share row 0250 and are not in row 0372."""
     corep = b31[1]
 
     for column in ("0010", "0040", "0150", "0200"):

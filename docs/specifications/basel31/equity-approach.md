@@ -41,7 +41,8 @@ Basel 3.1 fundamentally changes equity treatment by:
 | SA equity (standard) | 100% flat | **250%** | Art. 133(3) |
 | SA equity (higher risk) | 100% flat | **400%** | Art. 133(4) |
 | Subordinated debt / non-equity own funds | 100% | **150%** | Art. 133(5) |
-| Government-supported equity | 100% | **250%** (standard) | Art. 133(3) |
+| Government-supported equity | 100% | **250%**, or **400%** if higher risk (no carve-out from the Glossary test) | Art. 133(3)/(4) |
+| Significant investment (Own Funds Art. 48(4)) | 250% | **250%** on every date, even if higher risk | Art. 133(6)(c) |
 | IRB Simple approach | Available (Art. 155) | **Removed** | Art. 147A(1)(h) |
 | IRB PD/LGD approach | Available | **Removed** | Art. 147A(1)(h) |
 | CIU fallback | 1,250% (Art. 132(2)) | **1,250%** (unchanged) | Art. 132(2) |
@@ -55,7 +56,8 @@ Basel 3.1 fundamentally changes equity treatment by:
 | Equity Sub-Category | Risk Weight | Reference |
 |--------------------|-------------|-----------|
 | Subordinated debt / non-equity own funds | **150%** | Art. 133(5) |
-| Standard equity (listed, exchange-traded, government-supported) | **250%** | Art. 133(3) |
+| Standard equity (listed, exchange-traded, government-supported not higher risk) | **250%** | Art. 133(3) |
+| Significant investment (`is_significant_investment`, Own Funds Art. 48(4)) | **250%** | Art. 133(6)(c) |
 | Unlisted equity (non-higher-risk) | **250%** | Art. 133(3) |
 | Other equity | **250%** | Art. 133(3) |
 | Higher-risk equity (unlisted + business < 5 years — see [definition below](#higher-risk-classification-art-1334)) | **400%** | Art. 133(4) |
@@ -64,8 +66,27 @@ Basel 3.1 fundamentally changes equity treatment by:
     Art. 133(6) is an **exclusion clause** that scopes out exposures already handled
     elsewhere: (a) own funds deductions per Chapter 3, (b) 1,250% per Art. 89(3),
     (c) 250% per Art. 48(4). It does **not** assign a 100% risk weight.
-    CRR Art. 133(3)(c) had a 100% legislative equity carve-out, but B31 Art. 133
-    removes it. Government-supported equity is standard 250% equity under B31.
+    Basel 3.1 has no legislative-programme 100% weight. Government-supported
+    equity is ordinary Art. 133 equity: 250%, or 400% when it meets the Glossary
+    higher-risk test (unlisted, business under five years). The Glossary has no
+    government-supported carve-out (P1.393(c)).
+
+### Order of Resolution
+
+The engine (`EquityCalculator._apply_b31_equity_weights_sa`) resolves each leg
+in this order, so a leg that meets two descriptions takes the first:
+
+1. Central bank (0%)
+2. Subordinated debt / non-equity own funds (150%, Art. 133(5))
+3. CIU (Arts. 132–132C). Art. 112(2) Table A2 ranks CIUs (row 2) above equity
+   (row 3), so a CIU never reaches the Art. 133 ladder, even when flagged
+   `is_speculative` (P1.393(a)). The engine has no carrier for an Art. 132B(2)
+   exclusion, which would send a CIU unit to Art. 133.
+4. Significant investment (250%, Art. 133(6)(c)). Art. 133(3) and (4) both give
+   way to paragraph 6, so this outranks the higher-risk rung (P1.393(b)). It
+   sits after subordinated debt: an SI-flagged subordinated-debt leg keeps 150%.
+5. Higher-risk equity (400%, Art. 133(4))
+6. Every other equity exposure (250%, Art. 133(3))
 
 ### Higher-Risk Classification (Art. 133(4))
 
@@ -94,6 +115,17 @@ on whether the risk profile substantially changed on transfer (Glossary p.5, con
     or higher-risk (400%, Art. 133(4)). The calculator's `is_speculative` flag maps to
     the Art. 133(4) higher-risk definition, not a BCBS CQS tier.
 
+!!! info "The speculative flag asserts the Glossary test; it cannot contradict it"
+    `is_speculative` and the `speculative` type are the firm's assertion that the
+    leg is a Glossary higher-risk equity exposure. The assertion supplies a fact
+    the row does not state — the business age — so a flagged leg is 400% while
+    `business_age_years` is null or under five. It never overrides what the row
+    does state: a listed leg (`is_exchange_traded`, or `equity_type` `listed` /
+    `exchange_traded`) or one whose business age is evidenced at five years or
+    more is 250% whatever the flag (P1.207). Until November 2026 the flag forced
+    400% on any leg, and a `listed` / `exchange_traded` type with an evidenced age
+    under five also reached 400%.
+
 !!! info "Business-Age-Aware Higher-Risk Routing"
     The equity SA risk-weight logic (`engine/equity/calculator.py::_apply_equity_weights_sa`)
     is business-age aware: unlisted PE/VC (`private_equity`, `private_equity_diversified`)
@@ -104,8 +136,10 @@ on whether the risk profile substantially changed on transfer (Glossary p.5, con
     standard **250%** weight. See D3.37.
 
 All other equity (not subordinated debt, not higher-risk) receives the standard **250%**
-weight under Art. 133(3), including listed equity, government-supported equity, and
-unlisted PE/VC where the business has existed for five years or more.
+weight under Art. 133(3), including listed equity, government-supported equity of
+unknown or 5y+ business age, and unlisted PE/VC where the business has existed for
+five years or more. Any other unlisted type (including `government_supported`) is
+higher risk only when its business age is evidenced and under five years.
 
 ---
 
@@ -192,9 +226,9 @@ risk-weight rows, "However, the RWEA shall still reflect the transitional
 provisions".
 
 The engine reads "higher risk" from the same predicate that assigned the 400%
-rung (`_b31_higher_risk_expr`: the `is_speculative` flag, the `speculative`
-type, or the Glossary unlisted-and-under-five-years test), so a leg weighted
-at 400% takes the Rule 4.3 weight and nothing else does.
+rung (`_b31_higher_risk_expr`: the Glossary unlisted-and-under-five-years test,
+with the `is_speculative` flag or `speculative` type supplying an unstated age),
+so a leg weighted at 400% takes the Rule 4.3 weight and nothing else does.
 
 !!! note "Implementation — 2026-11"
     Until November 2026 the engine applied the schedule as
@@ -214,12 +248,9 @@ weight on every date and carry no transitional label:
 - **Art. 133(6) items** — both rules exclude exposures "within scope of
   paragraph 6" by name. The engine recognises Art. 133(6)(c) through
   `is_significant_investment` (a holding weighted 250% under Own Funds
-  Art. 48(4)); 133(6)(a) / (b) have no input carrier. **Engine gap:** a
-  flagged holding that is also higher risk is weighted 400% on every date, not
-  250% — the Art. 133 weight chain puts every higher-risk leg on the 400% rung
-  before it reads the flag, where Art. 133(4) sends a higher-risk exposure
-  "within the scope of paragraph 6" to paragraph 6's treatment
-  (`IMPLEMENTATION_PLAN.md` P1.393(b))
+  Art. 48(4)), which takes 250% on every date even when it is also higher
+  risk; 133(6)(a) (deducted amounts) is outside the engine's scope and (b)
+  (the Own Funds Art. 89(3) 1,250%) has no input carrier
 - **CIUs, every approach** (fall-back 1,250%, mandate-based, look-through) —
   weighted under Arts. 132–132C, not Art. 133. Under an assignment, an
   unexcluded fall-back CIU would drop from 1,250% to 160%, so the exclusion is
@@ -227,8 +258,9 @@ weight on every date and carry no transitional label:
 - **Central bank** (0%) — the engine's central-bank equity type is not an
   Art. 133(3) weight
 
-Government-supported equity is ordinary Art. 133(3) equity under Basel 3.1
-(there is no CRR Art. 133(3)(c) carve-out) and takes the Rule 4.2 weight.
+Government-supported equity is ordinary Art. 133 equity under Basel 3.1 (there
+is no legislative-programme carve-out): the Rule 4.2 weight, or the Rule 4.3
+weight when it meets the Glossary higher-risk test.
 
 !!! note "Rule 4.2 also reaches Simple Method equity collateral"
     Art. 222(3) weights the part of an exposure covered by Simple Method

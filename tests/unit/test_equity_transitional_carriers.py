@@ -74,7 +74,9 @@ _IN_SCOPE: dict[str, dict[str, Any]] = {
     "listed": {"equity_type": "listed", "is_exchange_traded": True},
     "government_supported": {"equity_type": "government_supported"},
     "unlisted_age_unknown": {"equity_type": "other"},
-    "speculative_flag": {"equity_type": "listed", "is_speculative": True},
+    "speculative_flag": {"equity_type": "other", "is_speculative": True},
+    # P1.207: the flag cannot contradict a listing -- standard, not higher risk.
+    "speculative_flag_on_listed": {"equity_type": "listed", "is_speculative": True},
     "speculative_type_without_flag": {"equity_type": "speculative"},
     "unlisted_age_2": {"equity_type": "other", "business_age_years": 2.0},
     "private_equity_age_unknown": {"equity_type": "private_equity"},

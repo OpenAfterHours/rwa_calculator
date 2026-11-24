@@ -1,7 +1,7 @@
 """
 Shared test helper for Basel 3.1 SA equity risk-weight assignment.
 
-Builds a single-row 11-column equity LazyFrame and calls
+Builds a single-row 14-column equity LazyFrame and calls
 EquityCalculator._apply_b31_equity_weights_sa directly, returning the
 assigned risk weight. Used by the B31 equity weight and subordinated-debt
 unit test modules to exercise weight assignment in isolation (before the
@@ -42,7 +42,13 @@ def apply_b31_equity_weight_sa(equity_type: str, **kwargs: bool | str | float | 
             # calls the weight functions directly, bypassing the equity input
             # contract, so every column the expressions read must be present here.
             "ciu_unrestricted_access": [kwargs.get("ciu_unrestricted_access")],
-        }
+            # PS1/26 Art. 133(6)(c) significant investment (P1.393(b)): read by
+            # the Basel 3.1 chain ahead of the Art. 133(4) rung.
+            "is_significant_investment": [kwargs.get("is_significant_investment", False)],
+            # Glossary "higher risk equity exposure" business-age limb.
+            "business_age_years": [kwargs.get("business_age_years")],
+        },
+        schema_overrides={"business_age_years": pl.Float64},
     ).lazy()
     result = calculator._apply_b31_equity_weights_sa(df, config).collect()
     return result["risk_weight"][0]

@@ -516,7 +516,9 @@ Effort: S1 M · S2 M · S3 M · S4 S — **L overall**, two batches.
    *presence*, so `SA004` fires on every Basel 3.1 run regardless of input and the override risk
    weight is unreachable. LESSONS B1 shape. Needs its own Tier 1 bullet (declare the columns on
    the hierarchy edges, test the override end-to-end); the FS-1 tests filter `SA004` by code
-   meanwhile.
+   meanwhile. **Resolved by P1.368**: both columns now pass `engine/hierarchy/unify.py` and
+   the hierarchy edge, the override reaches `risk_weight`, and `SA004` counts unattested
+   in-scope SA rows (`tests/acceptance/test_p1_368_due_diligence_override.py`).
 5. **The output-floor add-on has no reported home in the IRB templates** (found by the test wave,
    2026-09-05, when the FS-1 portfolio became the first registered run with a *binding* floor).
    Supervisory rules `boe_b0751` (OF08.01.01.01) and `boe_b0763` (OF08.02.01.01) — one published

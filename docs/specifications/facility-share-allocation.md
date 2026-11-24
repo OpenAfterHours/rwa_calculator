@@ -482,11 +482,13 @@ decisions. None is fixed by this design; the third has since been closed.
    where Art. 92(2A) takes it over whole-firm totals. The engine's form is
    conservative; correcting it would be RWA-reducing and needs its own evidence
    and sign-off.
-2. **The Art. 110A due-diligence input never reaches the standardised branch.**
-   The two input columns are accepted by the loan and contingent schemas but are
-   not declared on the hierarchy edge contract, so they are dropped silently
-   before classification and the `SA004` warning fires on every Basel 3.1 run
-   regardless of input.
+2. **Closed by P1.368: the Art. 110A due-diligence input now reaches the
+   standardised branch.** The two input columns were accepted by the loan and
+   contingent schemas but dropped at the hierarchy stage, so the override was
+   unreachable and the `SA004` warning fired on every Basel 3.1 run regardless of
+   input. They are now carried to the SA calculator, and SA004 counts the
+   in-scope SA rows that do not attest; the FS-1 runs, whose loans all attest,
+   raise no error at all.
 3. **Closed 2026-11-16: the binding-floor add-on is no longer reported in the
    internal-ratings templates.** The pro-rata floor add-on still lives inside
    `rwa_final`, but every COREP RWEA figure now reads the own-approach carrier

@@ -33,7 +33,7 @@ currency mismatch multiplier, and SME corporate class.
 | FR-1.15 | Covered bond unrated derivation (Art. 129(5)) — expanded 7-entry table for SCRA | P0 | Done |
 | FR-1.16 | Non-UK unrated PSE/RGLA: sovereign CQS-derived weights, not flat 100% | P1 | Code bug P1.112 |
 | FR-1.18 | Material dependency classification for RE exposures (Art. 124E) | P1 | Done (input-driven) |
-| FR-1.19 | Due diligence obligation risk-weight override (Art. 110A) | P1 | Done (input-driven; SA004 warning, `due_diligence_override_rw` floor) |
+| FR-1.19 | Due diligence obligation risk-weight override (Art. 110A) | P1 | Done (input-driven; SA004 attestation census, `due_diligence_override_rw` floor). Inputs reach the SA branch since P1.368 — before it they were dropped at the hierarchy stage and the override was unreachable |
 | FR-1.20 | ECRA trade-finance ≤ 6m extension of Table 4 (Art. 120(2A)) | P1 | Done (input-driven via `is_short_term_trade_lc`) |
 | FR-1.21 | Real estate framework routing (Art. 124(1)–(3)) and mixed RE proportional split (Art. 124(4)) | P1 | Partial — single-property routing done; mixed-property split requires per-component property values (input-schema gap, see D3.59) |
 | FR-1.22 | RE valuation requirements — qualifying valuation, >10% market decline and GBP 2.6m / 5% own funds revaluation triggers, self-build floor, pre-2027 transitional (Art. 124D(1)–(11)) | P1 | Input-driven — calculator consumes `property_value` as already Art. 124D-compliant; valuation governance is firm-side (no Art. 124D-specific input fields for valuation source, revaluation date, or self-build flag) |
@@ -79,7 +79,7 @@ All other obligor classes — **institutions, corporates, retail, real estate, e
 ### Minimum DD standard (Art. 110A(4))
 
 - **Assess condition of every obligor** (Art. 110A(4)(a)). The requirement is "reasonable and adequate steps" — the sophistication scales with the institution's activities (Art. 110A(3)).
-- **Policy, process, system, and control framework** for assigning risk weights (Art. 110A(4)(b)). This is the hook for the **risk-weight uplift**: if internal assessment shows the ECAI/class-based RW understates risk, the firm must assign a higher RW.
+- **Policy, process, system, and control framework** for assigning risk weights (Art. 110A(4)(b)). Art. 110A itself sets no risk-weight mechanic: the mandatory **risk-weight uplift** — "at least one step higher" where DD shows more risk than the credit quality step implies — is in Art. 120(4) (rated institutions), 122(4) (rated corporates) and 129(4A) (covered bonds). The calculator carries it, and any other firm-determined uplift, through `due_diligence_override_rw` (see [Implementation](#implementation)).
 - **Timing**: initial DD before the exposure is incurred; re-performed at least annually thereafter (Art. 110A(4)(c)).
 - **Granularity**: per-exposure where reasonably practicable (Art. 110A(4)(d)); portfolio-level otherwise.
 - **Group structure**: membership of a corporate group must be factored into the assessment (Art. 110A(4)(e)) — relevant to connected-client and intra-group support analysis.
@@ -90,47 +90,95 @@ Art. 110A is the **umbrella obligation**. Three narrower, class-specific CQS ste
 
 | Provision | Obligor class | Trigger | Effect |
 |-----------|---------------|---------|--------|
-| Art. 120(4) | Rated institutions | DD reveals risk higher than ECAI implies | One CQS step higher (e.g. CQS 2 → CQS 3 weight) |
-| Art. 122(4) | Rated corporates | Same | One CQS step higher |
-| Art. 129(4A) | Covered bonds | Same | One CQS step higher than the derivation (Art. 129(4)/(5)) result |
+| Art. 120(4) | Rated institutions | DD reveals risk higher than ECAI implies | The weight of a CQS **at least one step higher** (e.g. CQS 2 → CQS 3 weight or worse) |
+| Art. 122(4) | Rated corporates | Same | At least one CQS step higher |
+| Art. 129(4A) | Covered bonds | Same | At least one CQS step higher than the derivation (Art. 129(4)/(5)) result |
 
-Art. 110A is broader: it applies to **every non-exempt SA exposure**, rated or unrated, and permits an arbitrary uplift (not limited to one CQS step) where the firm's internal assessment indicates the calculated RW understates risk.
+"At least one step" is a minimum, not a cap: where the DD finding supports it, the firm
+assigns a weight more than one step higher.
+
+Art. 110A is broader in scope: it applies to **every non-exempt SA exposure**, rated or unrated. It sets no risk-weight mechanic of its own; the calculator's `due_diligence_override_rw` accepts any firm-determined weight, which is applied only where it exceeds the calculated RW.
 
 ### Implementation
 
-Two optional input fields on the facility schema support Art. 110A:
+Two optional input fields on the **loan** and **contingent** schemas support Art. 110A.
+They are carried through the hierarchy, classifier, CRM and real-estate-split edges to the
+SA calculator; guarantee-substituted and RE-split legs inherit them from the row they were
+split from.
 
 | Field | Type | Nullable | Description |
 |-------|------|----------|-------------|
-| `due_diligence_performed` | Boolean | Yes (default `False`) | Firm attestation that DD per Art. 110A(2) has been performed for this exposure |
+| `due_diligence_performed` | Boolean | Yes (loader default `False`) | Firm attestation that DD per Art. 110A(2) has been performed for this exposure |
 | `due_diligence_override_rw` | Float64 | Yes | Firm-determined uplifted risk weight (decimal — e.g. `1.50` for 150%) where DD reveals higher risk than the calculated RW |
+
+The **facility** schema has neither field, and nor do the SA-CCR and SFT inputs. A
+facility's undrawn-headroom row, and every SA-CCR netting-set and SFT row, therefore
+reaches the calculator with both fields null: it cannot be attested, cannot be
+overridden, and is not counted by SA004. Attest and override on the drawn loan or the
+contingent itself. Holdings in the `equity_exposures` table are in the same position:
+they are SA exposures (Art. 133) and in scope of Art. 110A, but the equity calculator
+that weights them reads neither field, so they are neither counted nor overridable. An
+equity-class row supplied on the loan or contingent table is an SA-branch row and is
+both.
 
 **Override behaviour:**
 
 - Apply as the **final** risk-weight modification — after CQS lookup, CRM substitution (life-insurance / guarantee / FCSM), and currency-mismatch multiplier (Art. 123B).
 - **Directional floor:** `RW_final = max(RW_calculated, RW_override)`. The override can only increase the RW; a lower override has no effect.
 - Null override values are silently ignored.
+- The override is honoured whatever `due_diligence_performed` says: a firm-supplied uplift is
+  conservative, so it is applied even on a row that is not attested.
+- It is applied to **every leg** of the exposure, including a guarantee-substituted leg
+  (a 0% sovereign-guaranteed leg rises to the override weight) and a real-estate-secured
+  leg. That is broader than Art. 120(4) / 122(4) / 129(4A), which lift only the weight
+  "determined by the external credit assessment" of the obligor. It can only raise RWA;
+  a leg-scoped override is an open follow-up.
+- Under the output floor the SA risk-weight pipeline also runs over IRB and slotting rows
+  to compute their SA-equivalent weight. A populated override there raises that
+  SA-equivalent (and so S-TREA) only; it never changes the reported IRB weight, and the
+  audit flag below is carried for SA-branch rows only. This is deliberate: Art. 92(3A)(b)(ii)
+  computes S-TREA "as if permission to use [the IRB Approach] has not been granted", so the
+  SA-equivalent is the SA weight in full, Art. 122(4) included. The override is therefore
+  **not** scoped to SA-branch rows the way the SA004 census is; scoping it so would lower
+  S-TREA. Pinned end to end by `TestDueDiligenceOverrideOutputFloor` in
+  `tests/acceptance/test_p1_368_due_diligence_override.py`.
 
 **Sequencing in the SA calculator:**
 
 1. Standard CQS/class-based risk weight determination (Art. 112–134).
 2. CRM substitution — FCSM, life insurance, guarantee (Art. 197–236).
 3. Currency-mismatch multiplier — 1.5×, 150% cap (Art. 123B).
-4. **Due diligence override (Art. 110A)** — `max(calculated, override)` applied here.
+4. **Due diligence override (Art. 120(4) / 122(4) / 129(4A) uplift)** — `max(calculated, override)` applied here.
 5. RWA calculation — `RWA = EAD × RW_final`.
 
-**Validation:**
+**Validation (SA004):**
 
-- Under Basel 3.1, when the `due_diligence_performed` column is absent from the facilities frame, the calculator emits a data-quality warning with code `SA004` (`ERROR_DUE_DILIGENCE_NOT_PERFORMED`, severity `WARNING`, `regulatory_reference="PRA PS1/26 Art. 110A"`). The calculation continues — the warning does not block execution.
+- Under Basel 3.1 the calculator counts, once per run, the rows that are inside the scope of
+  Art. 110A and carry `due_diligence_performed = False`, and emits **one** data-quality
+  warning `SA004` (`ERROR_DUE_DILIGENCE_NOT_PERFORMED`, severity `WARNING`,
+  `regulatory_reference="PRA PS1/26 Art. 110A"`) carrying the count in `actual_value`
+  (`"False on N exposure row(s)"`). A book whose in-scope rows all attest raises nothing.
+- In scope means: an SA-branch row (Art. 110A(1) — IRB and slotting rows are not counted),
+  outside the Art. 110A(5) exemptions (the CGCB, RGLA and PSE classes; MDBs whose
+  `entity_type` is `mdb_named`; the international-organisation class), with a non-null
+  attestation. Facility-undrawn, SA-CCR and SFT rows and `equity_exposures` holdings have
+  no attestation field and are not counted.
+- A loans or contingents feed that omits `due_diligence_performed` is read as `False` on
+  every row (the loader default), so every in-scope row is counted.
+- The calculation continues — the warning does not block execution.
 - Under CRR, no warning is emitted (no CRR equivalent to Art. 110A).
 
 **Audit:**
 
-- When the override column is present, an output column `due_diligence_override_applied` (Boolean) flags exposures whose RW was raised by the override. Use this to reconcile against internal DD records and to populate SA RW-uplift disclosures.
+- Under Basel 3.1 the output column `due_diligence_override_applied` (Boolean) flags SA
+  exposures whose RW was raised by the override (`False` where it was not, including on
+  equity-class rows from the loan or contingent tables; null on IRB and slotting rows and
+  on `equity_exposures` holdings; absent under CRR). Use this to reconcile against internal DD
+  records and to populate SA RW-uplift disclosures.
 
 !!! warning "Firm responsibility — not an engine determination"
     The calculator does not attempt to determine whether DD is *adequate* under Art. 110A(2)–(4). It only:
-    (1) warns when DD status is not provided, and (2) applies any firm-supplied uplifted risk weight as a floor. The firm remains responsible for the policies, processes, and annual review obligations under Art. 110A(4)(b)/(c). Values supplied via `due_diligence_override_rw` should be traceable to the firm's DD process documentation.
+    (1) warns when in-scope exposures are not attested, and (2) applies any firm-supplied uplifted risk weight as a floor. The firm remains responsible for the policies, processes, and annual review obligations under Art. 110A(4)(b)/(c). Values supplied via `due_diligence_override_rw` should be traceable to the firm's DD process documentation.
 
 ### CRR comparison
 
@@ -561,12 +609,12 @@ resulting RW is unchanged until CQS 6 (150%) is reached.
     the maturity overlay.
 
 **Distinction from Art. 110A.** Art. 120(4) is a narrower, rated-exposure-only rule with
-a fixed one-step uplift; [Art. 110A](#due-diligence-obligation-art-110a) applies to every
-non-exempt SA exposure (rated or unrated) and permits an unbounded uplift. The two rules
-can interact: a firm's DD finding may be satisfied either by a one-step CQS uplift under
-Art. 120(4) or by a larger uplift channelled through the Art. 110A
-`due_diligence_override_rw` path. Where both would apply, the final RW is
-`max(RW_Art_120_4, RW_Art_110A_override, RW_ECAI)`.
+a minimum one-step uplift (at least one step, not exactly one);
+[Art. 110A](#due-diligence-obligation-art-110a) applies to every non-exempt SA exposure
+(rated or unrated) and sets no risk-weight mechanic of its own. The two rules can
+interact: a firm's DD finding may be satisfied by a one-step CQS uplift under Art. 120(4)
+or by a larger uplift, both channelled through the `due_diligence_override_rw` path.
+Where both would apply, the final RW is `max(RW_Art_120_4, RW_Art_110A_override, RW_ECAI)`.
 
 **Distinction from SCRA (Art. 121).** Art. 120(4) applies to **rated** institutions only.
 Unrated institution exposures are routed to the SCRA grade table at
@@ -593,7 +641,7 @@ and ICAAP-level overlays.
 
 **Implementation status.** The calculator does not yet implement a dedicated Art. 120(4)
 branch. Firms currently carry Art. 120(4) findings through the Art. 110A pathway: set
-`due_diligence_override_rw` on the facility to the next-CQS-band weight drawn from
+`due_diligence_override_rw` on the loan or contingent to the next-CQS-band weight drawn from
 Table 3 (or Table 4 / Table 4A for short-term exposures), and the SA calculator will
 apply it as a directional floor (see
 [Implementation](#implementation) earlier in this specification). This is functionally
@@ -1107,11 +1155,12 @@ Art. 122(4) is **not** a discretionary floor — it is a mandatory override wher
 finding is triggered.
 
 **Distinction from Art. 110A.** Art. 122(4) is a narrower, rated-exposure-only rule with a
-fixed one-step uplift; Art. 110A applies to every non-exempt SA exposure (rated or unrated)
-and permits an unbounded uplift. The two rules can interact: a firm's DD finding may be
-satisfied either by a one-step CQS uplift under Art. 122(4) or by a larger uplift channelled
-through the Art. 110A `due_diligence_override_rw` path. Where both would apply, the final RW
-is `max(RW_Art_122_4, RW_Art_110A_override, RW_ECAI)`.
+minimum one-step uplift (at least one step, not exactly one); Art. 110A applies to every
+non-exempt SA exposure (rated or unrated) and sets no risk-weight mechanic of its own. The
+two rules can interact: a firm's DD finding may be satisfied by a one-step CQS uplift under
+Art. 122(4) or by a larger uplift, both channelled through the `due_diligence_override_rw`
+path. Where both would apply, the final RW is
+`max(RW_Art_122_4, RW_Art_110A_override, RW_ECAI)`.
 
 **Distinction from the unrated corporate IG/non-IG split.** Art. 122(4) applies to **rated**
 corporates only. The Art. 122(6)(a)/(b) 65%/135% IG split applies only to **unrated**
@@ -1134,7 +1183,7 @@ of the three classes — the rules are Basel 3.1-only.
 
 **Implementation status.** The calculator does not yet implement a dedicated Art. 122(4)
 branch. Firms currently carry Art. 122(4) findings through the Art. 110A pathway: set
-`due_diligence_override_rw` on the facility to the next-CQS-band weight, and the SA
+`due_diligence_override_rw` on the loan or contingent to the next-CQS-band weight, and the SA
 calculator will apply it as a directional floor (see [Implementation](#implementation)
 above). This is functionally equivalent and captured in the output via the
 `due_diligence_override_applied` audit column.
@@ -2410,8 +2459,9 @@ regardless — Art. 129(4A) mandates the CQS reassignment, even if the RW happen
 This matters for any downstream process that keys off CQS rather than RW (e.g. disclosure).
 
 **Distinction from Art. 110A.** Art. 129(4A) is a narrower, rated-covered-bond-only rule with
-a fixed one-step CQS uplift; [Art. 110A](#due-diligence-obligation-art-110a) applies to every
-non-exempt SA exposure (including unrated covered bonds) and permits an unbounded uplift.
+a minimum one-step CQS uplift (at least one step, not exactly one);
+[Art. 110A](#due-diligence-obligation-art-110a) applies to every non-exempt SA exposure
+(including unrated covered bonds) and sets no risk-weight mechanic of its own.
 Where both would apply, the final RW is
 `max(RW_Art_129_4A, RW_Art_110A_override, RW_Table_7)`.
 
@@ -2430,7 +2480,7 @@ of the three classes — the rules are Basel 3.1-only.
 
 **Implementation status.** The calculator does not yet implement a dedicated Art. 129(4A)
 branch. Firms currently carry Art. 129(4A) findings through the Art. 110A pathway: set
-`due_diligence_override_rw` on the covered-bond facility to the next-CQS-band weight (e.g.
+`due_diligence_override_rw` on the covered-bond loan or contingent to the next-CQS-band weight (e.g.
 CQS 3 → 50% to reflect a stepped-up CQS 4 treatment), and the SA calculator will apply it as
 a directional floor (see [Implementation](#implementation) above). This is functionally
 equivalent and captured in the output via the `due_diligence_override_applied` audit column.

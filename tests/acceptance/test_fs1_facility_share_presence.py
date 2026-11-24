@@ -29,7 +29,6 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from rwa_calc.contracts.errors import ERROR_DUE_DILIGENCE_NOT_PERFORMED
 from tests.acceptance import _fs1_expectations as fx
 from tests.acceptance._fs1_harness import (
     ALL_RUNS,
@@ -252,34 +251,29 @@ class TestFacilityShareFanOutShape:
         assert case.summary_field("facility_share_metric_used") is not None
 
     @pytest.mark.parametrize(("framework", "variant"), ALL_RUNS)
-    def test_facility_share_reports_no_error_beyond_the_known_due_diligence_warning(
-        self, framework: str, variant: str
-    ) -> None:
+    def test_facility_share_reports_no_error(self, framework: str, variant: str) -> None:
         """
-        The run is clean apart from the known Art. 110A due-diligence warning.
+        The run is clean: no error or warning of any kind, SA004 included.
 
         Arrange: any FS-1 run.
         Act:     read ``result.errors``.
-        Assert:  nothing outside SA004.
+        Assert:  it is empty.
 
-        SA004 is filtered BY CODE, with its reason recorded, rather than widened
-        to "no errors of any kind". It fires on every Basel 3.1 run regardless of
-        input: ``due_diligence_performed`` survives the loader seal but is not
-        declared in ``contracts/edges.py::_hierarchy_resolved_columns``, so
-        ``EdgeContract.conform`` strips it before classification, and the guard in
-        ``engine/sa/rw_adjustments.py`` tests column PRESENCE rather than value.
-        That is an out-of-scope finding of its own (design doc Section 10 item 4,
-        LESSONS B1 shape) and the Art. 110A override is unreachable from input
-        until it is fixed. Filtering by code keeps a REGRESSION that re-introduced
-        SA004 elsewhere attributable, and keeps an unrelated new warning red.
+        Every FS-1 loan attests ``due_diligence_performed = True``, and the
+        undrawn facility rows have no attestation field (null), so the Art. 110A
+        census (SA004) has nothing to count. Until P1.368 this test had to filter
+        SA004 by code: the attestation was stripped before classification and the
+        guard tested the column's PRESENCE, so SA004 fired on every Basel 3.1 run
+        whatever the input said. A census that counted the facility-undrawn rows'
+        nulls would go red here. (The IRB-scope exclusion is pinned separately, in
+        ``tests/unit/test_due_diligence.py``: every FS-1 loan attests, so this file
+        cannot tell an IRB-scoped census from an unscoped one.)
         """
         # Arrange
         case = run_case(framework, variant)
 
         # Act
-        unexpected = [
-            error for error in case.result.errors if error.code != ERROR_DUE_DILIGENCE_NOT_PERFORMED
-        ]
+        reported = [(error.code, error.message) for error in case.result.errors]
 
         # Assert
-        assert not unexpected, [(error.code, error.message) for error in unexpected]
+        assert not reported, reported

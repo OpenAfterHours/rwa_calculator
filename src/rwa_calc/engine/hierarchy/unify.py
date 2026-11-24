@@ -194,6 +194,13 @@ def _coerce_loans_to_unified(loans: pl.LazyFrame) -> pl.LazyFrame:
         # without this the unified select would drop it (dropping it silently
         # collapses genuine roll-out exposures into permanent-partial-use).
         pl.col("is_under_irb_rollout"),
+        # PS1/26 Art. 110A due-diligence attestation and the Art. 120(4) / 122(4) /
+        # 129(4A) one-step-higher override weight — declared on LOAN_SCHEMA and read
+        # by the SA calculator (SA004 census, ``apply_due_diligence_override``).
+        # Without this pass-through the unified select dropped both, so the override
+        # was unreachable from input and SA004 could not read the attestation.
+        pl.col("due_diligence_performed"),
+        pl.col("due_diligence_override_rw"),
         pl.col("counterparty_reference"),
         pl.col("value_date"),
         pl.col("maturity_date"),
@@ -317,6 +324,11 @@ def _coerce_contingents_to_unified(
             # CRR Art. 148/150 IRB roll-out-plan flag (see _coerce_loans_to_unified).
             # Declared on CONTINGENTS_SCHEMA; carried for COREP C 08.07 col 0040.
             pl.col("is_under_irb_rollout"),
+            # PS1/26 Art. 110A due-diligence carriers (see _coerce_loans_to_unified).
+            # Declared on CONTINGENTS_SCHEMA; kept on drawn (ONB) and undrawn (OFB)
+            # rows alike — the obligation covers the exposure, not its CCF.
+            pl.col("due_diligence_performed"),
+            pl.col("due_diligence_override_rw"),
             pl.col("counterparty_reference"),
             pl.col("value_date"),
             pl.col("maturity_date"),

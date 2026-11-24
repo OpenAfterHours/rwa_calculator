@@ -713,6 +713,29 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
             "the firm sets True on an SA exposure covered by an approved Art. 148 "
             "sequential-implementation (roll-out) plan",
         ),
+        # PS1/26 Art. 110A due-diligence inputs, threaded from LOAN_SCHEMA and
+        # CONTINGENTS_SCHEMA (the loader defaults the attestation to False there) to
+        # the SA calculator: the SA004 census reads the attestation, and
+        # ``apply_due_diligence_override`` reads the override weight. Undeclared, this
+        # seal stripped both and the override was dead (P1.368). Optional with NO
+        # default and NO null fill, deliberately unlike is_under_irb_rollout:
+        # facility-undrawn, SA-CCR and SFT rows have no attestation field and must
+        # stay null — filled to False they would make SA004 fire on every facility or
+        # derivatives book, whatever the firm attested. Stripped at the branch exit.
+        "due_diligence_performed": EdgeColumn(
+            dtype=pl.Boolean,
+            required=False,
+            citation="PS1/26 Art. 110A",
+            null_meaning="null = this row type has no attestation field (facility-undrawn, "
+            "SA-CCR and SFT rows); the SA004 census does not count it. Loan and contingent "
+            "rows are never null: the loader defaults an unreported attestation to False",
+        ),
+        "due_diligence_override_rw": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            citation="PS1/26 Art. 122(4)",
+            null_meaning="null = no due-diligence override; the SA risk weight stands",
+        ),
         "counterparty_reference": EdgeColumn(dtype=pl.String),
         "value_date": EdgeColumn(dtype=pl.Date),
         "maturity_date": EdgeColumn(dtype=pl.Date),
@@ -1935,6 +1958,14 @@ SA_BRANCH_EDGE: EdgeContract = EdgeContract(
         "sl_project_phase": EdgeColumn(dtype=pl.String),
         "ead_calculation_method": EdgeColumn(dtype=pl.String, required=False, inject=False),
         "pre_fcsm_risk_weight": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        # PS1/26 Art. 110A / 122(4) audit flag: True where the due-diligence override
+        # raised the SA risk weight. CONDITIONAL — written on every Basel 3.1 run and
+        # never under CRR. SA branch only: on an IRB row the override raises just the
+        # output-floor SA-equivalent, never the reported weight, so the flag is not
+        # carried there.
+        "due_diligence_override_applied": EdgeColumn(
+            dtype=pl.Boolean, required=False, inject=False, citation="PS1/26 Art. 122(4)"
+        ),
     },
 )
 
@@ -2413,6 +2444,12 @@ AGGREGATOR_EXIT_EDGE: EdgeContract = EdgeContract(
         "is_double_default_eligible": EdgeColumn(dtype=pl.Boolean, required=False, inject=False),
         "pre_crm_rwa": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "pre_fcsm_risk_weight": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
+        # SA-branch audit flag (see SA_BRANCH_EDGE): null on IRB and slotting rows and
+        # on equity-calculator rows (the equity_exposures table), which never carry it.
+        # Equity-class rows from the loan / contingent tables are SA-branch rows and do.
+        "due_diligence_override_applied": EdgeColumn(
+            dtype=pl.Boolean, required=False, inject=False, citation="PS1/26 Art. 122(4)"
+        ),
         "risk_weight_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "rw_direct": EdgeColumn(dtype=pl.Float64, required=False, inject=False),
         "rwa_irb_original": EdgeColumn(dtype=pl.Float64, required=False, inject=False),

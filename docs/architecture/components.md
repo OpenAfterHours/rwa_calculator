@@ -412,7 +412,7 @@ class SACalculator:
 
     def calculate_branch(self, exposures, config, *, errors=None):
         if errors is not None:
-            self._collect_entry_warnings(exposures, config, errors, pack=pack)  # SA005 + SA010
+            self._collect_entry_warnings(exposures, config, errors, pack=pack)  # SA004 + SA005 + SA010
 
         return (
             exposures.pipe(apply_risk_weights, config, pack=pack)
@@ -420,7 +420,7 @@ class SACalculator:
             .pipe(apply_life_insurance_rw_mapping)
             .pipe(apply_guarantee_substitution, config, pack=pack)
             .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
-            .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)  # SA004
+            .pipe(apply_due_diligence_override, config, pack=pack)  # Art. 122(4) uplift
             .pipe(calculate_rwa)
             .pipe(apply_supporting_factors, config, errors=errors, pack=pack)      # SF001
         )  # + approach_applied / rwa_final standardisation for the aggregator

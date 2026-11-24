@@ -1,4 +1,4 @@
-"""Unit tests for Art. 110A due diligence risk weight override (Basel 3.1).
+"""Unit tests for the Basel 3.1 due-diligence override and the SA004 census.
 
 Tests cover:
 - Override applied when due_diligence_override_rw > calculated risk_weight
@@ -6,16 +6,21 @@ Tests cover:
 - Override ignored when due_diligence_override_rw is null
 - No-op when override column is absent from data
 - No-op under CRR (Art. 110A is Basel 3.1 only)
-- Warning emitted when due_diligence_performed column absent under Basel 3.1
-- No warning emitted under CRR
-- No warning when due_diligence_performed column is present
 - Audit column due_diligence_override_applied set correctly
 - Override only increases risk weight (max behavior)
-- Integration with SA result bundle path
+- SA004 census (P1.368): reads the attestation VALUE, counts only SA-branch rows
+  outside the Art. 110A(5) exemptions, never counts a null (no attestation
+  field), and is silent under CRR
+
+These are unit legs on hand-built frames, which bypass unify and every edge. The
+proof that the inputs reach the calculator at all is end to end:
+``tests/acceptance/test_p1_368_due_diligence_override.py``.
 
 References:
-- PRA PS1/26 Art. 110A: Due diligence obligation
+- PRA PS1/26 Art. 110A(2), (5): due-diligence obligation and its exemptions
+- PRA PS1/26 Art. 120(4), 122(4), 129(4A): the one-step-higher risk weight
 - P1.49: Art. 110A due diligence obligation implementation
+- P1.368: the attestation and override reach the SA branch; SA004 reads the value
 """
 
 from __future__ import annotations
@@ -235,110 +240,180 @@ class TestDueDiligenceAuditColumn:
         df = result.collect()
         assert "due_diligence_override_applied" not in df.columns
 
-    def test_audit_flag_absent_when_column_missing(
+    def test_audit_flag_false_when_column_missing(
         self, calculator: SACalculator, b31_config: CalculationConfig
     ) -> None:
-        """Audit column is not added when override column is absent."""
+        """An absent override column reads as "no override": flag False, RW unchanged.
+
+        The hierarchy edge always carries the column in production; only a
+        hand-built frame can lack it, and it is then injected as a typed null.
+        """
         exposures = _exposures_without_dd(risk_weights=[0.50])
         result = apply_due_diligence_override(exposures, b31_config)
         df = result.collect()
-        assert "due_diligence_override_applied" not in df.columns
+        assert df["due_diligence_override_applied"][0] is False
+        assert df["risk_weight"][0] == pytest.approx(0.50)
 
 
 # =============================================================================
-# Warning Tests
+# SA004 census tests
 # =============================================================================
+
+
+def _census_frame(
+    *,
+    performed: list[bool | None],
+    exposure_class: str = "corporate",
+    approach: str = "standardised",
+    cp_entity_type: str = "corporate",
+) -> pl.LazyFrame:
+    """SA calculator input rows carrying the carriers the SA004 census reads."""
+    n = len(performed)
+    return pl.DataFrame(
+        {
+            "exposure_reference": [f"EXP_{i:03d}" for i in range(n)],
+            "counterparty_reference": ["CP_001"] * n,
+            "exposure_class": [exposure_class] * n,
+            "approach": [approach] * n,
+            "cp_entity_type": [cp_entity_type] * n,
+            "ead_final": [500_000.0] * n,
+            "ead_gross": [500_000.0] * n,
+            "cqs": [3] * n,
+            "currency": ["GBP"] * n,
+            "due_diligence_performed": performed,
+        },
+        schema_overrides={"due_diligence_performed": pl.Boolean},
+    ).lazy()
+
+
+def _sa004(
+    calculator: SACalculator, frame: pl.LazyFrame, config: CalculationConfig
+) -> list[CalculationError]:
+    """Run the unified (output-floor) path and return its SA004 warnings."""
+    errors: list[CalculationError] = []
+    calculator.calculate_unified(frame, config, errors=errors)
+    return [e for e in errors if e.code == ERROR_DUE_DILIGENCE_NOT_PERFORMED]
 
 
 class TestDueDiligenceWarnings:
-    """Tests for due diligence validation warnings."""
+    """SA004 reads the attestation value, scoped to the rows Art. 110A covers."""
 
-    def test_warning_when_dd_performed_absent_b31(
+    def test_warning_when_sa_row_unattested_b31(
         self, calculator: SACalculator, b31_config: CalculationConfig
     ) -> None:
-        """Warning emitted when due_diligence_performed column is absent under B31."""
-        errors: list[CalculationError] = []
-        exposures = _exposures_without_dd(risk_weights=[0.50])
-        apply_due_diligence_override(exposures, b31_config, errors=errors)
-        assert len(errors) == 1
-        assert errors[0].code == ERROR_DUE_DILIGENCE_NOT_PERFORMED
+        """An in-scope SA row with due_diligence_performed = False warns once."""
+        warnings = _sa004(calculator, _census_frame(performed=[False]), b31_config)
+        assert len(warnings) == 1
+        assert warnings[0].actual_value == "False on 1 exposure row(s)"
 
-    def test_warning_severity_is_warning(
+    def test_no_warning_when_sa_row_attested_b31(
         self, calculator: SACalculator, b31_config: CalculationConfig
     ) -> None:
-        """Warning has WARNING severity (not ERROR)."""
-        errors: list[CalculationError] = []
-        exposures = _exposures_without_dd(risk_weights=[0.50])
-        apply_due_diligence_override(exposures, b31_config, errors=errors)
-        assert errors[0].severity == ErrorSeverity.WARNING
+        """The same row attested True is silent — the alarm discriminates (B9)."""
+        assert _sa004(calculator, _census_frame(performed=[True]), b31_config) == []
 
-    def test_warning_category_is_data_quality(
+    def test_null_attestation_is_not_counted(
         self, calculator: SACalculator, b31_config: CalculationConfig
     ) -> None:
-        """Warning category is DATA_QUALITY."""
-        errors: list[CalculationError] = []
-        exposures = _exposures_without_dd(risk_weights=[0.50])
-        apply_due_diligence_override(exposures, b31_config, errors=errors)
-        assert errors[0].category == ErrorCategory.DATA_QUALITY
+        """A null means "no attestation field" (facility-undrawn, SA-CCR, SFT rows)."""
+        assert _sa004(calculator, _census_frame(performed=[None]), b31_config) == []
 
-    def test_warning_has_regulatory_reference(
+    def test_absent_attestation_column_is_not_counted(
         self, calculator: SACalculator, b31_config: CalculationConfig
     ) -> None:
-        """Warning includes Art. 110A regulatory reference."""
-        errors: list[CalculationError] = []
-        exposures = _exposures_without_dd(risk_weights=[0.50])
-        apply_due_diligence_override(exposures, b31_config, errors=errors)
-        assert "110A" in (errors[0].regulatory_reference or "")
+        """A hand-built frame without the column reads as all-null: nothing counted."""
+        frame = _census_frame(performed=[False]).drop("due_diligence_performed")
+        assert _sa004(calculator, frame, b31_config) == []
 
-    def test_warning_has_field_name(
+    @pytest.mark.parametrize(
+        ("exposure_class", "cp_entity_type"),
+        [
+            ("central_govt_central_bank", "sovereign"),  # Art. 112(1)(a)
+            ("rgla", "rgla_institution"),  # Art. 112(1)(b)
+            ("pse", "pse_institution"),  # Art. 112(1)(c)
+            ("mdb", "mdb_named"),  # Art. 117(2)
+            ("international_organisation", "international_org"),  # Art. 118(1)
+        ],
+    )
+    def test_art_110a_5_exemptions_are_not_counted(
+        self,
+        calculator: SACalculator,
+        b31_config: CalculationConfig,
+        exposure_class: str,
+        cp_entity_type: str,
+    ) -> None:
+        """PS1/26 Art. 110A(5): the obligation does not apply, so no warning."""
+        frame = _census_frame(
+            performed=[False], exposure_class=exposure_class, cp_entity_type=cp_entity_type
+        )
+        assert _sa004(calculator, frame, b31_config) == []
+
+    def test_mdb_outside_art_117_2_is_counted(
         self, calculator: SACalculator, b31_config: CalculationConfig
     ) -> None:
-        """Warning includes the expected field name."""
-        errors: list[CalculationError] = []
-        exposures = _exposures_without_dd(risk_weights=[0.50])
-        apply_due_diligence_override(exposures, b31_config, errors=errors)
-        assert errors[0].field_name == "due_diligence_performed"
+        """Only the Art. 117(2) named MDBs are exempt; another MDB is in scope."""
+        frame = _census_frame(performed=[False], exposure_class="mdb", cp_entity_type="mdb")
+        assert len(_sa004(calculator, frame, b31_config)) == 1
+
+    @pytest.mark.parametrize("approach", ["foundation_irb", "advanced_irb", "slotting"])
+    def test_irb_and_slotting_rows_are_not_counted(
+        self, calculator: SACalculator, b31_config: CalculationConfig, approach: str
+    ) -> None:
+        """calculate_unified weights IRB rows for the output floor, but Art. 110A(1)
+        applies to the Standardised Approach: only SA-branch rows are counted."""
+        frame = _census_frame(performed=[False], approach=approach)
+        assert _sa004(calculator, frame, b31_config) == []
+
+    def test_equity_approach_rows_are_counted(
+        self, calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """An equity-class loan / contingent row is routed with ``approach='equity'``
+        and weighted on the SA branch (``is_sa_branch_approach``), so it is in scope.
+        A census keyed on the ``standardised`` label alone would miss it (P1.317)."""
+        # Arrange
+        frame = _census_frame(performed=[False], exposure_class="equity", approach="equity")
+
+        # Act
+        warnings = _sa004(calculator, frame, b31_config)
+
+        # Assert
+        assert len(warnings) == 1, [w.message for w in warnings]
+        assert warnings[0].actual_value == "False on 1 exposure row(s)"
+
+    def test_warning_counts_rows_once_not_per_row(
+        self, calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """One warning per run, carrying the count of in-scope unattested rows."""
+        warnings = _sa004(calculator, _census_frame(performed=[False, True, False]), b31_config)
+        assert len(warnings) == 1
+        assert warnings[0].actual_value == "False on 2 exposure row(s)"
+        assert warnings[0].message.startswith("2 Standardised Approach exposure row(s)")
+
+    def test_warning_metadata(
+        self, calculator: SACalculator, b31_config: CalculationConfig
+    ) -> None:
+        """WARNING severity, DATA_QUALITY category, Art. 110A, the attestation field."""
+        (warning,) = _sa004(calculator, _census_frame(performed=[False]), b31_config)
+        assert warning.severity == ErrorSeverity.WARNING
+        assert warning.category == ErrorCategory.DATA_QUALITY
+        assert "110A" in (warning.regulatory_reference or "")
+        assert warning.field_name == "due_diligence_performed"
 
     def test_no_warning_under_crr(
         self, calculator: SACalculator, crr_config: CalculationConfig
     ) -> None:
-        """No warning under CRR even if DD column is absent."""
+        """CRR has no Art. 110A: an unattested SA row raises nothing."""
         errors: list[CalculationError] = []
-        exposures = _exposures_without_dd(risk_weights=[0.50])
-        apply_due_diligence_override(exposures, crr_config, errors=errors)
-        assert len(errors) == 0
+        calculator.calculate_branch(_census_frame(performed=[False]), crr_config, errors=errors)
+        assert ERROR_DUE_DILIGENCE_NOT_PERFORMED not in [e.code for e in errors]
 
-    def test_no_warning_when_dd_performed_present(
+    def test_override_without_errors_kwarg_still_applies(
         self, calculator: SACalculator, b31_config: CalculationConfig
     ) -> None:
-        """No warning when due_diligence_performed column is present."""
-        errors: list[CalculationError] = []
-        exposures = _exposures_with_dd(
-            risk_weights=[0.50],
-            override_rws=[None],
-            dd_performed=[True],
-        )
-        apply_due_diligence_override(exposures, b31_config, errors=errors)
-        assert len(errors) == 0
-
-    def test_no_warning_when_errors_none(
-        self, calculator: SACalculator, b31_config: CalculationConfig
-    ) -> None:
-        """No crash when errors parameter is None (unified/branch paths)."""
-        exposures = _exposures_without_dd(risk_weights=[0.50])
-        # Should not raise — warnings are silently skipped
-        result = apply_due_diligence_override(exposures, b31_config)
-        df = result.collect()
-        assert df["risk_weight"][0] == pytest.approx(0.50)
-
-    def test_warning_only_once_not_per_row(
-        self, calculator: SACalculator, b31_config: CalculationConfig
-    ) -> None:
-        """Warning is emitted once per calculation, not per row."""
-        errors: list[CalculationError] = []
-        exposures = _exposures_without_dd(risk_weights=[0.50, 0.75, 1.00])
-        apply_due_diligence_override(exposures, b31_config, errors=errors)
-        assert len(errors) == 1
+        """The override itself takes no error channel and needs none."""
+        exposures = _exposures_with_dd(risk_weights=[0.50], override_rws=[0.75])
+        df = apply_due_diligence_override(exposures, b31_config).collect()
+        assert df["risk_weight"][0] == pytest.approx(0.75)
 
 
 # =============================================================================

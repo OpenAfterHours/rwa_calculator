@@ -53,8 +53,11 @@ from rwa_calc.engine.sa.rw_adjustments import (
     apply_intragroup_zero_rw,
     apply_life_insurance_rw_mapping,
     apply_third_party_deposit_rw_mapping,
+    due_diligence_census_exprs,
+    due_diligence_not_performed_warnings,
     income_currency_unknown_census_exprs,
     income_currency_unknown_warnings,
+    with_due_diligence_census_columns,
     with_income_currency_census_columns,
 )
 from rwa_calc.rulebook import RulepackV0
@@ -135,7 +138,7 @@ class SACalculator:
             .pipe(apply_third_party_deposit_rw_mapping)
             .pipe(apply_guarantee_substitution, config, pack=pack)
             .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
-            .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)
+            .pipe(apply_due_diligence_override, config, pack=pack)
             # CRR Art. 113(6): final 0% override for eligible core-UK-group
             # intragroup rows — runs last so the SA-equivalent RW captured for
             # the output floor below (and rwa_pre_factor) reflects the 0%.
@@ -206,7 +209,7 @@ class SACalculator:
             .pipe(apply_third_party_deposit_rw_mapping)
             .pipe(apply_guarantee_substitution, config, pack=pack)
             .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
-            .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)
+            .pipe(apply_due_diligence_override, config, pack=pack)
             # CRR Art. 113(6): final 0% override for eligible core-UK-group
             # intragroup rows (before RWA is computed from risk_weight).
             .pipe(apply_intragroup_zero_rw, config, pack=pack)
@@ -234,13 +237,16 @@ class SACalculator:
         *,
         pack: ResolvedRulepack | None = None,
     ) -> None:
-        """Emit SA005 and SA010 from ONE collect over the calculator's input.
+        """Emit SA004, SA005 and SA010 from ONE collect over the calculator's input.
 
         SA010 (PS1/26 Art. 123B(3), RE-05) counts the Art. 123B-scope rows with
         no borrower income currency; its aggregates come from
         ``rw_adjustments.income_currency_unknown_census_exprs`` and are empty
-        under CRR. Folding them into the SA005 check's collect keeps the
-        pipeline's fixed collect budget unchanged.
+        under CRR. SA004 (PS1/26 Art. 110A) counts the in-scope SA rows whose
+        ``due_diligence_performed`` is False
+        (``rw_adjustments.due_diligence_census_exprs``), also empty under CRR.
+        Folding both into the SA005 check's collect keeps the pipeline's fixed
+        collect budget unchanged.
 
         SA005 — equity-class rows may be in the main exposure table.
 
@@ -265,15 +271,20 @@ class SACalculator:
             if checks_equity
             else []
         )
-        if not census and not equity:
+        due_diligence = due_diligence_census_exprs(config, pack=pack)
+        if not census and not equity and not due_diligence:
             return
         if census:
             exposures = with_income_currency_census_columns(exposures, schema.names())
+        if due_diligence:
+            exposures = with_due_diligence_census_columns(exposures, schema.names())
         # The calculator's input is eager-backed (re_split_exit edge), so this
         # one aggregate collect is cheap.
-        counts = exposures.select(*equity, *census).collect()
+        counts = exposures.select(*equity, *census, *due_diligence).collect()
         if census:
             errors.extend(income_currency_unknown_warnings(counts))
+        if due_diligence:
+            errors.extend(due_diligence_not_performed_warnings(counts))
         if checks_equity and counts["_has_equity"].item():
             errors.append(
                 CalculationError(

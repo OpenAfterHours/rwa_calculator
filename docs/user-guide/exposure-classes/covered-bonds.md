@@ -159,9 +159,9 @@ equivalent provision for any of the three classes.
 !!! warning "Implementation — Art. 110A Pathway"
     The calculator does not yet implement a dedicated Art. 129(4A) branch. Firms
     currently route Art. 129(4A) findings through the Art. 110A
-    `due_diligence_override_rw` input — set to the next-CQS-band weight (e.g. CQS 3
-    → 50% to reflect a stepped-up CQS 4 treatment) and the SA calculator will apply
-    it as a directional floor. The output records the application via
+    `due_diligence_override_rw` input on the covered-bond loan or contingent — set
+    to the next-CQS-band weight (e.g. CQS 3 → 50% to reflect a stepped-up CQS 4
+    treatment) and the SA calculator will apply it as a directional floor. The output records the application via
     `due_diligence_override_applied`. See [B31 SA Risk Weights — Art. 129(4A)](../../specifications/basel31/sa-risk-weights.md#covered-bond-due-diligence-cqs-step-up-art-1294a).
 
 ## CRR vs Basel 3.1 — Key Differences
@@ -262,8 +262,12 @@ After Art. 129(4A) step-up: CQS 2 → RW = 20%
 RWA = 50,000,000 × 20% = 10,000,000  (vs 5,000,000 without step-up)
 ```
 
-Implementation: set `due_diligence_override_rw = 0.20` on the facility, and
-the SA calculator applies the 20% as a directional floor.
+Implementation: set `due_diligence_override_rw = 0.20` on the covered-bond loan or
+contingent, and the SA calculator applies the 20% as a directional floor. Only the
+loan and contingent tables accept the field: a facility's undrawn-headroom row, SA-CCR
+and SFT rows, and `equity_exposures` holdings cannot carry it, so an override meant for
+them has no effect (see
+[B31 SA Risk Weights — Due Diligence](../../specifications/basel31/sa-risk-weights.md#due-diligence-obligation-art-110a)).
 
 ### Example 5 — Cover-Pool Concentration Breach
 
@@ -288,7 +292,7 @@ blended weight is not permitted.
 | `is_eligible_covered_bond` | bool | Flags the exposure for Art. 129 treatment; `False` reverts to issuer institution RW |
 | `external_cqs` | int (1–6) or NULL | Drives the Table 7 lookup when not NULL |
 | `issuer_institution_rw` | Decimal | Senior-unsecured RW of the issuing institution — drives Art. 129(5) derivation when `external_cqs` is NULL |
-| `due_diligence_override_rw` | Decimal | Art. 110A directional floor used to express Art. 129(4A) step-up findings |
+| `due_diligence_override_rw` | Decimal | Art. 110A directional floor used to express Art. 129(4A) step-up findings — loan and contingent tables only (the facility schema has no such field) |
 | `is_pre_2007_covered_bond` | bool | Triggers the Art. 129(6) legacy carve-out from cover-pool composition rules |
 
 ## Regulatory References

@@ -355,13 +355,15 @@ class SACalculator:
         errors: list[CalculationError] | None = None,
     ) -> pl.LazyFrame:
         """Calculate SA RWA on the SA branch."""
+        if errors is not None:
+            self._collect_entry_warnings(exposures, config, errors, pack=pack)  # SA004 + SA005 + SA010
         return (
             exposures.pipe(apply_risk_weights, config, pack=pack)
             .pipe(apply_fcsm_rw_substitution, config)
             .pipe(apply_life_insurance_rw_mapping)
             .pipe(apply_guarantee_substitution, config, pack=pack)
             .pipe(apply_currency_mismatch_multiplier, config, pack=pack)
-            .pipe(apply_due_diligence_override, config, errors=errors, pack=pack)
+            .pipe(apply_due_diligence_override, config, pack=pack)
             .pipe(calculate_rwa)
             .pipe(apply_supporting_factors, config, errors=errors, pack=pack)  # CRR only
         )  # + approach_applied / rwa_final for the aggregator

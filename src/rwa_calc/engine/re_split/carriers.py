@@ -60,7 +60,8 @@ The three classes of carrier:
     ``collateral_coverage_pct``, ``securitisation_residual_pct``,
     ``fx_rate_applied``, ``supporting_factor``, the substitution risk weights
     (``fcsm_collateral_rw`` / ``life_ins_secured_rw`` /
-    ``third_party_deposit_secured_rw``), the maturities
+    ``third_party_deposit_secured_rw``) and the PS1/26 Art. 122(4)
+    due-diligence override weight (``due_diligence_override_rw``), the maturities
     (``effective_maturity``, ``original_maturity_years``,
     ``exposure_security_residual_maturity_years``) and, on a CCR row,
     ``pfe_multiplier`` / ``alpha_applied`` / ``ccr_effective_maturity`` /

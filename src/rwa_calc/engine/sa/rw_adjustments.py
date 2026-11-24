@@ -15,7 +15,9 @@ Key responsibilities:
 - Art. 232 life-insurance collateral RW mapping
 - Art. 235 unfunded credit protection (guarantee substitution)
 - PRA PS1/26 Art. 123B currency-mismatch multiplier (Basel 3.1)
-- PRA PS1/26 Art. 110A due-diligence override (Basel 3.1)
+- PRA PS1/26 Art. 120(4) / 122(4) / 129(4A) due-diligence override (Basel 3.1)
+- The SA004 / SA010 entry censuses (Art. 110A attestation, Art. 123B income
+  currency), returned as expressions for ``SACalculator``'s one entry collect
 
 References:
 - CRR Art. 193: CRM recognition principles (the no-worse cap and the
@@ -25,7 +27,9 @@ References:
   ``engine/crm/guarantees.py``, not here)
 - CRR Art. 222: Financial Collateral Simple Method
 - CRR Art. 232: Life insurance collateral
-- PRA PS1/26 Art. 110A: Basel 3.1 due diligence override
+- PRA PS1/26 Art. 110A: Basel 3.1 due-diligence obligation (SA004 census)
+- PRA PS1/26 Art. 120(4), 122(4), 129(4A): the "at least one step higher" risk
+  weight the due-diligence override applies
 - PRA PS1/26 Art. 123B: Basel 3.1 currency mismatch multiplier
 """
 
@@ -47,6 +51,7 @@ from rwa_calc.contracts.errors import (
 )
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.domain.enums import ApproachType, CRMCollateralMethod, ExposureClass, ReportingBasis
+from rwa_calc.engine.branch_split import is_sa_branch_approach
 from rwa_calc.engine.eu_sovereign import (
     build_domestic_cgcb_guarantor_expr,
     country_domestic_currency_expr,
@@ -99,6 +104,34 @@ _INCOME_CENSUS_COLUMNS: dict[str, ColumnSpec] = {
 }
 _CENSUS_UNKNOWN = "_sa010_income_currency_unknown"
 _CENSUS_PRE_2027 = "_sa010_income_currency_unknown_pre_2027"
+
+# PS1/26 Art. 110A(5): the exposure classes outside the due-diligence obligation.
+# Points (a) to (c) of Art. 112(1) are the CGCB, RGLA and PSE classes; the
+# international-organisation class holds exactly the Art. 118(1) list (weighted 0%
+# unconditionally). The Art. 117(2) MDBs are a subset of the MDB class, told apart
+# inside ``due_diligence_census_exprs`` by their ``mdb_named`` entity type.
+_ART_110A_EXEMPT_CLASSES: tuple[str, ...] = (
+    ExposureClass.CENTRAL_GOVT_CENTRAL_BANK.value,
+    ExposureClass.RGLA.value,
+    ExposureClass.PSE.value,
+    ExposureClass.INTERNATIONAL_ORGANISATION.value,
+)
+
+# SA004 census (P1.368): the carriers it reads — injected as typed nulls where a
+# hand-built frame lacks them, and a null is never counted — and its aggregate.
+_DUE_DILIGENCE_CENSUS_COLUMNS: dict[str, ColumnSpec] = {
+    "due_diligence_performed": ColumnSpec(pl.Boolean, required=False),
+    "exposure_class": ColumnSpec(pl.String, required=False),
+    "cp_entity_type": ColumnSpec(pl.String, required=False),
+    "approach": ColumnSpec(pl.String, required=False),
+}
+_CENSUS_DD_NOT_PERFORMED = "_sa004_due_diligence_not_performed"
+
+# The override weight ``apply_due_diligence_override`` reads; the hierarchy edge
+# always carries it, so the injection only ever fires on a hand-built frame.
+_DUE_DILIGENCE_OVERRIDE_COLUMNS: dict[str, ColumnSpec] = {
+    "due_diligence_override_rw": ColumnSpec(pl.Float64, required=False),
+}
 
 
 @cites("CRR Art. 222")
@@ -683,54 +716,46 @@ def income_currency_unknown_warnings(census: pl.DataFrame) -> list[CalculationEr
 
 
 @cites("PS1/26, paragraph 110A")
+@cites("PS1/26, paragraph 120")
+@cites("PS1/26, paragraph 122")
+@cites("PS1/26, paragraph 129")
 def apply_due_diligence_override(
     lf: pl.LazyFrame,
     config: CalculationConfig,
     *,
-    errors: list[CalculationError] | None = None,
     pack: ResolvedRulepack | None = None,
 ) -> pl.LazyFrame:
-    """Apply due diligence risk weight override (Basel 3.1 Art. 110A).
+    """Apply the firm's due-diligence risk-weight override (Basel 3.1).
 
-    Under Basel 3.1, firms must perform due diligence on all SA exposures.
-    Where due diligence reveals that the risk weight does not adequately
-    reflect the risk, the firm must apply a higher risk weight.
+    PS1/26 Art. 110A(2) obliges an SA institution to perform due diligence on its
+    exposures, and Art. 120(4) (rated institutions), 122(4) (rated corporates) and
+    129(4A) (eligible covered bonds) require that, where it shows higher risk than
+    the credit quality step implies, the institution "shall assign a risk weight
+    associated with a credit quality step that is at least one step higher". The
+    firm supplies that weight per loan / contingent as ``due_diligence_override_rw``
+    and this step applies it as a floor: ``max(override, risk_weight)``, recorded
+    in ``due_diligence_override_applied``.
 
-    The override only increases the risk weight — it can never reduce it.
-    This is applied as the final risk weight modification before RWA
-    calculation, after all standard RW determination, CRM, and currency
-    mismatch adjustments.
+    The override only increases the risk weight — it can never reduce it. It is
+    applied after every standard RW determination, CRM substitution and the
+    currency-mismatch multiplier, and is independent of ``due_diligence_performed``
+    (a firm-supplied uplift is honoured whatever the attestation says). It is
+    read off the row, so the guarantee-substituted and real-estate-split legs of an
+    exposure inherit it. Under the Basel 3.1 output floor ``calculate_unified`` runs
+    this over IRB and slotting rows too, where it can raise only the SA-equivalent
+    weight behind S-TREA. That is deliberate and must NOT be narrowed to
+    ``is_sa_branch_approach()`` the way the census is: PS1/26 Art. 92(3A)(b)(ii)
+    computes S-TREA "as if permission to use [the IRB Approach] has not been
+    granted", i.e. under the SA in full, Art. 122(4) included — skipping IRB rows
+    would lower S-TREA (pinned by ``TestDueDiligenceOverrideOutputFloor``). The SA004
+    attestation warning is a separate census (``due_diligence_census_exprs``),
+    counted once at calculator entry.
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     if not resolved_pack.feature("sa_due_diligence_override"):
         return lf
 
-    schema = lf.collect_schema()
-    cols = schema.names()
-
-    # Warn if due_diligence_performed column is absent under Basel 3.1
-    if "due_diligence_performed" not in cols and errors is not None:
-        errors.append(
-            CalculationError(
-                code=ERROR_DUE_DILIGENCE_NOT_PERFORMED,
-                message=(
-                    "Due diligence assessment status not provided "
-                    "(due_diligence_performed column absent). "
-                    "Art. 110A requires firms to perform due diligence "
-                    "on all SA exposures to ensure risk weights "
-                    "appropriately reflect exposure risk."
-                ),
-                severity=ErrorSeverity.WARNING,
-                category=ErrorCategory.DATA_QUALITY,
-                regulatory_reference="PRA PS1/26 Art. 110A",
-                field_name="due_diligence_performed",
-            )
-        )
-
-    # Apply override RW where provided and higher than calculated RW
-    if "due_diligence_override_rw" not in cols:
-        return lf
-
+    lf = ensure_columns(lf, _DUE_DILIGENCE_OVERRIDE_COLUMNS)
     override_applies = pl.col("due_diligence_override_rw").is_not_null() & (
         pl.col("due_diligence_override_rw") > pl.col("risk_weight")
     )
@@ -744,6 +769,95 @@ def apply_due_diligence_override(
             override_applies.alias("due_diligence_override_applied"),
         ]
     )
+
+
+@cites("PS1/26, paragraph 110A")
+def due_diligence_census_exprs(
+    config: CalculationConfig,
+    *,
+    pack: ResolvedRulepack | None = None,
+) -> tuple[pl.Expr, ...]:
+    """Return the SA004 census aggregate, or ``()`` where Art. 110A does not apply.
+
+    One row count over the SA calculator's input: the rows inside the scope of
+    PS1/26 Art. 110A whose ``due_diligence_performed`` is explicitly False. The
+    scope is the article's own:
+
+    - SA-branch rows only (``is_sa_branch_approach``) — Art. 110A(1) applies to
+      "an institution subject to the Standardised Approach", so the IRB and
+      slotting rows ``calculate_unified`` also weights (for the output floor) are
+      not counted;
+    - not the Art. 110A(5) exemptions — the CGCB, RGLA and PSE classes
+      (Art. 112(1)(a)-(c)), the Art. 117(2) named MDBs (``mdb_named``) and the
+      Art. 118(1) international organisations;
+    - not a null attestation — facility-undrawn, SA-CCR and SFT rows have no
+      attestation field (the hierarchy edge leaves it null rather than False), so
+      counting them would fire the alarm on every facility or derivatives book
+      whatever the firm attested.
+
+    Returned as an expression, not counted here, so ``SACalculator`` folds it into
+    the ONE collect it already makes at entry — the pipeline's fixed collect budget
+    does not grow. Empty where the ``sa_due_diligence_override`` Feature is off
+    (CRR has no Art. 110A).
+    """
+    resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
+    if not resolved_pack.feature("sa_due_diligence_override"):
+        return ()
+    exposure_class = pl.col("exposure_class")
+    exempt = exposure_class.is_in(list(_ART_110A_EXEMPT_CLASSES)) | (
+        (exposure_class == ExposureClass.MDB.value)
+        & pl.col("cp_entity_type").eq_missing("mdb_named")
+    )
+    unattested = (
+        is_sa_branch_approach() & ~exempt & pl.col("due_diligence_performed").eq_missing(False)
+    )
+    return (unattested.sum().alias(_CENSUS_DD_NOT_PERFORMED),)
+
+
+def with_due_diligence_census_columns(lf: pl.LazyFrame, present: Collection[str]) -> pl.LazyFrame:
+    """Inject (as typed nulls) the carriers the SA004 census reads, where absent.
+
+    ``present`` is the caller's already-resolved column list, so this costs no
+    second schema resolution on the sealed calculator input.
+    """
+    return ensure_columns(lf, _DUE_DILIGENCE_CENSUS_COLUMNS, present=present)
+
+
+@cites("PS1/26, paragraph 110A")
+def due_diligence_not_performed_warnings(census: pl.DataFrame) -> list[CalculationError]:
+    """Return the SA004 warning from a census row built by ``due_diligence_census_exprs``.
+
+    One WARNING per run carrying the count, or nothing when every in-scope row
+    attests — so a book that has done its due diligence is silent and one that has
+    not is not (LESSONS B9: the two cases must produce different output).
+    """
+    unattested = int(census[_CENSUS_DD_NOT_PERFORMED].item())
+    if unattested == 0:
+        return []
+    return [
+        CalculationError(
+            code=ERROR_DUE_DILIGENCE_NOT_PERFORMED,
+            message=(
+                f"{unattested} Standardised Approach exposure row(s) carry "
+                "due_diligence_performed = False. PS1/26 Art. 110A(2) requires due "
+                "diligence on every SA exposure outside the Art. 110A(5) exemptions "
+                "(central governments and central banks, regional governments and local "
+                "authorities, public sector entities, the Art. 117(2) multilateral "
+                "development banks and the Art. 118(1) international organisations). "
+                "Where it shows higher risk than the external rating implies, "
+                "Art. 120(4) / 122(4) / 129(4A) require a risk weight at least one credit "
+                "quality step higher: supply it as due_diligence_override_rw. "
+                "Facility-undrawn, SA-CCR and SFT rows and equity_exposures holdings "
+                "carry no attestation field and are not counted."
+            ),
+            severity=ErrorSeverity.WARNING,
+            category=ErrorCategory.DATA_QUALITY,
+            regulatory_reference="PRA PS1/26 Art. 110A",
+            field_name="due_diligence_performed",
+            expected_value="True",
+            actual_value=f"False on {unattested} exposure row(s)",
+        )
+    ]
 
 
 @cites("CRR Art. 113")

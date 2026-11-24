@@ -247,8 +247,10 @@ class TestP1314Art1147FundedCurrencyB31EndToEnd:
         data-quality event, and a reported one that mismatches the denomination
         is a risk-weight outcome rather than an error. Both runs must therefore
         raise exactly the same code set. Stated as a set equality against a
-        control run rather than as "no errors", because the Basel 3.1 baseline
-        is legitimately non-empty (SA004, due diligence).
+        control run rather than as "no errors", so the assertion is about the
+        funding currency alone and not about whatever else the baseline raises.
+        (It once had to be: SA004 fired on every Basel 3.1 run until P1.368. This
+        book is an Art. 112(1)(a) sovereign, exempt from Art. 110A by Art. 110A(5).)
         """
         # Arrange / Act
         live = PipelineOrchestrator().run_with_data(build_p314_bundle(), _config())

@@ -78,6 +78,15 @@ def _sa_corporate_frame() -> pl.LazyFrame:
     ).lazy()
 
 
+def _unattested_sa_corporate_frame() -> pl.LazyFrame:
+    """The SA corporate row with ``due_diligence_performed = False``.
+
+    SA004 reads the attestation VALUE (P1.368): a frame without the column reads as
+    "no attestation field" and is silent, so the channel test must say False.
+    """
+    return _sa_corporate_frame().with_columns(pl.lit(False).alias("due_diligence_performed"))
+
+
 def _irb_sme_frame_without_group_key() -> pl.LazyFrame:
     """IRB SME row carrying the contract columns the branch reads directly,
     but with neither counterparty nor lending-group key (SF001 trigger)."""
@@ -158,10 +167,10 @@ class TestSABranchErrorChannel:
         assert all(e.severity == ErrorSeverity.WARNING for e in errors)
 
     def test_sa004_due_diligence_warning_under_b31(self, b31_config: CalculationConfig) -> None:
-        """Frame without due_diligence_performed under B31 warns SA004."""
+        """An unattested SA corporate row under B31 warns SA004."""
         errors: list[CalculationError] = []
 
-        SACalculator().calculate_branch(_sa_corporate_frame(), b31_config, errors=errors)
+        SACalculator().calculate_branch(_unattested_sa_corporate_frame(), b31_config, errors=errors)
 
         assert ERROR_DUE_DILIGENCE_NOT_PERFORMED in [e.code for e in errors]
 
@@ -186,7 +195,9 @@ class TestSAUnifiedErrorChannel:
     def test_sa004_due_diligence_warning_on_unified(self, b31_config: CalculationConfig) -> None:
         errors: list[CalculationError] = []
 
-        SACalculator().calculate_unified(_sa_corporate_frame(), b31_config, errors=errors)
+        SACalculator().calculate_unified(
+            _unattested_sa_corporate_frame(), b31_config, errors=errors
+        )
 
         assert ERROR_DUE_DILIGENCE_NOT_PERFORMED in [e.code for e in errors]
 

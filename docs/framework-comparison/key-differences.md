@@ -1247,7 +1247,7 @@ Basel 3.1 introduces a **framework-wide due diligence obligation** for the Stand
 |--------|-----|-----------|
 | Framework gate | No SA-specific DD obligation | Art. 110A — applies to every non-exempt SA exposure |
 | Uplift mechanism | N/A | Firm must apply a higher RW where internal assessment shows the calculated RW understates risk |
-| Uplift magnitude | N/A | Unbounded — not limited to one CQS step |
+| Uplift magnitude | N/A | Not set by Art. 110A. For rated institutions, corporates and covered bonds, Art. 120(4) / 122(4) / 129(4A) require at least one CQS step higher — a minimum, not a cap |
 | Timing | N/A | Initial DD before exposure; annual refresh thereafter (Art. 110A(4)(c)) |
 | Group-structure analysis | N/A | Required where applicable (Art. 110A(4)(e)) |
 
@@ -1271,7 +1271,7 @@ All other obligor classes — institutions, corporates, retail, real estate, equ
 
 Art. 110A applies to every non-exempt SA exposure regardless of rating status and permits an arbitrary uplift above the class RW where the firm's internal assessment supports it.
 
-**Implementation.** The calculator exposes `due_diligence_performed` (Boolean, firm attestation) and `due_diligence_override_rw` (Float64, uplifted RW) on the facility schema. Under Basel 3.1, when `due_diligence_performed` is absent the calculator emits a `SA004` data-quality warning. Where `due_diligence_override_rw > risk_weight`, the override is applied as `RW_final = max(RW_calculated, RW_override)` *after* CRM, currency-mismatch multiplier, and before RWA = EAD × RW. A `due_diligence_override_applied` audit column flags uplifted exposures. Under CRR both columns are ignored and no warning is raised.
+**Implementation.** The calculator exposes `due_diligence_performed` (Boolean, firm attestation, default `False`) and `due_diligence_override_rw` (Float64, uplifted RW) on the loan and contingent schemas. Under Basel 3.1 the calculator emits one `SA004` data-quality warning counting the SA exposure rows (one per real-estate-split or guarantee-substituted leg) outside the Art. 110A(5) exemptions whose attestation is `False`. Where `due_diligence_override_rw > risk_weight`, the override is applied as `RW_final = max(RW_calculated, RW_override)` *after* CRM, currency-mismatch multiplier, and before RWA = EAD × RW. A `due_diligence_override_applied` audit column flags uplifted exposures. Under CRR both columns are ignored and no warning is raised.
 
 See [Basel 3.1 SA Risk Weights § Due Diligence Obligation (Art. 110A)](../specifications/basel31/sa-risk-weights.md#due-diligence-obligation-art-110a) for the verbatim regulatory text and full implementation sequencing.
 

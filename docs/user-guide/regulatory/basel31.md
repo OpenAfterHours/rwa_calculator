@@ -551,13 +551,13 @@ Basel 3.1 introduces a **framework-wide due diligence (DD) obligation** for Stan
 
 All other obligor classes — institutions, corporates, retail, real estate, equity, CIUs, and non-named MDBs — are within scope.
 
-**Risk-weight uplift.** Where internal DD indicates the class/ECAI-based risk weight understates the risk, the firm must assign a higher RW. The uplift is **unbounded** — not limited to one CQS step. Three narrower class-specific CQS step-up rules apply alongside Art. 110A for rated exposures: Art. 120(4) (rated institutions), Art. 122(4) (rated corporates), and [Art. 129(4A)](#covered-bonds) (covered bonds). Each limits the uplift to *one* CQS step and applies only where ECAI assessment is the default RW source.
+**Risk-weight uplift.** Art. 110A itself sets no risk-weight mechanic. Three class-specific rules attach one for rated exposures: Art. 120(4) (rated institutions), Art. 122(4) (rated corporates) and [Art. 129(4A)](#covered-bonds) (covered bonds). Where the DD analysis shows higher risk than the credit quality step implies, the firm must assign the risk weight of a credit quality step **at least one step higher** than the ECAI-based weight — one step is the minimum, not a cap, so the DD finding may justify more. These rules apply where an ECAI assessment is the RW source; the calculator carries the resulting weight, and any other firm-determined uplift, through `due_diligence_override_rw`.
 
-**Using the calculator.** The facility schema exposes two optional fields to carry DD status and any uplifted RW:
+**Using the calculator.** The loan and contingent schemas expose two optional fields to carry DD status and any uplifted RW (the facility schema does not, so a facility's undrawn headroom can be neither attested nor overridden):
 
 ```python
-facility = {
-    "facility_ref": "LOAN-001",
+loan = {
+    "loan_reference": "LOAN-001",
     # ... standard fields ...
     "due_diligence_performed": True,       # firm attestation per Art. 110A(2)
     "due_diligence_override_rw": 1.50,     # uplifted RW (decimal) — 150% here
@@ -572,7 +572,7 @@ Override behaviour:
 
 Validation:
 
-- When `due_diligence_performed` is absent from the input under Basel 3.1, the calculator emits a `SA004` (`ERROR_DUE_DILIGENCE_NOT_PERFORMED`) WARNING — the calculation continues.
+- Under Basel 3.1 the calculator emits one `SA004` (`ERROR_DUE_DILIGENCE_NOT_PERFORMED`) WARNING counting the SA exposure rows outside the Art. 110A(5) exemptions whose `due_diligence_performed` is `False` (an omitted column defaults to `False`) — the calculation continues. The count is of rows at calculator entry, so an exposure split into real-estate-secured and residual legs counts once per leg. A book whose in-scope exposures all attest raises nothing.
 - Under CRR both fields are ignored and no warning is raised.
 
 Audit: the output column `due_diligence_override_applied` (Boolean) flags exposures whose RW was raised by the override — use this to reconcile against DD-process evidence and to populate internal disclosures.

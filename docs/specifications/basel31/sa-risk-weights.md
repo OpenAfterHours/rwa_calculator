@@ -2570,12 +2570,43 @@ risk weights from ECRA and SCRA:
 | Institution Senior Unsecured RW | Covered Bond RW | Art. 129(5) Sub-Para | Change |
 |---------------------------------|-----------------|----------------------|--------|
 | 20% | 10% | (a) | Unchanged |
-| 30% | 15% | (aa) | **New** (ECRA CQS 2) |
+| 30% | 15% | (aa) | **New** (ECRA CQS 2; SCRA Grade A, Art. 121(5)) |
 | 40% | 20% | (ab) | **New** (SCRA Grade A) |
-| 50% | 25% | (b) | ↓ from CRR 20% |
+| 50% | 25% | (b) | ↑ from CRR 20% |
 | 75% | 35% | (ba) | **New** (SCRA Grade B) |
 | 100% | 50% | (c) | Unchanged |
 | 150% | 100% | (d) | Unchanged |
+
+**Where the issuer weight comes from, and in what order.** Art. 129(5) works on "the
+risk weight assigned to senior unsecured exposures to the institution which issues
+them", however that weight was set. The covered bond's counterparty carries the
+issuer's standing in two input columns, lifted by the classifier to `cp_institution_cqs`
+and `cp_scra_grade`, and `engine/sa/covered_bond.py::b31_unrated_cb_rw_expr` reads them
+in this order:
+
+1. The covered bond's **own** ECAI assessment (`cqs`), if any, takes Art. 129(4) Table 7
+   and Art. 129(5) is not reached at all.
+2. The issuer's ECAI step (`institution_cqs`) through Art. 120 Table 3 — CQS 2 (30%)
+   and CQS 3 (50%) are where Basel 3.1 departs from CRR (15% and 25%, both 20% under
+   CRR).
+3. An unrated issuer's SCRA grade (`scra_grade`) through Art. 121 Table 5 and
+   paragraph 5 — Art. 121(1) grades only institutions "for which a credit assessment
+   by a nominated ECAI is not available", so a grade beside an ECAI step is not read.
+4. Neither: the Grade C issuer weight (150%), so 100%.
+
+**Coverage.** Two registered reporting portfolios reach this derivation through the
+full pipeline. `rw-ladder` holds two unrated covered bonds whose issuers carry an ECAI
+step (CQS 2 and 3), which puts figures on OF 07.00 rows 0171 (15%) and 0181 (25%) of
+the covered-bond sheet (z0013) and the Total sheet, and so under the Bank's rules over
+them (`boe_b0493` / `boe_b0494` on z0013, `boe_b1018` / `boe_b1019` on z0001).
+`unrated-covered-bond` (`tests/fixtures/reporting_unrated_covered_bond_portfolio.py`,
+in `RUNS` under both regimes, SA permission only) adds what that book does not reach:
+the SCRA arm (step 3), the only registered covered bonds whose issuer carries
+`scra_grade`; the precedence of steps 1-2 and the step 4 default; and the only
+covered-bond-sheet figures on rows 0190 (35%), 0200 (50%) and 0230 (100%), and under
+CRR on rows 0200 and 0230. Each limb is asserted per leg in both regimes. Weights:
+`tests/acceptance/test_p5_12_art_129_5_unrated_covered_bond_pipeline.py`; rows and
+rules: `tests/acceptance/reporting/test_of07_unrated_covered_bond_rows.py`.
 
 ### Covered Bond Due Diligence CQS Step-Up (Art. 129(4A))
 

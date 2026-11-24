@@ -1007,6 +1007,17 @@ The institution RW is determined per Art. 120 (ECRA rated) or Art. 121 (sovereig
 If the issuing institution itself is unrated under CRR, the sovereign-derived approach
 (Art. 121, Table 5) provides the institution RW, which then maps through the table above.
 
+!!! warning "Implementation status — the unrated-issuer limb"
+    `engine/sa/covered_bond.py::crr_unrated_cb_rw_expr` reads only the issuer's ECAI step
+    (`cp_institution_cqs`). Where it is absent it applies the Art. 121(2) 100% issuer
+    weight, so 50%, and does **not** consult the issuer's home-sovereign step
+    (`cp_sovereign_cqs`) as the institution path does. Measured: an unrated institution
+    with `sovereign_cqs = 1` is weighted 20%, while a covered bond on the same issuer
+    attributes is weighted 50% rather than the (a) 10%. Fixing it lowers RWA. The
+    registered `unrated-covered-bond` reporting portfolio carries no `sovereign_cqs`, so
+    each of its unrated issuers is on the Art. 121(2) 100% and it pins only limbs on
+    which the engine and the article agree (its institution anchor takes the same 100%).
+
 !!! quote "CRR Art. 129(5) — verbatim (CRR p. 129)"
     "[CRR covered bonds] for which a credit assessment by a nominated ECAI is not
     available shall be assigned a risk weight on the basis of the risk weight

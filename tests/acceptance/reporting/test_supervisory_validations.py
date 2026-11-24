@@ -287,7 +287,7 @@ Cost, and why every run is load-bearing:
     entry of ``RUNS`` (most portfolios under both regimes, a few under one only),
     one more for each IRB-permissioned entry's prior period, and two for leg (m)'s
     probe (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not
-    this prose — on 2026-11-24 it held forty-eight runs, twenty-five of them Basel
+    this prose — on 2026-11-24 it held fifty runs, twenty-six of them Basel
     3.1 and twenty-five with a prior period. The gateway leg adds one canonical
     return and one ``validate_return`` per Basel 3.1 run and no pipeline run: the
     pack is loaded once per process and the COREP bundle is the one the template
@@ -360,6 +360,13 @@ Cost, and why every run is load-bearing:
                            C 08.01 sheet. ``irb-classes``' single-leg QRRE row
                            still moves under a change that inflates one
                            facility's own contribution past the ceiling.
+    - ``unrated-covered-bond`` the exception: the sole route to no published
+                           rule (the rules over its rows already reach a
+                           verdict through ``rw-ladder`` and others). It is
+                           registered for what it alone reaches — the SCRA arm
+                           of Art. 129(5) through the classifier and the
+                           covered-bond-sheet rows 0190 / 0200 / 0230 — which
+                           its golden and the cell ratchets hold.
 
     Measured: ``sa-classes`` and ``irb-classes`` together move 53 CRR and 32
     Basel 3.1 rules out of NOT_EVALUATED. The ten prior-period runs exist
@@ -508,6 +515,9 @@ from tests.fixtures.reporting_slotting_maturity_portfolio import (
     build_reporting_slotting_maturity_bundle,
     slotting_maturity_config,
     slotting_maturity_prior_config,
+)
+from tests.fixtures.reporting_unrated_covered_bond_portfolio import (
+    build_reporting_unrated_covered_bond_bundle,
 )
 
 from rwa_calc.contracts.config import CalculationConfig
@@ -1666,6 +1676,40 @@ RUNS: tuple[GateInput, ...] = (
         "intragroup",
         partial(build_reporting_intragroup_bundle, INTRAGROUP_DATE["BASEL_3_1"]),
         lambda: intragroup_config("BASEL_3_1"),
+    ),
+    # Unrated covered bonds on SCRA-graded issuers — Art. 129(5), LESSONS B5. Not
+    # the first unrated covered bond here: ``rw-ladder`` reaches Art. 129(5)
+    # through the issuer's ECAI step (CQS 2 / 3 -> OF 07.00 z0013 rows 0171 /
+    # 0181), and with it ``boe_b0493`` / ``boe_b0494`` / ``boe_b1018`` /
+    # ``boe_b1019``. What this book adds, measured over the runs above when it
+    # was registered: the only covered bonds whose issuer carries ``scra_grade``,
+    # so the only run on which the classifier's ``scra_grade`` lift feeds the
+    # Basel 3.1 derivation (A_ENHANCED / A / B / C -> 15 / 20 / 35 / 100%); the
+    # two precedence legs (issuer ECAI step before grade, the bond's own rating
+    # before its issuer); and the only covered-bond-sheet figures on rows 0190 /
+    # 0200 / 0230 under Basel 3.1 and 0200 / 0230 under CRR (cells_live +69,
+    # filing placed_cells +27). It is the SOLE route to no published rule: it
+    # moves no rule out of the vacuous register or into either covered set, and
+    # the Bank's row identities pass whichever legs a row holds, so what sees a
+    # leg that moves is its golden and the placement tests in
+    # ``test_of07_unrated_covered_bond_rows.py``.
+    #
+    # SA-only and no prior frame: no model permission is supplied, and an IRB
+    # permission would route the book through open item P1.322's covered-bond
+    # SA forcing instead of testing Art. 129(5).
+    GateInput(
+        "crr",
+        "CRR",
+        "unrated-covered-bond",
+        build_reporting_unrated_covered_bond_bundle,
+        lambda: _sa_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "unrated-covered-bond",
+        build_reporting_unrated_covered_bond_bundle,
+        lambda: _sa_config("BASEL_3_1"),
     ),
 )
 

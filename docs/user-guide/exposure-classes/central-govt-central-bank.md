@@ -221,6 +221,17 @@ if guarantee.type == "SOVEREIGN" and guarantee.cqs <= 3:
     guaranteed_rw = sovereign_risk_weight(guarantee.cqs)
 ```
 
+!!! note "An ECB guarantee is 0%, whatever its rating or currency (Art. 114(3))"
+    Under risk-weight substitution (Art. 235(1)) the covered part takes the risk weight
+    of a direct exposure to the guarantor, and Art. 114(3) gives the ECB 0% with no
+    rating or currency condition. Art. 235(3) restricts only the Art. 114(4) / 114(7)
+    domestic-currency treatments, so it does not apply. A guarantor tagged
+    `entity_type = "central_bank_ecb"` is therefore priced at 0% on SA, slotting and
+    IRB risk-weight-substitution legs, and in the Basel 3.1 output-floor SA-equivalent —
+    unrated, at any CQS, and whatever the guarantee or funding currency. A plain
+    `central_bank` guarantor keeps the Table 1 weight (100% unrated). See
+    [Credit Risk Mitigation](../../specifications/crr/credit-risk-mitigation.md#art-1143-ecb-guarantor-0-unconditionally).
+
 ### Sovereign Collateral
 
 Government bonds as collateral receive low haircuts (0.5%–4% for CQS 1 depending on residual maturity).

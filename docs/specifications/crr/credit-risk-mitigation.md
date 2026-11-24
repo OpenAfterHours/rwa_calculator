@@ -760,6 +760,37 @@ The domestic-currency test is therefore evaluated against the **guarantee** curr
 
 This short-circuit takes precedence over the internal-rating routing: a sovereign guarantor with an internal PD and IRB permission still receives the 0% SA treatment when the guarantee is in the sovereign's domestic currency.
 
+### Art. 114(3) ECB Guarantor — 0% Unconditionally
+
+Art. 235(1) prices the covered part at the risk weight of a (comparable) direct
+exposure to the protection provider, and a direct exposure to the European Central Bank
+is 0% under Art. 114(3) in both regimes: CRR "Exposures to the ECB shall be assigned a
+0 % risk weight"; PS1/26 "Exposures to the European Central Bank shall be assigned a 0%
+risk weight". The provision has no rating limb and no currency limb, and Art. 235(3)
+restricts only the 114(4) / 114(7) treatments to domestic-currency guarantees funded in
+that currency. So an ECB guarantor (`entity_type = "central_bank_ecb"`) prices at 0%
+whatever its CQS, its country tag, the guarantee currency or the funding currency.
+
+The guarantor risk-weight chain
+(`engine/sa/guarantor_rw.py::build_guarantor_rw_expr`) evaluates the ECB branch first,
+ahead of the domestic-sovereign and Table 1 branches. It keys on the **guarantor's**
+entity type — never the obligor's `cp_entity_type`, so a guarantee *of* a loan to the ECB
+keeps its own guarantor's weight. Like every branch it also requires a guarantor class,
+so an ECB guarantor declined by the Art. 201 gate still prices nothing.
+
+Reach: the chain is shared, so the 0% applies to SA beneficiaries, to slotting
+beneficiaries, to IRB beneficiaries routed to risk-weight substitution
+(`guarantor_approach = "sa"`), and — under Basel 3.1 — to the SA-equivalent risk weight
+of every row that feeds the output floor's S-TREA. It does not reach an ECB guarantor
+that carries an internal PD on an IRB beneficiary where the firm holds IRB permission
+for the central-government class: that guarantee goes to parameter substitution.
+
+Until P1.358 the chain had no ECB branch. The ECB fell into the central government /
+central bank class and onto the Table 1 ladder — 100% unrated, 20% / 50% / 150% at
+CQS 2 / 3 / 6 — so an unrated ECB guarantee on a 100%-weighted borrower was declined as
+non-beneficial. It reached 0% only at CQS 1, or by the 114(7) EU-domestic branch when
+tagged with a euro-area country and guaranteed and funded in EUR.
+
 ### Valuation of G (Art. 233(1)) — amount, percentage and one cap per contract
 
 Art. 233(1): G is "the amount that the protection provider has undertaken to pay in the

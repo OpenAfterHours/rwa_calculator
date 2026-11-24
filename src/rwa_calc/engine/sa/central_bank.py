@@ -3,11 +3,13 @@ Article 114 central-bank treatments for the Standardised Approach.
 
 Pipeline position:
     CRMProcessor -> SACalculator (engine/sa/risk_weights.py) -> OutputAggregator
-    Called from ``_prepare_risk_weight_lookup`` (the CQS lift) and from both
-    risk-weight override ladders (the ECB predicate).
+    Called from ``_prepare_risk_weight_lookup`` (the CQS lift), and the ECB
+    predicate from both risk-weight override ladders and from the guarantor
+    risk-weight chain (``guarantor_rw.py``, Art. 235 substitution).
 
 Key responsibilities:
-- ``is_ecb_expr``: identify the ECB for the Art. 114(3) unconditional 0% RW.
+- ``is_ecb_expr``: identify the ECB for the Art. 114(3) unconditional 0% RW, as
+  the obligor (direct exposures) or as the protection provider (guarantees).
 - ``lift_central_bank_cqs``: PS1/26 Art. 114(2A) read-across
   from a central bank's government's ECAI assessment.
 
@@ -66,14 +68,27 @@ def ecb_rw_expr() -> pl.Expr:
 
 @cites("CRR Art. 114(3)")
 @cites("PS1/26, paragraph 114")
-def is_ecb_expr() -> pl.Expr:
-    """Art. 114(3): identify exposures to the ECB (0% RW, unconditionally).
+def is_ecb_expr(entity_type_col: str = "cp_entity_type") -> pl.Expr:
+    """Art. 114(3): identify the ECB (0% RW, unconditionally) in an entity-type column.
 
-    ``eq_missing`` returns False rather than null for a null ``cp_entity_type``,
-    so no ``fill_null`` is needed and a missing entity type can never be read as
-    the ECB.
+    The default reads the OBLIGOR's ``cp_entity_type`` — the direct-exposure
+    ladders in ``risk_weights.py``. The guarantor chain
+    (``guarantor_rw.py::build_guarantor_rw_expr``) passes the GUARANTOR's column
+    instead: on a guarantee sub-row ``cp_entity_type`` is still the obligor's, so
+    the default there would zero a guarantee of a loan TO the ECB rather than a
+    guarantee BY it.
+
+    ``eq_missing`` returns False rather than null for a null entity type, so no
+    ``fill_null`` is needed and a missing entity type can never be read as the
+    ECB.
+
+    Args:
+        entity_type_col: Name of the entity-type column to test.
+
+    Returns:
+        Boolean expression, True exactly where the column is ``central_bank_ecb``.
     """
-    return pl.col("cp_entity_type").eq_missing(_ECB_ENTITY_TYPE)
+    return pl.col(entity_type_col).eq_missing(_ECB_ENTITY_TYPE)
 
 
 @cites("PS1/26, paragraph 114")

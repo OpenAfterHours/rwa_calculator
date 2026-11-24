@@ -48,6 +48,7 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.domain.enums import CQS
+from rwa_calc.engine.sa.central_bank import ecb_rw_expr, is_ecb_expr
 from rwa_calc.rulebook.compile import scalar_value
 from rwa_calc.rulebook.resolve import resolve
 
@@ -115,12 +116,15 @@ _QCCP_PROPRIETARY_RW = scalar_value(_CRR_PACK.scalar_param("qccp_proprietary_rw"
 
 
 @cites("CRR Art. 114")
+@cites("CRR Art. 114(3)")
+@cites("PS1/26, paragraph 114")
 @cites("CRR Art. 115")
 @cites("CRR Art. 116")
 @cites("CRR Art. 117")
 @cites("PS1/26, paragraph 117")
 @cites("CRR Art. 118")
 @cites("CRR Art. 235")
+@cites("PS1/26, paragraph 235")
 def build_guarantor_rw_expr(
     *,
     exposure_class_col: str,
@@ -144,6 +148,7 @@ def build_guarantor_rw_expr(
 
     Branch order (first match wins):
         no guarantee -> null (only when ``no_guarantee_expr`` is supplied)
+        ECB (Art. 114(3)) -> 0%, whatever its CQS, country or currency
         domestic CGCB sovereign (Art. 114(4)/(7)) -> 0%
         CGCB CQS table (Art. 114 Table 1)
         CCP (CRR Art. 306, CRE54.14-15)
@@ -160,8 +165,17 @@ def build_guarantor_rw_expr(
         Corporate (Art. 122 corporate CQS table)
         else -> null (no substitution)
 
+    The ECB branch leads the CGCB branches because Art. 114(3) carries neither
+    a rating limb nor a currency limb, and Art. 235(3) restricts only the
+    114(4)/(7) treatments to domestic-currency guarantees funded in that
+    currency — so an ECB guarantee is 0% where the domestic test fails and at
+    every CQS. It keys on the GUARANTOR entity type (``entity_type_col``), never
+    on the obligor's ``cp_entity_type``, and never on country or currency (the
+    ECB is supranational).
+
     An empty (or null) guarantor class prices nothing: every branch requires a
-    class, including the two that also read the entity type (CCP, named MDB).
+    class, including the three that also read the entity type (ECB, CCP, named
+    MDB).
     That is how a guarantor declined by the Art. 201 gate
     (``engine/crm/guarantor_eligibility.py``), which clears the class, and an
     unmapped guarantor both reach null and so no substitution on the SA and
@@ -177,7 +191,8 @@ def build_guarantor_rw_expr(
         exposure_class_col: Name of the guarantor SA exposure-class column
             (e.g. ``guarantor_exposure_class``).
         entity_type_col: Name of the guarantor entity-type column — used for
-            the CCP override and the named-MDB (``mdb_named``) carve-out.
+            the Art. 114(3) ECB (``central_bank_ecb``) branch, the CCP override
+            and the named-MDB (``mdb_named``) carve-out.
         cqs_col: Name of the integer guarantor CQS column.
         country_code_col: Name of the guarantor country-code column — drives
             the unrated PSE / RGLA GB-vs-other approximation.
@@ -220,6 +235,12 @@ def build_guarantor_rw_expr(
     return (
         pl.when(skip_substitution)
         .then(pl.lit(None).cast(pl.Float64))
+        # Art. 114(3): the ECB -> 0%, unconditionally (P1.358). Ahead of the
+        # domestic and Table 1 branches; keyed on the GUARANTOR entity type —
+        # ``is_ecb_expr``'s default column is the obligor's — and gated on the
+        # class, so an Art. 201-declined guarantor still prices nothing.
+        .when((gec == "central_govt_central_bank") & is_ecb_expr(entity_type_col))
+        .then(ecb_rw_expr())
         # Art. 114(4)/(7): Domestic sovereign -> 0% regardless of CQS.
         .when((gec == "central_govt_central_bank") & is_domestic_guarantor)
         .then(pl.lit(0.0))

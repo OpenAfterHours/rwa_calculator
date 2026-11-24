@@ -185,6 +185,55 @@ class TestCLS011RollUpWarning:
         assert len(cls011) == 0
 
 
+class TestCLS011LargeCorporatePopulation:
+    """CLS011 counts the same population the F-IRB restriction reads (P1.321).
+
+    PS1/26 Art. 147(4C): exposures to corporates go to the financial-and-large
+    subclass "if: (a) they do not fall within the specialised lending exposure
+    subclass ...; and (b) the exposures are to ... (ii) 'large' corporates with
+    annual revenue of more than GBP 440 million, taken at the highest level of
+    consolidation". CLS011 announces that a group roll-up put a small subsidiary
+    in that subclass, so it must not fire where 4C(a) keeps the row out of it,
+    and must fire for the ``company`` alias of ``corporate``.
+    """
+
+    def test_no_cls011_for_a_subsidiary_with_a_specialised_lending_record(
+        self, classifier: ExposureClassifier
+    ) -> None:
+        """Own 50m under a 500m group, project-finance SL record -> no CLS011 (4C(a))."""
+        # Arrange
+        bundle = make_classify_bundle(
+            sub_revenue=SUB_OWN_REVENUE,
+            parent_revenue=BIG_GROUP_REVENUE,
+            sub_sl_type="project_finance",
+        )
+
+        # Act
+        codes = [e.code for e in _errors(classifier, bundle, _b31())]
+
+        # Assert
+        assert "CLS011" not in codes
+
+    def test_cls011_emitted_for_a_company_subsidiary_under_a_large_group(
+        self, classifier: ExposureClassifier
+    ) -> None:
+        """Own 50m ``company`` under a 500m group -> F-IRB and CLS011, as for ``corporate``."""
+        # Arrange
+        bundle = make_classify_bundle(
+            sub_revenue=SUB_OWN_REVENUE,
+            parent_revenue=BIG_GROUP_REVENUE,
+            sub_entity_type="company",
+        )
+
+        # Act
+        result = classifier.classify(bundle, _b31())
+        approach = result.all_exposures.collect()["approach"][0]
+        cls011 = [e for e in result.classification_errors if e.code == "CLS011"]
+
+        # Assert
+        assert (approach, len(cls011)) == (ApproachType.FIRB.value, 1)
+
+
 # =============================================================================
 # CLS008 — the null-revenue conservatism is now keyed on the GROUP figure
 # =============================================================================

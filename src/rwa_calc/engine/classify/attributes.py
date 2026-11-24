@@ -57,7 +57,10 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.data.schemas import NATURAL_PERSON_ENTITY_TYPES
+from rwa_calc.data.schemas import (
+    LARGE_CORPORATE_TEST_ENTITY_TYPES,
+    NATURAL_PERSON_ENTITY_TYPES,
+)
 from rwa_calc.domain.enums import ExposureClass, ProjectPhase, SpecialisedLendingType
 from rwa_calc.engine.entity_class_maps import (
     entity_type_to_irb_class,
@@ -619,6 +622,29 @@ def natural_person_expr() -> pl.Expr:
     """
     return pl.col("cp_is_natural_person").fill_null(False) | pl.col("cp_entity_type").is_in(
         list(NATURAL_PERSON_ENTITY_TYPES)
+    )
+
+
+@cites("PS1/26, paragraph 147")
+def large_corporate_test_entity_expr(entity_type_column: str) -> pl.Expr:
+    """Return an expression flagging the entity types the large-corporate test reads.
+
+    PRA PS1/26 Art. 147(4C)(b)(ii) puts "'large' corporates with annual revenue of
+    more than GBP 440 million" in the financial-and-large subclass, which
+    Art. 147A(1)(e)(ii) restricts to Foundation IRB. The population is
+    ``LARGE_CORPORATE_TEST_ENTITY_TYPES`` — ``corporate`` and its alias
+    ``company`` (P1.321). A null entity type is not in it (``nulls_equal=True``
+    makes the membership test False rather than null, with no ``fill_null``).
+
+    ONE predicate for both readers, so they cannot drift: the approach
+    restriction (``approach._apply_b31_approach_restrictions``, on the exposure
+    frame's ``cp_entity_type``) and the CLS008 / CLS011 / CLS015 counts
+    (``audit._input_warning_filters``, on the counterparty lookup's
+    ``entity_type``). Specialised-lending rows are excluded by each reader in its
+    own terms (Art. 147(4C)(a)) — this predicate is about the obligor's type only.
+    """
+    return pl.col(entity_type_column).is_in(
+        list(LARGE_CORPORATE_TEST_ENTITY_TYPES), nulls_equal=True
     )
 
 

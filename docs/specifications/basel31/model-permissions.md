@@ -121,6 +121,21 @@ Art. 147(2) — both are handled by Art. 147A(1)(**e**), not by separate letters
 "large corporate" if:
 
 - The obligor's **consolidated annual revenue** exceeds **£440 million** (GBP)
+  (Art. 147(4C)(b)(ii)), and
+- the exposure is **not** in the specialised-lending subclass (Art. 147(4C)(a)).
+
+Limb (a) qualifies the FSE limb (b)(i) as well: a specialised-lending row (one with an
+`sl_type` from the specialised-lending table) is routed by Art. 147A(1)(c)/(d), so an
+object / project / commodities-finance row with an A-IRB permission keeps its own LGD
+whatever its obligor's revenue or FSE flag.
+
+The revenue test reads the entity types `corporate` and `company` (the documented alias;
+`LARGE_CORPORATE_TEST_ENTITY_TYPES` in `data/schemas.py`). Before P1.321 it read only the
+literal `corporate`, so a large `company` escaped to A-IRB. A null-revenue `corporate` /
+`company` with no SME-confirming group assets is treated as large (an engine convention,
+the conservative direction) and raises CLS008. How to route a `specialised_lending`-typed
+obligor with no specialised-lending record is an open owner decision — see
+[the classification spec](../common/hierarchy-classification.md#large-corporate-revenue-threshold-basel-31).
 
 !!! warning "Distinct Thresholds — Approach Restriction vs Correlation Multiplier"
     The **£440m revenue** threshold (Art. 147A(1)(e), via Art. 147(2)(c)(ii)) for the

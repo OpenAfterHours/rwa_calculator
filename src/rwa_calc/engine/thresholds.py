@@ -23,7 +23,7 @@ References:
   NOT Art. 4(1)(146), the large-institution G-SII/O-SII definition, which both
   this docstring and the CRR pack comment previously named — no threshold in
   this block derives from that article. D3.58.)
-- PRA PS1/26 Art. 147(5A) / 147A(1)(d) / 153(4): native GBP thresholds.
+- PRA PS1/26 Art. 147(5A) / 147(4C)(b)(ii) / 153(4): native GBP thresholds.
 """
 
 from __future__ import annotations

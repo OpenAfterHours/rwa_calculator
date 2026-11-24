@@ -89,8 +89,9 @@ VALUE_DATE: date = date(2027, 1, 15)
 MATURITY_DATE: date = date(2032, 1, 15)  # ~5 years
 
 # Revenue set at GBP 50m — well below any revenue threshold; the large-corp
-# Art. 147A(1)(d) restriction applies to entity_type="corporate" only, but
-# we set a low revenue on the counterparty for completeness.
+# Art. 147(4C)(b)(ii) / 147A(1)(e)(ii) restriction applies to entity types
+# "corporate" and "company" only, but we set a low revenue on the counterparty
+# for completeness.
 ANNUAL_REVENUE: float = 50_000_000.0
 
 EQUITY_EAD: float = 1_000_000.0

@@ -131,14 +131,16 @@ def _sub_and_parent_counterparties(
     parent_ref: str | None,
     parent_revenue: float | None,
     sub_total_assets: float | None,
+    sub_entity_type: str = "corporate",
 ) -> pl.LazyFrame:
     """Two-row counterparty lookup: the subsidiary plus its ultimate parent.
 
     When ``parent_ref`` is None the subsidiary is a standalone corporate (its
     ``ultimate_parent_reference`` is null and only the subsidiary row is emitted).
+    ``sub_entity_type`` types the subsidiary only; the parent is always ``corporate``.
     """
     refs = [sub_ref]
-    entity = ["corporate"]
+    entity = [sub_entity_type]
     revenue: list[float | None] = [sub_revenue]
     assets: list[float | None] = [sub_total_assets]
     has_parent = [parent_ref is not None]
@@ -231,6 +233,26 @@ def _classify_model_permissions() -> pl.LazyFrame:
     )
 
 
+def _sub_sl_record(sub_ref: str, sl_type: str | None) -> pl.LazyFrame | None:
+    """The subsidiary's specialised-lending record, or None when it has none."""
+    if sl_type is None:
+        return None
+    return pl.LazyFrame(
+        {
+            "counterparty_reference": [sub_ref],
+            "sl_type": [sl_type],
+            "slotting_category": ["good"],
+            "is_hvcre": [False],
+        },
+        schema={
+            "counterparty_reference": pl.String,
+            "sl_type": pl.String,
+            "slotting_category": pl.String,
+            "is_hvcre": pl.Boolean,
+        },
+    )
+
+
 def make_classify_bundle(
     *,
     sub_revenue: float | None,
@@ -238,12 +260,17 @@ def make_classify_bundle(
     parent_ref: str | None = CP_PARENT_BIG,
     sub_total_assets: float | None = None,
     sub_ref: str = CP_SUB_LARGE,
+    sub_entity_type: str = "corporate",
+    sub_sl_type: str | None = None,
 ) -> ResolvedHierarchyBundle:
     """Return a classify-level bundle for one subsidiary + (optional) parent.
 
     The subsidiary carries the hierarchy's ``group_annual_revenue`` so the
     classifier's large-corp gate runs without the hierarchy stage.
-    ``parent_ref=None`` produces a standalone corporate.
+    ``parent_ref=None`` produces a standalone corporate. ``sub_entity_type``
+    types the subsidiary (e.g. the ``company`` alias, P1.321); ``sub_sl_type``
+    gives it a specialised-lending record of that type, which puts its exposure
+    in the specialised-lending subclass (Art. 147(4C)(a), P1.321).
     """
     counterparties = _sub_and_parent_counterparties(
         sub_ref=sub_ref,
@@ -251,8 +278,10 @@ def make_classify_bundle(
         parent_ref=parent_ref,
         parent_revenue=parent_revenue,
         sub_total_assets=sub_total_assets,
+        sub_entity_type=sub_entity_type,
     )
     return make_resolved_bundle(
+        specialised_lending=_sub_sl_record(sub_ref, sub_sl_type),
         exposures=_sub_exposure(sub_ref),
         counterparty_lookup=make_counterparty_lookup(
             counterparties=counterparties,

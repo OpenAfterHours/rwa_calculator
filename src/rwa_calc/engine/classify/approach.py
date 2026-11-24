@@ -47,7 +47,10 @@ from rwa_calc.domain.enums import (
     ExposureClass,
     SpecialisedLendingType,
 )
-from rwa_calc.engine.classify.attributes import natural_person_expr
+from rwa_calc.engine.classify.attributes import (
+    large_corporate_test_entity_expr,
+    natural_person_expr,
+)
 from rwa_calc.engine.classify.permissions import (
     build_permission_exprs,
     build_sl_irb_permission_expr,
@@ -183,11 +186,21 @@ def _apply_b31_approach_restrictions(
 
     Returns the inputs unchanged when the
     ``approach_restrictions_b31_applicable`` Feature is off (CRR).
-    Under Basel 3.1, removes A-IRB eligibility for FSE / large-corporate /
-    institution exposures (Art. 147A(1)(b)/(d)/(e)) and removes both A-IRB
-    and F-IRB for sovereign-like entity types (Art. 147A(1)(a)). Also
-    widens ``firb_clear_expr`` to include rows whose A-IRB was blocked but
-    which still receive F-IRB.
+    Under Basel 3.1, removes A-IRB eligibility for institution exposures
+    (Art. 147A(1)(b)) and for the financial-and-large corporates subclass
+    (Art. 147(4C) with Art. 147A(1)(e)(ii)), and removes both A-IRB and F-IRB
+    for sovereign-like entity types (Art. 147A(1)(a)). Also widens
+    ``firb_clear_expr`` to include rows whose A-IRB was blocked but which
+    still receive F-IRB.
+
+    The financial-and-large subclass is Art. 147(4C): a corporate exposure
+    that (a) is NOT in the specialised-lending subclass and (b) is to (i) a
+    financial sector entity or (ii) a corporate with group revenue above
+    GBP 440m. Limb (a) qualifies both (b)(i) and (b)(ii), so a specialised-
+    lending row — routed to A-IRB under Art. 147A(1)(d)(iii) — keeps its own
+    LGD however large or financial its obligor (P1.321). The (b)(ii) revenue
+    test reads the ``LARGE_CORPORATE_TEST_ENTITY_TYPES`` population
+    (``corporate`` and its alias ``company``).
 
     These supplement the permissions-level restrictions in
     ``full_irb_b31()`` with data-dependent checks that cannot be encoded
@@ -197,18 +210,18 @@ def _apply_b31_approach_restrictions(
     if not resolved_pack.feature("approach_restrictions_b31_applicable"):
         return airb_expr, firb_expr, firb_clear_expr
 
-    # Art. 147A(1)(d)/(e): FSE → no A-IRB (null = not flagged as FSE)
+    # Art. 147(4C)(b)(i): FSE (null = not flagged as FSE)
     is_fse = (
         (pl.col("cp_is_financial_sector_entity") == True)  # noqa: E712
         .fill_null(False)
     )
-    # Art. 147(4C)(b)(ii) w/ Art. 147A(1)(e): the large-corporate F-IRB
-    # restriction applies ONLY to counterparties of entity_type ==
-    # "corporate". Non-corporate entity types are governed by their own
-    # Art. 147A sub-clauses and must never trip this branch. The revenue
-    # test reads ``cp_group_annual_revenue`` — the max of the counterparty's
-    # own turnover and every org ancestor's (hierarchy/graph.py
-    # ::with_group_size_figures) — because Art. 147(4C)(b)(ii) prescribes
+    # Art. 147(4C)(b)(ii) w/ Art. 147A(1)(e): the large-corporate revenue
+    # test applies ONLY to the ``LARGE_CORPORATE_TEST_ENTITY_TYPES`` population
+    # (``corporate`` and its alias ``company``). Other entity types are
+    # governed by their own Art. 147A sub-clauses and must never trip this
+    # branch. The revenue test reads ``cp_group_annual_revenue`` — the max of
+    # the counterparty's own turnover and every org ancestor's
+    # (hierarchy/graph.py::with_group_size_figures) — because Art. 147(4C)(b)(ii) prescribes
     # revenue "taken at the highest level of consolidation", so a small
     # subsidiary of a large group is F-IRB-only. Within the corporate slice:
     #   - When the group revenue is non-null, compare to the large-corp
@@ -223,8 +236,7 @@ def _apply_b31_approach_restrictions(
     balance_sheet_threshold = float(
         regulatory_threshold(resolved_pack, "sme_balance_sheet_threshold", config.eur_gbp_rate)
     )
-    is_corporate_cp = pl.col("cp_entity_type").fill_null("") == "corporate"
-    is_large_corp = is_corporate_cp & (
+    is_large_corp = large_corporate_test_entity_expr("cp_entity_type") & (
         pl.when(pl.col("cp_group_annual_revenue").is_not_null())
         .then(
             pl.col("cp_group_annual_revenue")
@@ -245,7 +257,13 @@ def _apply_b31_approach_restrictions(
     # forced to SA per Art. 147(3)(c)-(e); this branch only governs their
     # A-IRB block, which the SA-only restriction then subsumes.
     b31_institution_no_airb = pl.col("exposure_class_irb") == ExposureClass.INSTITUTION.value
-    b31_airb_blocked = is_fse | is_large_corp | b31_institution_no_airb
+    # Art. 147(4C)(a): a row in the specialised-lending subclass is never in
+    # (c)(ii), whichever (b) limb its obligor meets. ``exposure_class`` is the
+    # carrier the decision ladder's SL branches read (``is_sl``), so the two
+    # agree on which rows are specialised lending.
+    is_sl_subclass = pl.col("exposure_class").eq_missing(ExposureClass.SPECIALISED_LENDING.value)
+    b31_financial_or_large = (is_fse | is_large_corp) & ~is_sl_subclass
+    b31_airb_blocked = b31_financial_or_large | b31_institution_no_airb
 
     # Art. 147A(1)(a) read with Art. 147(3)(c)-(e): central governments,
     # central banks and the quasi-sovereign entity types (regional govts,

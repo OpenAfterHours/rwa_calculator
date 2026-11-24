@@ -762,7 +762,7 @@ ENTRIES: dict[str, RuleEntry] = {
         ),
     ),
     # Basel 3.1 regulatory monetary thresholds — PRA-native GBP values (Art. 147(5A) /
-    # 147A(1)(d) / 153(4)), EXCEPT sme_balance_sheet which PS1/26 does not restate, so it
+    # 147(4C)(b)(ii) / 153(4)), EXCEPT sme_balance_sheet which PS1/26 does not restate, so it
     # stays the Commission Rec 2003/361/EC EUR 43m converted at the default 0.8732. B31
     # never FX-syncs (config.py builds B31 thresholds at the fixed 0.8732), so
     # 43m × 0.8732 = 37547600 is frozen byte-identically. The Feature is False (values are
@@ -773,7 +773,7 @@ ENTRIES: dict[str, RuleEntry] = {
             "sme_turnover_threshold": Decimal("44000000"),  # GBP 44m (Art. 153(4))
             "sme_balance_sheet_threshold": Decimal("37547600"),  # EUR 43m × 0.8732 (frozen)
             "sme_exposure_threshold": Decimal("0"),  # n/a under Basel 3.1
-            "large_corporate_revenue_threshold": Decimal("440000000"),  # GBP 440m (Art. 147A(1)(d))
+            "large_corporate_revenue_threshold": Decimal("440000000"),  # GBP 440m (147(4C)(b)(ii))
             "retail_max_exposure": Decimal("880000"),  # GBP 880k (Art. 147(5A))
             "qrre_max_limit": Decimal("90000"),  # GBP 90k (Art. 147(5A)(c))
             "lfse_total_assets_threshold": Decimal("79000000000"),  # GBP 79bn (IRB Part glossary)

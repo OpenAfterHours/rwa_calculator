@@ -2406,6 +2406,27 @@ NATURAL_PERSON_ENTITY_TYPES: tuple[str, ...] = (
     "retail",
 )
 
+# Entity types the Basel 3.1 large-corporate revenue test is applied to: PS1/26
+# Art. 147(4C)(b)(ii) assigns "'large' corporates with annual revenue of more than
+# GBP 440 million" to the financial-and-large subclass, which Art. 147A(1)(e)(ii)
+# restricts to Foundation IRB. ``company`` is the documented alias of
+# ``corporate`` (both map to CORPORATE in the common pack's class maps), so the
+# two are one population (P1.321). Read by
+# ``engine/classify/approach.py::_apply_b31_approach_restrictions`` and by the
+# CLS008 / CLS011 / CLS015 counts in ``engine/classify/audit.py``.
+#
+# ``specialised_lending`` is deliberately NOT a member, unlike the ADC corporate
+# gate's list (whose SPV member is justified by the ADC glossary's "a corporate
+# or special purpose entity"). Art. 147(4C)(a) excludes the specialised-lending
+# subclass from (c)(ii) outright, and the classifier excludes SL rows by
+# exposure class; how to route a ``specialised_lending``-typed obligor that has
+# NO specialised-lending record is an open owner decision (register entry D2 in
+# tests/conformance/classification_table.toml), not settled by this list.
+LARGE_CORPORATE_TEST_ENTITY_TYPES: tuple[str, ...] = (
+    "corporate",
+    "company",
+)
+
 # Entity types the Basel 3.1 approach-restriction step forces to the
 # Standardised Approach only (no IRB), under PS1/26 Art. 147A(1)(a) read
 # with Art. 147(3). Art. 147(3)(a)-(f) assign central governments, central

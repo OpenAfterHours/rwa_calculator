@@ -32,6 +32,26 @@ Composition — one row per shape:
     LN_LIFE          | retail_other + life-policy pledge       | A-IRB    | C 08.01/02 0170,0172
     LN_FINCOLL       | corporate + cash AND equity pledged     | F-IRB    | CR7-A col b (diagnostic)
     LN_SL / CT_SL    | slotting SL obligor with an off-BS leg  | slotting | C 08.06 0030,0050; CR10 b
+    LN_LARGE_CO      | GBP 600m `company` with an own LGD      | A-IRB CRR| OF 08.01 sheet 0022;
+                     |                                         | F-IRB B31| OF 09.02 r0048
+
+``LN_LARGE_CO`` is the one deliberate regime divergence in the book (P1.321). A
+`company` is the documented alias of `corporate`, and at GBP 600m revenue PS1/26
+Art. 147(4C)(b)(ii) puts it in the financial-and-large subclass, which
+Art. 147A(1)(e)(ii) restricts to Foundation IRB — so under Basel 3.1 its own LGD
+is cleared and it reports on OF 08.01 sheet 0022 (financial and large corporates,
+FIRB) and OF 09.02 row 0048. CRR has no such subclass, so it stays A-IRB on its
+own LGD. Before P1.321 the revenue test read only the literal `corporate`, the
+row took A-IRB under Basel 3.1 too, and was folded into sheet 0011 (other general
+corporates, non-SME, AIRB). It is also the first financial-or-large obligor in
+the estate: sheet 0022 and row 0048 were dark in every registered run before it.
+Its PD sits in a different PD band from the F-IRB corporates so the C 08.03
+off-balance-sheet blend assertions keep reading the band they were written for.
+Pillar 3 CR9 does NOT yet agree with COREP on it: ``cr9._leaf_expr`` keys the
+financial-and-large leaf on ``cp_is_financial_sector_entity`` alone, so the leg
+lands in "Other general corporates (non-SME)" row 5. That is P2.92's open CR9
+limb, held as a strict xfail in
+tests/acceptance/reporting/test_irb_shapes_template_coverage.py - not a verdict.
 
 THE DEFAULTED CLUSTER'S PREMISE WAS WRONG, AND THE CORRECTION IS THE DESIGN.
 The banked baseline records C 08.01/0265, C 08.02/0265 and C 09.02/0120 as
@@ -154,6 +174,7 @@ CP_RET_DEF: str = "IRS-CP-RET-DEF"
 CP_LIFE: str = "IRS-CP-LIFE"
 CP_FINCOLL: str = "IRS-CP-FINCOLL"
 CP_SL: str = "IRS-CP-SL"
+CP_LARGE_CO: str = "IRS-CP-LARGE-CO"
 
 LN_CORP_ONB: str = "IRS-LN-CORP-ONB"
 LN_LFSE: str = "IRS-LN-LFSE"
@@ -162,6 +183,7 @@ LN_RET_DEF: str = "IRS-LN-RET-DEF"
 LN_LIFE: str = "IRS-LN-LIFE"
 LN_FINCOLL: str = "IRS-LN-FINCOLL"
 LN_SL: str = "IRS-LN-SL"
+LN_LARGE_CO: str = "IRS-LN-LARGE-CO"
 
 CT_CORP_GTEE: str = "IRS-CT-CORP-GTEE"
 CT_SL: str = "IRS-CT-SL"
@@ -176,6 +198,19 @@ FAC_SL: str = "IRS-FAC-SL"
 PD_CORP: float = 0.0150
 PD_LFSE: float = 0.0180
 PD_RETAIL: float = 0.0250
+#: Deliberately in a lower C 08.03 PD band (0.25%-0.50%) than the F-IRB
+#: corporates' 0.75%-2.50%, so the large company's on-balance-sheet leg never
+#: shares the band the off-balance-sheet blend assertions read.
+PD_LARGE_CO: float = 0.0035
+
+#: Own-estimate LGD of the large company. Below the Art. 161(1)(aa) 40% senior
+#: unsecured supervisory value, so the Basel 3.1 F-IRB restriction is visible as
+#: an LGD that moves (0.30 own -> 0.40 supervisory) and not only as a label.
+LGD_LARGE_CO: float = 0.30
+
+#: Annual revenue of the large company — above the PS1/26 Art. 147(4C)(b)(ii)
+#: GBP 440m threshold.
+REVENUE_LARGE_CO: float = 600_000_000.0
 
 #: Own-estimate LGD shared by every A-IRB retail leg, so the RWEA differences
 #: between them are attributable to the shape under test and not to LGD.
@@ -197,6 +232,7 @@ DRAWN_RET_DEF: float = 170_000.0
 DRAWN_LIFE: float = 130_000.0
 DRAWN_FINCOLL: float = 90_000.0
 DRAWN_SL: float = 12_700_000.0
+DRAWN_LARGE_CO: float = 2_900_000.0
 
 #: Off-balance-sheet nominals. Both are ISSUED items (``is_obs_commitment``
 #: defaults False) carrying ``risk_type="FR"`` — full risk, 100% CCF in both
@@ -231,9 +267,10 @@ EQUITY_VALUE: float = 35_000.0
 _VALUE_DATE: date = date(2020, 1, 1)
 _MATURITY: date = date(2031, 12, 31)  # > both reporting dates (CRR 2025, B31 2027)
 
-#: The approach each row must resolve to, per regime. No divergence is expected
-#: here — unlike the class portfolio, every obligor type in this book keeps its
-#: approach across the regime change, so any movement is a regression.
+#: The approach each row must resolve to, per regime. ``LN_LARGE_CO`` is the one
+#: designed divergence (PS1/26 Art. 147A(1)(e)(ii), see the module docstring);
+#: every other obligor type in this book keeps its approach across the regime
+#: change, so any other movement is a regression.
 IRB_SHAPES_EXPECTED_APPROACH: dict[str, tuple[str, str]] = {
     # exposure_reference: (CRR approach, Basel 3.1 approach)
     LN_CORP_ONB: ("foundation_irb", "foundation_irb"),
@@ -243,6 +280,7 @@ IRB_SHAPES_EXPECTED_APPROACH: dict[str, tuple[str, str]] = {
     LN_LIFE: ("advanced_irb", "advanced_irb"),
     LN_FINCOLL: ("foundation_irb", "foundation_irb"),
     LN_SL: ("slotting", "slotting"),
+    LN_LARGE_CO: ("advanced_irb", "foundation_irb"),
 }
 
 
@@ -350,6 +388,15 @@ def _counterparties() -> pl.DataFrame:
             "entity_type": "specialised_lending",
             "country_code": "GB",
         },
+        # `company`, not `corporate`: the alias the Art. 147(4C)(b)(ii) revenue
+        # test once missed (P1.321). Above GBP 440m, so Basel 3.1 restricts it to
+        # F-IRB under Art. 147A(1)(e)(ii).
+        {
+            "counterparty_reference": CP_LARGE_CO,
+            "entity_type": "company",
+            "country_code": "GB",
+            "annual_revenue": REVENUE_LARGE_CO,
+        },
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(COUNTERPARTY_SCHEMA))
 
@@ -370,6 +417,7 @@ def _ratings() -> pl.DataFrame:
         _internal(CP_LIFE, pd=PD_RETAIL),
         _internal(CP_FINCOLL, pd=PD_RETAIL),
         _internal_no_pd(CP_SL),
+        _internal(CP_LARGE_CO, pd=PD_LARGE_CO),
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(RATINGS_SCHEMA))
 
@@ -377,10 +425,12 @@ def _ratings() -> pl.DataFrame:
 def _loans() -> pl.DataFrame:
     """The drawn leg of each shape.
 
-    The two corporates carry no firm LGD estimate, so the A-IRB branch is
-    unavailable and they resolve F-IRB on the Art. 161 supervisory LGD. The four
-    retail rows carry ``lgd`` + ``has_sufficient_collateral_data`` so they resolve
-    A-IRB (retail is A-IRB-only in both regimes).
+    The other-general corporates carry no firm LGD estimate, so the A-IRB branch
+    is unavailable and they resolve F-IRB on the Art. 161 supervisory LGD. The
+    four retail rows carry ``lgd`` + ``has_sufficient_collateral_data`` so they
+    resolve A-IRB (retail is A-IRB-only in both regimes). The large company
+    carries one too: A-IRB under CRR, and under Basel 3.1 the Art. 147A(1)(e)(ii)
+    restriction clears it for the supervisory LGD.
     """
     rows: list[dict] = [
         _loan(LN_CORP_ONB, CP_CORP, DRAWN_CORP_ONB),
@@ -416,6 +466,14 @@ def _loans() -> pl.DataFrame:
         _loan(LN_FINCOLL, CP_FINCOLL, DRAWN_FINCOLL),
         # Slotting: SL row + slotting permission + no internal PD.
         _loan(LN_SL, CP_SL, DRAWN_SL),
+        # Own LGD estimate: A-IRB under CRR; Basel 3.1 clears it for F-IRB.
+        _loan(
+            LN_LARGE_CO,
+            CP_LARGE_CO,
+            DRAWN_LARGE_CO,
+            lgd=LGD_LARGE_CO,
+            has_sufficient_collateral_data=True,
+        ),
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(LOAN_SCHEMA))
 

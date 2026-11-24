@@ -775,22 +775,30 @@ Approach.
 [[known_disagreement]]
 id = "D2-large-corporate-test-keys-on-one-entity-type-string"
 field = "approach"
-when = { regime = "B31", entity_type = ["company", "specialised_lending"], size_band = ["large", "none"], irb_inputs = "pd_lgd", flavour = ["plain", "mortgage", "revolving_qrre", "revolving_qrre_headroom", "defaulted"] }
+when = { regime = "B31", entity_type = ["specialised_lending"], size_band = ["large", "none"], irb_inputs = "pd_lgd", flavour = ["plain", "mortgage", "revolving_qrre", "revolving_qrre_headroom", "defaulted"] }
 expected = "foundation_irb"
 observed = "advanced_irb"
-citation = "PS1/26 Art. 147(4C)(b)(ii), Art. 147A(1)(e)(ii)"
+citation = "PS1/26 Art. 147(4B), Art. 147(4C)(a)-(b)(ii), Art. 147A(1)(e)(ii)"
 detail = """
-OWNER: P1.321.
-The Art. 147(4C)(b)(ii) large-corporate test is gated on the literal string
-`cp_entity_type == "corporate"`, so the other entity types that map to the
-corporate exposure class — `company` and `specialised_lending` — escape it. A
-GBP 600m-revenue obligor typed `company` receives A-IRB where the identical
-obligor typed `corporate` correctly receives F-IRB, and the same split applies
-to the unknown-revenue conservative default. Direction: RWA-REDUCING, because
-A-IRB's own LGD estimate is normally below the Art. 161(1)(aa) 40% / (a) 45%
-supervisory values. The same one-string gate is not used elsewhere: the ADC
-corporate gate in `attributes.py` tests `["corporate", "company",
-"specialised_lending"]`, and the class map sends all three to CORPORATE.
+OWNER: P1.481.
+NARROWED 2026-11-23 (P1.321). The `company` half is fixed: the Art. 147(4C)(b)(ii)
+revenue test now reads `corporate` and its alias `company`, and A8/A9 hold for
+both. What remains is an obligor typed `specialised_lending` that has NO
+specialised-lending record. The engine classes it as a plain corporate (SA8,
+IRB11; exposure_subclass corporate_financial_large at GBP 600m) but leaves it out
+of the revenue test, so at large or unknown revenue it keeps A-IRB with its own
+LGD where A8/A9 expect Foundation IRB. Whether the entity-type label alone puts
+it in the Art. 147(4B) specialised-lending subclass (which Art. 147(4C)(a)
+excludes from (c)(ii)) is an OWNER DECISION on the data model, deliberately not
+settled by P1.321: adding `specialised_lending` to the revenue test's population
+would settle it in the capital-increasing direction, and leaving it out keeps the
+A-IRB own LGD. A row WITH a specialised-lending record is outside (c)(ii) by
+Art. 147(4C)(a) and is not part of this entry (A3/A4 govern it). The OWNER token
+names P1.321 only while P1.321 is open. The parked-register gate
+(scripts/check_parked_registers.py requirement (d), run by
+tests/contracts/test_parked_register_ratchet.py) fails any OWNER that is not an
+open IMPLEMENTATION_PLAN.md bullet, so the change that closes P1.321 must file the
+owner-decision bullet and re-point this token to it in the same commit.
 """
 
 [[known_disagreement]]

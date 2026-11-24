@@ -11,11 +11,11 @@ Key responsibilities:
 - ``collect_input_warnings``: CLS009 (LFSE assets unknown), CLS016 (SME
   status decided by the consolidated group), CLS015 (Basel 3.1 SME turnover
   unknown), CLS008 (null corporate group annual_revenue under Basel 3.1,
-  Art. 147A(1)(d) conservatism), CLS011 (a group-revenue roll-up that forces
-  F-IRB, Art. 147(4C)(b)(ii)), CLS013 (a null counterparty ``entity_type``,
-  Art. 112 class undeterminable — RC-12) and SA011 (a non-UK PSE with no
-  ``is_equivalent_jurisdiction``, weighted at the Art. 116(5) 100% as obligor
-  and as guarantor) — one collect over the counterparty lookup.
+  Art. 147(4C)(b)(ii) / 147A(1)(e)(ii) conservatism), CLS011 (a group-revenue
+  roll-up that forces F-IRB, Art. 147(4C)(b)(ii)), CLS013 (a null counterparty
+  ``entity_type``, Art. 112 class undeterminable — RC-12) and SA011 (a non-UK
+  PSE with no ``is_equivalent_jurisdiction``, weighted at the Art. 116(5) 100%
+  as obligor and as guarantor) — one collect over the counterparty lookup.
 - ``collect_classified_frame_warnings``: the row-count roll-ups over the
   materialised classified frame, from ONE collect — DQ008 for
   ``is_defaulted=False ∧ beel>0`` rows, CLS010 for revolving retail rows a
@@ -30,7 +30,9 @@ Key responsibilities:
 - ``build_audit_trail``: per-exposure classification reason frame.
 
 References:
-- PRA PS1/26 Art. 147A(1)(d): large-corporate F-IRB restriction (CLS008)
+- PRA PS1/26 Art. 147(4C)(b)(ii) with Art. 147A(1)(e)(ii): large-corporate
+  F-IRB restriction (CLS008); Art. 147(4C)(a): the specialised-lending
+  subclass is outside it (CLS008 / CLS011)
 - PRA PS1/26 Art. 147(4C)(b)(ii): highest-consolidation group revenue test —
   the roll-up flip warning (CLS011)
 - PS1/26 Art. 181(1)(h)(ii) / CRR Art. 158(5): BEEL defined for defaulted
@@ -84,6 +86,7 @@ from rwa_calc.domain.enums import ApproachType, ExposureClass, SlottingCategory
 from rwa_calc.engine.classify.attributes import (
     group_size_exprs,
     is_sme_by_size_expr,
+    large_corporate_test_entity_expr,
     natural_person_expr,
     sme_size_exprs,
 )
@@ -137,10 +140,11 @@ def collect_input_warnings(
       revenue (own or group) whose total assets are under the balance-sheet
       threshold — an SME under CRR's Rec 2003/361/EC balance-sheet limb, not
       under the turnover-only PS1/26 glossary SME, so no SME treatment applies.
-    - **Large-corp F-IRB restriction conservatism** (CLS008, Art. 147A(1)(d),
-      Basel 3.1 only): a corporate with null group revenue and no SME-sized
-      group total assets is treated as large-corp by default (see
-      ``_apply_b31_approach_restrictions``).
+    - **Large-corp F-IRB restriction conservatism** (CLS008, Art. 147(4C)(b)(ii)
+      with Art. 147A(1)(e)(ii), Basel 3.1 only): a ``corporate`` / ``company``
+      with null group revenue, no SME-sized group total assets and no
+      specialised-lending record (Art. 147(4C)(a)) is treated as large-corp by
+      default (see ``_apply_b31_approach_restrictions``).
     - **Group revenue roll-up flip** (CLS011, Art. 147(4C)(b)(ii), Basel 3.1
       only): own turnover at/below GBP 440m but the highest-consolidation group
       turnover above it, so the large-corporate subclass forces F-IRB.
@@ -167,8 +171,11 @@ def collect_input_warnings(
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     group_revenue, group_assets = group_size_exprs()
-    counterparties = data.counterparty_lookup.counterparties.with_columns(
-        group_revenue.alias("group_annual_revenue"), group_assets.alias("group_total_assets")
+    counterparties = _with_sl_record_marker(
+        data.counterparty_lookup.counterparties.with_columns(
+            group_revenue.alias("group_annual_revenue"), group_assets.alias("group_total_assets")
+        ),
+        data.specialised_lending,
     )
     filters = _input_warning_filters(config, resolved_pack)
     # CLS013 rides the same select: its count plus the first few references,
@@ -364,11 +371,48 @@ def collect_group_threshold_warnings(
 # =========================================================================
 
 
+def _with_sl_record_marker(
+    counterparties: pl.LazyFrame, specialised_lending: pl.LazyFrame | None
+) -> pl.LazyFrame:
+    """Add ``_sl_record_reference``: non-null where the counterparty has an SL record.
+
+    The classifier joins the specialised-lending table by
+    ``counterparty_reference`` and puts every exposure of a counterparty whose
+    record carries an ``sl_type`` in the specialised-lending class
+    (``attributes.join_specialised_lending`` / ``derive_independent_flags``), so
+    the counterparty-level marker selects exactly the obligors whose rows the
+    Art. 147(4C)(a) exclusion takes out of the large-corporate test. A lazy left
+    join — it adds no ``collect`` to the single one in ``collect_input_warnings``.
+    """
+    if specialised_lending is None:
+        return counterparties.with_columns(
+            pl.lit(None, dtype=pl.String).alias("_sl_record_reference")
+        )
+    sl_records = (
+        specialised_lending.filter(pl.col("sl_type").is_not_null())
+        .select(pl.col("counterparty_reference"))
+        .unique()
+        .with_columns(pl.col("counterparty_reference").alias("_sl_record_reference"))
+    )
+    return counterparties.join(sl_records, on="counterparty_reference", how="left")
+
+
 def _input_warning_filters(config: CalculationConfig, pack: ResolvedRulepack) -> dict[str, pl.Expr]:
     """Per warning code, the counterparty predicate it counts (False when off).
 
-    Reads the lookup with ``group_size_exprs`` applied. Regime-gated codes are
-    a ``False`` literal when their Feature is off, so one select counts all.
+    Reads the lookup with ``group_size_exprs`` applied and the
+    ``_sl_record_reference`` marker from ``_with_sl_record_marker``.
+    Regime-gated codes are a ``False`` literal when their Feature is off, so one
+    select counts all.
+
+    The corporate population is ``large_corporate_test_entity_expr`` — the same
+    predicate the approach restriction reads (``corporate`` and its alias
+    ``company``, P1.321). CLS008 and CLS011 announce the Art. 147(4C)(b)(ii)
+    F-IRB restriction, which Art. 147(4C)(a) never applies to the
+    specialised-lending subclass, so a counterparty with a specialised-lending
+    record is not counted for them. CLS015 keeps it: SME status is not a
+    subclass test and still reaches a specialised-lending obligor (the IRB
+    firm-size adjustment reads ``is_sme``).
     """
     balance_sheet_threshold = float(
         regulatory_threshold(pack, "sme_balance_sheet_threshold", config.eur_gbp_rate)
@@ -376,7 +420,9 @@ def _input_warning_filters(config: CalculationConfig, pack: ResolvedRulepack) ->
     large_corp_threshold = float(
         regulatory_threshold(pack, "large_corporate_revenue_threshold", config.eur_gbp_rate)
     )
-    is_corporate = pl.col("entity_type").fill_null("") == "corporate"
+    is_corporate = large_corporate_test_entity_expr("entity_type")
+    # Art. 147(4C)(a): outside the specialised-lending subclass.
+    in_large_corporate_test = is_corporate & pl.col("_sl_record_reference").is_null()
     lfse_assets = pl.col(
         "group_total_assets"
         if pack.feature("lfse_assets_at_highest_consolidation")
@@ -412,7 +458,8 @@ def _input_warning_filters(config: CalculationConfig, pack: ResolvedRulepack) ->
         ),
         # CLS008: null group revenue and no SME-sized group assets.
         ERROR_LARGE_CORP_REVENUE_NULL: (
-            group_revenue_null
+            in_large_corporate_test
+            & pl.col("group_annual_revenue").is_null()
             & (
                 pl.col("group_total_assets").is_null()
                 | (pl.col("group_total_assets") >= balance_sheet_threshold)
@@ -422,7 +469,7 @@ def _input_warning_filters(config: CalculationConfig, pack: ResolvedRulepack) ->
         ),
         # CLS011: own revenue small, the group's large.
         ERROR_LARGE_CORP_GROUP_ROLLUP: (
-            is_corporate
+            in_large_corporate_test
             & (
                 pl.col("annual_revenue").is_null()
                 | (pl.col("annual_revenue") <= large_corp_threshold)
@@ -467,11 +514,11 @@ def _input_warning(
             "annual_revenue",
         ),
         ERROR_LARGE_CORP_REVENUE_NULL: (
-            f"Art. 147A(1)(d) large-corporate F-IRB restriction applied conservatively for "
+            f"Art. 147(4C)(b)(ii) large-corporate F-IRB restriction applied conservatively for "
             f"{count} corporate counterparty row(s) with null annual_revenue (own and "
             f"rolled-up group) and no SME-confirming total_assets — could not confirm size "
             f"is below the GBP 440m threshold.",
-            "PRA PS1/26 Art. 147A(1)(d)",
+            "PRA PS1/26 Art. 147(4C)(b)(ii), Art. 147A(1)(e)(ii)",
             "annual_revenue",
         ),
         ERROR_LARGE_CORP_GROUP_ROLLUP: (

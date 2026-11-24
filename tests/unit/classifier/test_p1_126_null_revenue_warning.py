@@ -6,11 +6,14 @@ Tests cover:
 - Scenario B: B31 + GBP 500m revenue (provably large) → no CLS008, approach="foundation_irb".
 - Scenario C: CRR + null annual_revenue → no CLS008 (framework-gated), approach="advanced_irb".
 - CLS008 attributes: code, severity (WARNING), category (CLASSIFICATION),
-  regulatory_reference (PRA PS1/26 Art. 147A(1)(d)), message contains "annual_revenue"
-  and "large" or "440".
+  regulatory_reference (PRA PS1/26 Art. 147(4C)(b)(ii), Art. 147A(1)(e)(ii)), message
+  contains "annual_revenue" and "large" or "440".
 
 References:
-- PRA PS1/26 Art. 147A(1)(d): Large corporate (revenue > GBP 440m) restricted to F-IRB
+- PRA PS1/26 Art. 147(4C)(b)(ii): large corporate (revenue > GBP 440m) is in the
+  financial-and-large subclass; Art. 147A(1)(e)(ii): that subclass is F-IRB only.
+  (147A(1)(d) is the object/project/commodities-finance limb — the CLS008 reference
+  cited it until P1.321.)
 - P1.126: null annual_revenue → CLS008 warning + conservative F-IRB under Basel 3.1
 - tests/unit/classifier/test_p1_125_fse_column_warning.py: analogous CLS007 pattern
 """
@@ -135,12 +138,12 @@ class TestScenarioA_B31NullRevenue:
         assert len(cls008_errors) == 1
         assert cls008_errors[0].category == ErrorCategory.CLASSIFICATION
 
-    def test_cls008_regulatory_reference_cites_art_147a_1d(
+    def test_cls008_regulatory_reference_cites_art_147_4c_and_147a_1e(
         self,
         classifier: ExposureClassifier,
         b31_config: CalculationConfig,
     ) -> None:
-        """CLS008 regulatory_reference must cite PRA PS1/26 Art. 147A(1)(d)."""
+        """CLS008 regulatory_reference cites the subclass rule and its approach limb."""
         # Arrange
         bundle = _add_internal_pd_to_bundle(make_scenario_a_bundle())
 
@@ -150,7 +153,9 @@ class TestScenarioA_B31NullRevenue:
         # Assert
         cls008_errors = [e for e in result.classification_errors if e.code == "CLS008"]
         assert len(cls008_errors) == 1
-        assert cls008_errors[0].regulatory_reference == "PRA PS1/26 Art. 147A(1)(d)"
+        assert cls008_errors[0].regulatory_reference == (
+            "PRA PS1/26 Art. 147(4C)(b)(ii), Art. 147A(1)(e)(ii)"
+        )
 
     def test_cls008_message_mentions_annual_revenue(
         self,

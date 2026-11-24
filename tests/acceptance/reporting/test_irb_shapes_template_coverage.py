@@ -52,12 +52,15 @@ from tests.fixtures.reporting_irb_shapes_portfolio import (
     BEEL_RET_DEF,
     DRAWN_CORP_ONB,
     DRAWN_FINCOLL,
+    DRAWN_LARGE_CO,
     DRAWN_LFSE,
     DRAWN_RET_DEF,
     IRB_SHAPES_EXPECTED_APPROACH,
+    LGD_LARGE_CO,
     LGD_RETAIL,
     LIFE_SURRENDER_VALUE,
     LIMIT_CORP_OC,
+    LN_LARGE_CO,
     LN_LFSE,
     LN_LIFE,
     LN_RET_CTRL,
@@ -99,6 +102,15 @@ _IRB_SHEET: dict[str, dict[str, str]] = {
     "crr": {"corporate": "corporate", "retail_other": "retail_other"},
     "b31": {"corporate": "corporate_non_sme_firb", "retail_other": "retail_other_non_sme_airb"},
 }
+
+#: Basel 3.1 OF 08.01 sheet 0022, "Corporates - Financial corporates and large
+#: corporates (FIRB approach)" — the large company's sheet (P1.321).
+_FINANCIAL_LARGE_FIRB_SHEET: str = "corporate_financial_large_firb"
+
+#: The large company's LGD per regime: its own estimate under CRR (A-IRB), the
+#: PS1/26 Art. 161(1)(aa) 40% senior-unsecured supervisory value under Basel 3.1,
+#: where Art. 147A(1)(e)(ii) allows the financial-and-large subclass F-IRB only.
+_EXPECTED_LARGE_CO_LGD: dict[str, float] = {"crr": LGD_LARGE_CO, "b31": 0.40}
 
 
 def _config(regime_key: str) -> CalculationConfig:
@@ -469,19 +481,75 @@ class TestOf0902SubClassRowsAreTheOf08Sheets:
                 f"c{column_08}: the two templates classify a corporate leg differently"
             )
 
-    def test_the_financial_and_large_row_is_empty_with_no_financial_or_large_sheet(
-        self,
-    ) -> None:
-        _results, corep, _p3 = _run("b31")
-        row = _row(corep.c09_02["TOTAL"], "0048")
+    def test_the_financial_and_large_row_is_the_financial_and_large_firb_sheet(self) -> None:
+        """Row 0048 ties to sheet 0022, which holds exactly the large ``company``.
 
-        assert "corporate_financial_large_firb" not in corep.c08_01, (
-            "the book now holds a financial or large corporate: this test's premise moved"
+        The large company (P1.321) is the book's only financial-or-large obligor, so
+        sheet 0022's original exposure is its drawn amount alone, and OF 09.02 row
+        0048 must carry the same figures (``boe_b1034`` / ``b1051`` / ``b1052``).
+        """
+        _results, corep, _p3 = _run("b31")
+        row = corep.c09_02["TOTAL"]
+        sheet = corep.c08_01[_FINANCIAL_LARGE_FIRB_SHEET]
+
+        assert _cell(sheet, "0020") == pytest.approx(DRAWN_LARGE_CO)
+        for column_09, column_08 in (("0010", "0020"), ("0105", "0110"), ("0110", "0260")):
+            assert _cell(row, column_09, "0048") == pytest.approx(_cell(sheet, column_08)), (
+                f"OF 09.02 r0048 c{column_09} is not OF 08.01 sheet 0022 r0010 "
+                f"c{column_08}: the two templates classify a corporate leg differently"
+            )
+
+
+class TestLargeCompanyIsFoundationIrbOnly:
+    """PS1/26 Art. 147(4C)(b)(ii) / 147A(1)(e)(ii) on the ``company`` alias (P1.321).
+
+    A GBP 600m-revenue obligor typed ``company`` is a large corporate exactly as one
+    typed ``corporate`` is. Under Basel 3.1 it is F-IRB only, so its own LGD gives
+    way to the Art. 161(1)(aa) 40% supervisory value and it reports on the
+    financial-and-large F-IRB sheet 0022 — never folded into sheet 0011, the
+    other-general non-SME A-IRB sheet, where the engine put it while the revenue
+    test read only the literal ``corporate``. CRR has no such subclass: A-IRB on
+    the own LGD.
+    """
+
+    @pytest.mark.parametrize("regime_key", list(_REGIMES))
+    def test_the_large_company_takes_its_regime_lgd(self, regime_key: str) -> None:
+        results, _corep, _p3 = _run(regime_key)
+
+        leg = _leg(results, LN_LARGE_CO)
+
+        assert float(leg["lgd_floored"]) == pytest.approx(_EXPECTED_LARGE_CO_LGD[regime_key])
+
+    def test_the_large_company_reports_on_the_financial_and_large_firb_sheet(self) -> None:
+        _results, corep, _p3 = _run("b31")
+
+        assert _FINANCIAL_LARGE_FIRB_SHEET in corep.c08_01, (
+            "no OF 08.01 sheet 0022: the large company did not reach the "
+            "financial-and-large F-IRB sheet"
         )
-        reported = {column: value for column, value in row.items() if value is not None}
-        assert set(reported) == {"row_ref", "row_name"}, (
-            f"OF 09.02 r0048 reports {reported} with no sheet 0022 to tie it to"
+        assert "corporate_non_sme_airb" not in corep.c08_01, (
+            "an A-IRB other-general corporate sheet exists: the large company was "
+            "folded into sheet 0011 on its own LGD"
         )
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "OWNER: P2.92 - Pillar 3 CR9 `_leaf_expr` keys the financial-and-large leaf "
+            "on `cp_is_financial_sector_entity` alone, so a corporate that is large by "
+            "revenue lands in 'Other general corporates (non-SME)' row 5 (PD band 0.25 to "
+            "<0.50) while COREP files the same leg on OF 08.01 sheet 0022"
+        ),
+    )
+    def test_the_large_company_reports_on_the_cr9_financial_and_large_leaf(self) -> None:
+        """Pillar 3 CR9 must agree with COREP: the large company is a (c)(ii) obligor.
+
+        Strict xfail, not a verdict: the misplacement is P2.92's open CR9 limb. When
+        that lands, this XPASSes and the marker must go.
+        """
+        _results, _corep, p3 = _run("b31")
+
+        assert "foundation_irb - corporate_financial_large" in p3.cr9
 
 
 class TestOtherFundedProtectionColumns:

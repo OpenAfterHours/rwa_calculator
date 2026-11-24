@@ -23,6 +23,7 @@ import polars as pl
 import pytest
 
 from rwa_calc.contracts.bundles import (
+    ClassifiedExposuresBundle,
     ResolvedHierarchyBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig, IRBPermissions
@@ -49,8 +50,8 @@ def _full_model_permissions(model_id: str = _TEST_MODEL_ID) -> pl.LazyFrame:
 def _make_counterparty(
     ref: str = "CP001",
     entity_type: str = "corporate",
-    annual_revenue: float = 100_000_000.0,
-    total_assets: float = 500_000_000.0,
+    annual_revenue: float | None = 100_000_000.0,
+    total_assets: float | None = 500_000_000.0,
     apply_fi_scalar: bool = False,
     is_financial_sector_entity: bool | None = None,
     country_code: str = "GB",
@@ -194,18 +195,48 @@ def _make_bundle(
 
 def _classify(
     entity_type: str = "corporate",
-    annual_revenue: float = 100_000_000.0,
+    annual_revenue: float | None = 100_000_000.0,
     is_financial_sector_entity: bool | None = None,
     lgd: float | None = 0.45,
     internal_pd: float | None = 0.005,
     specialised_lending: pl.LazyFrame | None = None,
     framework: str = "b31",
     country_code: str = "GB",
+    total_assets: float | None = 500_000_000.0,
 ) -> pl.DataFrame:
     """Classify a single exposure and return collected results."""
+    result = _classify_bundle(
+        entity_type=entity_type,
+        annual_revenue=annual_revenue,
+        is_financial_sector_entity=is_financial_sector_entity,
+        lgd=lgd,
+        internal_pd=internal_pd,
+        specialised_lending=specialised_lending,
+        framework=framework,
+        country_code=country_code,
+        total_assets=total_assets,
+    )
+    collected = result.all_exposures.collect()
+    assert isinstance(collected, pl.DataFrame)
+    return collected
+
+
+def _classify_bundle(
+    entity_type: str = "corporate",
+    annual_revenue: float | None = 100_000_000.0,
+    is_financial_sector_entity: bool | None = None,
+    lgd: float | None = 0.45,
+    internal_pd: float | None = 0.005,
+    specialised_lending: pl.LazyFrame | None = None,
+    framework: str = "b31",
+    country_code: str = "GB",
+    total_assets: float | None = 500_000_000.0,
+) -> ClassifiedExposuresBundle:
+    """Classify a single exposure and return the classifier's output bundle."""
     cp = _make_counterparty(
         entity_type=entity_type,
         annual_revenue=annual_revenue,
+        total_assets=total_assets,
         is_financial_sector_entity=is_financial_sector_entity,
         country_code=country_code,
     )
@@ -228,11 +259,7 @@ def _classify(
             permission_mode=PermissionMode.IRB,
         )
 
-    classifier = ExposureClassifier()
-    result = classifier.classify(bundle, config)
-    collected = result.all_exposures.collect()
-    assert isinstance(collected, pl.DataFrame)
-    return collected
+    return ExposureClassifier().classify(bundle, config)
 
 
 def _make_sl_table(sl_type: str, is_hvcre: bool = False) -> pl.LazyFrame:
@@ -759,7 +786,7 @@ class TestB31FSEFIRBOnly:
 
 
 class TestB31LargeCorporateFIRBOnly:
-    """Art. 147A(1)(d): Large corporates (>GBP 440m) must use F-IRB only."""
+    """Art. 147(4C)(b)(ii) / 147A(1)(e)(ii): large corporates (>GBP 440m) are F-IRB only."""
 
     def test_large_corporate_gets_firb_under_b31(self) -> None:
         """Corporate with revenue > GBP 440m gets FIRB under B31."""
@@ -848,3 +875,117 @@ class TestB31WithoutFSEColumn:
             annual_revenue=500_000_000.0,
         )
         assert df["approach"][0] == ApproachType.FIRB.value
+
+
+class TestB31FinancialLargeCorporatePopulation:
+    """Who is in the PS1/26 Art. 147(2)(c)(ii) financial-and-large subclass (P1.321).
+
+    PS1/26 Art. 147(4C): "Exposures to corporates shall be assigned to the
+    financial corporates and large corporates exposure subclass ... if: (a) they do
+    not fall within the specialised lending exposure subclass ...; and (b) the
+    exposures are to: (i) financial sector entities; or (ii) 'large' corporates with
+    annual revenue of more than GBP 440 million". Art. 147A(1)(e)(ii) then allows
+    that subclass only "the Foundation IRB Approach for all other exposures within
+    that exposure subclass", while Art. 147A(1)(d)(iii) leaves object, project and
+    commodities finance open to the Advanced IRB Approach.
+
+    Two population errors are pinned here:
+
+    - ``company`` is the documented alias of ``corporate`` (both map to the
+      corporate class), so a large ``company`` is in the subclass and is F-IRB only.
+    - A row in the specialised-lending subclass (an SL table row, so
+      ``exposure_class == specialised_lending``) is excluded by 4C(a) on BOTH limbs,
+      so neither revenue nor the FSE flag may strip its A-IRB own LGD.
+
+    The routing of a ``specialised_lending``-typed obligor with NO SL row is an open
+    owner decision (classification_table.toml D2); it is pinned at its current
+    behaviour so a change to it is a visible decision rather than a side effect.
+    """
+
+    def test_large_company_gets_firb_under_b31(self) -> None:
+        """A GBP 600m-revenue ``company`` is F-IRB only, with its own LGD cleared."""
+        df = _classify(entity_type="company", annual_revenue=600_000_000.0)
+
+        assert (df["approach"][0], df["lgd"][0]) == (ApproachType.FIRB.value, None)
+
+    def test_company_with_unknown_revenue_takes_the_conservative_firb_default(self) -> None:
+        """Null revenue, assets above the SME balance-sheet limit: F-IRB plus CLS008."""
+        result = _classify_bundle(entity_type="company", annual_revenue=None)
+        df = result.all_exposures.collect()
+        codes = {error.code for error in result.classification_errors}
+
+        assert df["approach"][0] == ApproachType.FIRB.value
+        assert "CLS008" in codes
+
+    def test_company_with_unknown_turnover_and_small_assets_warns_cls015(self) -> None:
+        """The Basel 3.1 SME-turnover-unknown warning covers the ``company`` alias too."""
+        result = _classify_bundle(
+            entity_type="company", annual_revenue=None, total_assets=10_000_000.0
+        )
+        codes = {error.code for error in result.classification_errors}
+
+        assert "CLS015" in codes
+
+    def test_large_corporate_project_finance_keeps_airb_and_its_own_lgd(self) -> None:
+        """4C(a): an SL row is outside the subclass, however large its obligor."""
+        df = _classify(
+            entity_type="corporate",
+            annual_revenue=600_000_000.0,
+            specialised_lending=_make_sl_table("project_finance"),
+        )
+
+        assert (df["approach"][0], df["lgd"][0]) == (ApproachType.AIRB.value, 0.45)
+
+    def test_fse_flagged_project_finance_keeps_airb_and_its_own_lgd(self) -> None:
+        """4C(a) qualifies the (b)(i) FSE limb as well as the (b)(ii) revenue limb."""
+        df = _classify(
+            entity_type="corporate",
+            is_financial_sector_entity=True,
+            specialised_lending=_make_sl_table("project_finance"),
+        )
+
+        assert (df["approach"][0], df["lgd"][0]) == (ApproachType.AIRB.value, 0.45)
+
+    def test_corporate_typed_sl_spv_with_unknown_revenue_raises_no_cls008(self) -> None:
+        """CLS008 announces the conservative F-IRB default — an SL row never takes it."""
+        result = _classify_bundle(
+            entity_type="corporate",
+            annual_revenue=None,
+            specialised_lending=_make_sl_table("project_finance"),
+        )
+        codes = {error.code for error in result.classification_errors}
+
+        assert "CLS008" not in codes
+
+    def test_sl_typed_project_finance_with_unknown_revenue_keeps_airb(self) -> None:
+        """Detector: listing ``specialised_lending`` in the corporate test must not
+        pull an SL SPV's null revenue into the conservative F-IRB default."""
+        df = _classify(
+            entity_type="specialised_lending",
+            annual_revenue=None,
+            specialised_lending=_make_sl_table("project_finance"),
+        )
+
+        assert (df["approach"][0], df["lgd"][0]) == (ApproachType.AIRB.value, 0.45)
+
+    def test_sl_typed_obligor_without_sl_row_keeps_its_current_routing(self) -> None:
+        """Pin, not a verdict: the no-SL-row ``specialised_lending`` case is an open
+        owner decision (classification_table.toml D2). Settling it is a separate,
+        deliberate change — not a side effect of widening the corporate test."""
+        df = _classify(entity_type="specialised_lending", annual_revenue=600_000_000.0)
+
+        assert (df["approach"][0], df["lgd"][0]) == (ApproachType.AIRB.value, 0.45)
+
+    @pytest.mark.parametrize("annual_revenue", [600_000_000.0, None])
+    def test_large_or_unknown_company_keeps_airb_under_crr(
+        self, annual_revenue: float | None
+    ) -> None:
+        """CRR Art. 147(2)(c) is one undivided corporates class: no size restriction."""
+        result = _classify_bundle(
+            entity_type="company", annual_revenue=annual_revenue, framework="crr"
+        )
+        df = result.all_exposures.collect()
+        codes = {error.code for error in result.classification_errors}
+
+        assert (df["approach"][0], df["lgd"][0]) == (ApproachType.AIRB.value, 0.45)
+        assert "CLS008" not in codes

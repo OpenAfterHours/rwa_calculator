@@ -740,7 +740,7 @@ def derive_exposure_subclass(
     ``exposure_class`` is corporate / corporate_sme, the three-way split is:
 
       - ``corporate_financial_large`` — FSE (``cp_is_financial_sector_entity``)
-        OR large corporate (``cp_annual_revenue`` > the Art. 147A(1)(d) GBP 440m
+        OR large corporate (``cp_annual_revenue`` > the Art. 147(4C)(b)(ii) GBP 440m
         threshold). Art. 147A(1)(e).
       - ``corporate_sme`` — ``is_sme`` (turnover <= GBP 44m). Art. 147A(1)(f).
       - ``corporate_other`` — otherwise. Art. 147A(1)(f).

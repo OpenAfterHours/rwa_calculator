@@ -38,9 +38,34 @@ the pairs exist to exercise both limbs of a class whose treatment forks:
     LN_MDB_RW20      | mdb              | Art. 117(1) CQS 1            |  20% |  20%
     LN_PSE_RW150     | pse_institution  | Art. 116(2) CQS 6            | 150% | 150%
     LN_CORP_RW150    | corporate        | Art. 122(1) CQS 5            | 150% | 150%
+    LN_RGLA_UK_GBP_FUNDED | rgla_institution | Art. 115(5) GBP-funded   |  20% |  20%
+    LN_RGLA_UK_USD_FUNDED | rgla_institution | Art. 115(1) own CQS 6    | 150% | 150%
 
     -> C 07.00 / OF 07.00 sheets  rgla | pse | mdb | international_organisation
                                   covered_bond | corporate
+
+The Art. 115(5) funding pair (P5.53)
+------------------------------------
+When ``LN_RGLA_UK_GBP_FUNDED`` / ``LN_RGLA_UK_USD_FUNDED`` were added, no
+registered reporting portfolio held a loan funded in a currency other than its
+denomination, so Tier 2 could not see the "denominated **and funded** in
+sterling" limb of Art. 115(5) (CRR and PS1/26 alike) move at all. They lend
+to one ORDINARY UK local authority (``rgla_institution``, GB, own CQS 6, no
+sovereign CQS) in GBP, and differ only in funding currency. Sterling-funded keeps
+the Art. 115(5) 20% — which Art. 115(1) puts ahead of the own rating — on rgla
+rung r0180. USD-funded fails the limb, so Art. 115(1) applies: CRR treats the
+authority as an institution (Art. 120 Table 3, CQS 6) and PS1/26 uses Table 1B
+(CQS 6), both 150%, on rung r0240. Delete the funding limb and the mover joins the
+survivor on r0180 and r0240 goes dark — a LIVE survivor and a MOVER, the two-leg
+shape LESSONS B5 asks for. Three shapes that look equivalent do not serve,
+measured in both regimes by the P5.53 premise audit: a USD-funded copy of
+``LN_RGLA_UK`` (the engine's Art. 115(2) route weighs it 0% however it is funded,
+so it never moves — and whether 0% is right for a non-sterling-funded leg with no
+sovereign CQS is a separate open question, not something this fixture asserts);
+a local authority with sovereign CQS 1 (Table 1A / Table 5 CQS 1 is also 20%, so
+nothing moves); and an unrated one with no sovereign CQS (it moves 20% -> 100% on
+r0230, where c0200 == c0220 and the row cannot tell a column swap). Both legs are
+regime-invariant, so ``LN_MDB_RATED`` stays the one row that moves between regimes.
 
 The second axis: the "Breakdown by Risk Weights" ROWS, not just the sheets
 -------------------------------------------------------------------------
@@ -205,7 +230,7 @@ from tests.fixtures.raw_bundle import make_raw_bundle
 # Scenario constants — the single source of truth for test assertions.
 # ---------------------------------------------------------------------------
 
-CP_RGLA_UK: str = "SAC-CP-RGLA-UK"  # UK local authority   -> rgla
+CP_RGLA_UK: str = "SAC-CP-RGLA-UK"  # UK Art. 115(2) RGLA -> rgla
 CP_RGLA_FOREIGN: str = "SAC-CP-RGLA-FGN"  # foreign region  -> rgla
 CP_PSE: str = "SAC-CP-PSE"  # public sector entity        -> pse
 CP_MDB_RATED: str = "SAC-CP-MDB-RATED"  # unlisted MDB     -> mdb
@@ -221,6 +246,10 @@ CP_MDB_RW20: str = "SAC-CP-MDB-RW20"  # MDB CQS 1               -> r0180
 CP_PSE_RW150: str = "SAC-CP-PSE-RW150"  # PSE CQS 6             -> r0240
 CP_CORP_RW150: str = "SAC-CP-CORP-RW150"  # corporate CQS 5     -> r0240
 
+# The Art. 115(5) funding pair's obligor: an ORDINARY UK local authority (not a
+# devolved administration, so not Art. 115(2)), own CQS 6, no sovereign CQS.
+CP_RGLA_UK_LA: str = "SAC-CP-RGLA-UK-LA"  # UK local authority -> rgla r0180 / r0240
+
 LN_RGLA_UK: str = "SAC-LN-RGLA-UK"
 LN_RGLA_FOREIGN: str = "SAC-LN-RGLA-FGN"
 LN_PSE: str = "SAC-LN-PSE"
@@ -233,6 +262,10 @@ LN_COVBOND_RW20: str = "SAC-LN-COVBOND-RW20"
 LN_MDB_RW20: str = "SAC-LN-MDB-RW20"
 LN_PSE_RW150: str = "SAC-LN-PSE-RW150"
 LN_CORP_RW150: str = "SAC-LN-CORP-RW150"
+#: The Art. 115(5) "denominated AND FUNDED in sterling" pair. Same obligor, same
+#: GBP denomination; the two loans differ ONLY in ``funding_currency``.
+LN_RGLA_UK_GBP_FUNDED: str = "SAC-LN-RGLA-UK-GBPF"  # survivor: keeps the 20%
+LN_RGLA_UK_USD_FUNDED: str = "SAC-LN-RGLA-UK-USDF"  # mover: loses it -> own CQS 6
 
 #: Drawn amounts, in GBP. Distinct per row so a mis-classified exposure is
 #: identifiable from a single C 07.00 cell value without a reverse lookup.
@@ -251,6 +284,10 @@ DRAWN_COVBOND_RW20: float = 7_000_000.0  # x 20%  -> 1,400,000 RWEA
 DRAWN_MDB_RW20: float = 5_000_000.0  # x 20%      -> 1,000,000 RWEA
 DRAWN_PSE_RW150: float = 1_000_000.0  # x 150%    -> 1,500,000 RWEA
 DRAWN_CORP_RW150: float = 2_000_000.0  # x 150%   -> 3,000,000 RWEA
+#: The funding pair. Distinct from every other amount, and from each other, so
+#: the leg that landed on a rung is identifiable from the rung's value alone.
+DRAWN_RGLA_UK_GBP_FUNDED: float = 2_200_000.0  # x 20%  ->   440,000 RWEA
+DRAWN_RGLA_UK_USD_FUNDED: float = 1_300_000.0  # x 150% -> 1,950,000 RWEA
 
 _VALUE_DATE: date = date(2020, 1, 1)
 _MATURITY: date = date(2031, 12, 31)  # > both reporting dates (CRR 2025, B31 2027)
@@ -272,6 +309,8 @@ SA_CLASS_EXPECTED_SHEET: dict[str, str] = {
     LN_MDB_RW20: "mdb",
     LN_PSE_RW150: "pse",
     LN_CORP_RW150: "corporate",
+    LN_RGLA_UK_GBP_FUNDED: "rgla",
+    LN_RGLA_UK_USD_FUNDED: "rgla",
 }
 
 #: Every exposure that exists to light a C 07.00 "Breakdown by Risk Weights" row
@@ -284,6 +323,10 @@ SA_CLASS_EXPECTED_RW_ROW: dict[str, tuple[str, str]] = {
     LN_MDB_RW20: ("0180", "0180"),
     LN_PSE_RW150: ("0240", "0240"),
     LN_CORP_RW150: ("0240", "0240"),
+    # The Art. 115(5) funding pair. Without the funding limb the mover lands on
+    # 0180 beside the survivor and 0240 goes dark on the rgla sheet.
+    LN_RGLA_UK_GBP_FUNDED: ("0180", "0180"),
+    LN_RGLA_UK_USD_FUNDED: ("0240", "0240"),
 }
 
 #: Risk weight each row must resolve to, per regime. ``LN_MDB_RATED`` is the one
@@ -303,6 +346,12 @@ SA_CLASS_EXPECTED_RW: dict[str, tuple[float, float]] = {
     LN_MDB_RW20: (0.2, 0.2),
     LN_PSE_RW150: (1.5, 1.5),
     LN_CORP_RW150: (1.5, 1.5),
+    # The Art. 115(5) funding pair — regime-invariant, like the rows above.
+    # GBP-funded: Art. 115(5) 20%, which Art. 115(1) puts ahead of the own rating.
+    LN_RGLA_UK_GBP_FUNDED: (0.2, 0.2),
+    # USD-funded: not "funded in sterling", so Art. 115(1) applies — CRR as an
+    # institution (Art. 120 Table 3, CQS 6), PS1/26 Table 1B (CQS 6). Both 150%.
+    LN_RGLA_UK_USD_FUNDED: (1.5, 1.5),
 }
 
 
@@ -340,7 +389,9 @@ def _counterparties() -> pl.DataFrame:
     central government's 0%); ``LN_RGLA_FOREIGN`` is deliberately non-UK so the
     Art. 115(1) "risk weighted as institutions" default limb is the one under
     test. The two limbs share a sheet, which is the point: the sheet must be
-    emitted whichever limb a firm's book happens to hit.
+    emitted whichever limb a firm's book happens to hit. ``CP_RGLA_UK_LA`` adds
+    the third limb, Art. 115(5), for an ordinary UK local authority (see the
+    module docstring on the funding pair).
     """
     rows: list[dict] = [
         {
@@ -397,6 +448,17 @@ def _counterparties() -> pl.DataFrame:
             # ``c0220 = c0200 x 150%`` identity, which is the point of the row.
             "annual_revenue": 400_000_000.0,
         },
+        # --- The Art. 115(5) funding pair's obligor ---
+        # An ORDINARY UK local authority: ``rgla_institution``, not the
+        # ``rgla_sovereign`` of ``CP_RGLA_UK`` (an Art. 115(2) devolved
+        # administration, which the engine weighs at 0% however it is funded).
+        # GB-domiciled so Art. 115(5) can reach it, and with NO ``sovereign_cqs``:
+        # that column is left unset on purpose, not forgotten.
+        {
+            "counterparty_reference": CP_RGLA_UK_LA,
+            "entity_type": "rgla_institution",
+            "country_code": "GB",
+        },
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(COUNTERPARTY_SCHEMA))
 
@@ -437,6 +499,18 @@ def _ratings() -> pl.DataFrame:
         # Art. 122(1): corporate CQS 5 -> 150%, both regimes (the corporate
         # ladders diverge at CQS 3, not CQS 5). Row 0240.
         _external(CP_CORP_RW150, cqs=5),
+        # --- The Art. 115(5) funding pair's rating ---
+        # Of the six own-rating steps, CQS 6 is the one at which the funding
+        # limb's two outcomes land on rungs that are away from 100% and distinct
+        # from each other and from the rgla sheet's existing 0140 / 0200:
+        # sterling-funded keeps the Art. 115(5) 20% (r0180); otherwise CRR
+        # Art. 115(1) -> Art. 120 Table 3 and PS1/26 Art. 115(1)(b) Table 1B both
+        # give CQS 6 150% (r0240). CQS 1 is also 20%, so nothing would move;
+        # CQS 2-3 (50%) would land on r0200 beside ``LN_RGLA_FOREIGN`` and hide
+        # the move inside a sum; CQS 4-5, or no rating with a null sovereign CQS,
+        # give 100% (r0230), where c0200 == c0220 and the row stops
+        # discriminating a column swap.
+        _external(CP_RGLA_UK_LA, cqs=6),
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(RATINGS_SCHEMA))
 
@@ -451,14 +525,13 @@ def _loans() -> pl.DataFrame:
     conversion or a substitution.
     """
     rows: list[dict] = [
-        # P1.314: GBP-denominated AND GBP-funded is the SURVIVOR shape for the
-        # Art. 115(2) devolved-administration route (rgla_sovereign ->
-        # Art. 114 0%) — under the permissive null convention, an explicit
-        # funding_currency equal to the denomination must move NOTHING. Proves
-        # the carrier reaches this reporting estate without moving a golden
-        # cell. See .claude/state/outputs/P1.314-scenario.md §7 (orchestrator
-        # decision: survivor-only; the mover sibling is deferred to a new
-        # Tier 2 bullet).
+        # P1.314: an explicit funding_currency equal to the denomination must
+        # move NOTHING on the Art. 115(2) devolved-administration route
+        # (rgla_sovereign -> Art. 114 0%). It proves only that the carrier
+        # reaches this reporting estate; it cannot move, because the engine
+        # weighs that route at 0% however the loan is funded (whether that is
+        # right with no sovereign CQS is a separate open question). The funding
+        # limb's MOVER is the Art. 115(5) pair at the end of this list (P5.53).
         {**_loan(LN_RGLA_UK, CP_RGLA_UK, DRAWN_RGLA_UK), "funding_currency": "GBP"},
         _loan(LN_RGLA_FOREIGN, CP_RGLA_FOREIGN, DRAWN_RGLA_FOREIGN),
         _loan(LN_PSE, CP_PSE, DRAWN_PSE),
@@ -472,6 +545,21 @@ def _loans() -> pl.DataFrame:
         _loan(LN_MDB_RW20, CP_MDB_RW20, DRAWN_MDB_RW20),
         _loan(LN_PSE_RW150, CP_PSE_RW150, DRAWN_PSE_RW150),
         _loan(LN_CORP_RW150, CP_CORP_RW150, DRAWN_CORP_RW150),
+        # --- The Art. 115(5) funding pair (P5.53) ---
+        # One obligor, one GBP denomination, one maturity; the two loans differ
+        # ONLY in funding_currency, so the rung each lands on is the funding
+        # limb's verdict and nothing else's. Survivor: sterling-funded, keeps the
+        # Art. 115(5) 20% (rgla r0180). Mover: USD-funded, so not "denominated and
+        # funded in sterling" — Art. 115(1) applies and the own CQS 6 gives 150%
+        # (rgla r0240). Without the funding limb both legs sit on r0180.
+        {
+            **_loan(LN_RGLA_UK_GBP_FUNDED, CP_RGLA_UK_LA, DRAWN_RGLA_UK_GBP_FUNDED),
+            "funding_currency": "GBP",
+        },
+        {
+            **_loan(LN_RGLA_UK_USD_FUNDED, CP_RGLA_UK_LA, DRAWN_RGLA_UK_USD_FUNDED),
+            "funding_currency": "USD",
+        },
     ]
     return pl.DataFrame(rows, schema_overrides=dtypes_of(LOAN_SCHEMA))
 

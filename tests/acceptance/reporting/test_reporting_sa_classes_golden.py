@@ -46,6 +46,9 @@ from tests.acceptance.reporting.test_reporting_golden import (
     _read_golden,
 )
 from tests.fixtures.reporting_sa_classes_portfolio import (
+    CP_RGLA_UK_LA,
+    LN_RGLA_UK_GBP_FUNDED,
+    LN_RGLA_UK_USD_FUNDED,
     SA_CLASS_EXPECTED_RW,
     SA_CLASS_EXPECTED_SHEET,
     build_reporting_sa_classes_bundle,
@@ -220,7 +223,9 @@ def test_every_quasi_sovereign_row_takes_its_article_risk_weight(regime_key: str
     the Art. 120 institution table (CQS 2 -> 50%) while PS1/26 gives MDBs their
     own ECRA schedule (CQS 2 -> 30%). Pinning both arms is what stops a
     regression that collapsed the class onto the institution ladder from being
-    invisible.
+    invisible. ``LN_RGLA_UK_USD_FUNDED`` is the Art. 115(5) funding limb's
+    detector: with the limb deleted it keeps the 20% its GBP-funded twin takes
+    (0.2 against 1.5, red under each regime separately).
 
     Arrange: the portfolio under one regime.
     Act:     run the pipeline.
@@ -266,4 +271,60 @@ def test_the_mdb_risk_weight_is_the_one_that_moves_between_regimes() -> None:
     assert divergent == {"SAC-LN-MDB-RATED"}, (
         "the CRR / Basel 3.1 divergence this portfolio pins has changed shape: "
         f"expected only the rated-MDB row to move, got {sorted(divergent)}"
+    )
+
+
+def test_the_art_115_5_funding_pair_differs_only_in_funding_currency() -> None:
+    """The survivor and the mover are one loan, funded two ways (LESSONS C11).
+
+    The pair is where a registered reporting portfolio makes the Art. 115(5)
+    "denominated **and funded** in sterling" limb visible (P5.53): the
+    GBP-funded loan keeps the 20% on rgla r0180, the USD-funded one falls to its
+    own CQS 6 (150%, r0240). That reading holds only while nothing ELSE tells the
+    two apart — a second difference (another obligor, another denomination, a
+    short maturity) could move the weight by itself, and the pair would then pass
+    with the funding limb deleted. The obligor must also be one Art. 115(5) can
+    reach at all: a GB, ordinary local authority. The engine weighs an Art. 115(2)
+    devolved administration (``rgla_sovereign``) at 0% however it is funded, so a
+    USD-funded copy of ``LN_RGLA_UK`` would never move (measured, both regimes).
+
+    Arrange: the sealed raw bundle.
+    Act:     read the pair's two loan rows and their shared obligor.
+    Assert:  the rows agree on every column but the reference, the amount and the
+             funding currency; the survivor is funded in sterling and the mover is
+             not; the obligor is a GB ``rgla_institution``.
+    """
+    # Arrange
+    bundle = build_reporting_sa_classes_bundle()
+    loans = bundle.loans.collect()
+    counterparties = bundle.counterparties.collect()
+
+    # Act
+    pair = {
+        ref: loans.filter(pl.col("loan_reference") == ref)
+        for ref in (LN_RGLA_UK_GBP_FUNDED, LN_RGLA_UK_USD_FUNDED)
+    }
+    obligor = counterparties.filter(pl.col("counterparty_reference") == CP_RGLA_UK_LA)
+
+    # Assert
+    missing = sorted(ref for ref, frame in pair.items() if frame.height != 1)
+    assert not missing, f"the Art. 115(5) funding pair is not in the portfolio: {missing}"
+    survivor = pair[LN_RGLA_UK_GBP_FUNDED].row(0, named=True)
+    mover = pair[LN_RGLA_UK_USD_FUNDED].row(0, named=True)
+    free = {"loan_reference", "drawn_amount", "funding_currency"}
+    differing = sorted(
+        col for col in loans.columns if col not in free and survivor[col] != mover[col]
+    )
+    assert not differing, (
+        f"the pair differs in {differing} as well as funding_currency — the weight move can "
+        "no longer be attributed to the Art. 115(5) funding limb"
+    )
+    assert survivor["currency"] == "GBP", "Art. 115(5) needs a sterling denomination"
+    assert survivor["funding_currency"] in (None, "GBP"), "the survivor must be sterling-funded"
+    assert mover["funding_currency"] not in (None, "GBP"), "the mover must not be sterling-funded"
+    assert obligor.height == 1, f"obligor {CP_RGLA_UK_LA} is not in the portfolio"
+    shape = obligor.select("country_code", "entity_type").row(0)
+    assert shape == ("GB", "rgla_institution"), (
+        f"the pair's obligor is {shape}; Art. 115(5) reaches only a GB local authority outside "
+        "Art. 115(2), so any other shape makes the pair vacuous"
     )

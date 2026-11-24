@@ -85,6 +85,8 @@ Where RGLA exposures have their own ECAI rating, use Table 1B:
 
 **Sterling-funded UK RGLAs (Art. 115(5))**: Exposures to regional governments or local authorities of the United Kingdom that are not treated as central government under Art. 115(2)–(4) and are **denominated and funded in pounds sterling** shall be assigned a risk weight of **20%**. This treatment is **maturity-independent** — it applies regardless of the original or residual maturity of the exposure and regardless of the counterparty's CQS.
 
+Both limbs are required. A UK local authority loan denominated in sterling but **funded in another currency** (`funding_currency` set and different from the denomination) does not qualify and falls back to Art. 115(1): under CRR it is risk-weighted as an institution (Art. 120 Table 3 on its own rating, Art. 121 otherwise), and under PS1/26 Art. 115(1) it takes Table 1B on its own rating, otherwise Table 1A on the sovereign's (100% where the sovereign has no assessment). A null `funding_currency` is read as funded in the denomination currency. The registered `sa-classes` reporting portfolio carries the two-leg pair that pins this in both regimes: GBP loans to one UK local authority with its own CQS 6, one funded in GBP (20%, C 07.00 rgla row 0180) and one funded in USD (150%, row 0240).
+
 !!! warning "Previous Spec Error Corrected"
     An earlier version of this section described Art. 115(5) as applying only to short-term
     sterling RGLA exposures. Art. 115(5) has **no maturity condition** — the 20% weight

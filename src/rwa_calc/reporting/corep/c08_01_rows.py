@@ -80,13 +80,17 @@ _OFF_BS_GROSS: Final = "reporting_gross_off_bs"
 # The Total row 0010 takes the whole inflow; rows 0020/0030 take its balance-sheet
 # split. Both are needed: row 0010 is decomposed TWICE over the same columns — the
 # balance-sheet axis (r0020+r0030+r0040+r0050+r0060, BoE ``boe_b0744``) and the IRB
-# treatment axis (r0070+r0080+r0170+r0180, EBA ``v0338_m``, live ERROR; BoE
-# ``boe_b0745``, both BoE rules withdrawn in v4.1.1) — and a Total-row-only inflow
-# breached BOTH by exactly the inflow on cols 0080/0090/0104 (measured on the
-# CRM-substitution portfolio). The balance-sheet split is unambiguous: the side is
-# a property of the asset, not of substitution. Row 0030's own breakdown by
-# conversion factor (``boe_b0742``) takes the off-balance-sheet part split by the
-# bucket of the leg it came from (module docstring).
+# treatment axis (r0070+r0080+r0170+r0180, plus r0160 under CRR; EBA ``v0338_m``,
+# live ERROR on five columns; BoE ``boe_b0745``, both BoE rules withdrawn in
+# v4.1.1) — and a Total-row-only inflow breached BOTH by exactly the inflow on cols
+# 0080/0090/0104 (measured on the CRM-substitution portfolio). Both decompositions
+# are checked in-house, in both regimes, by
+# ``tests/acceptance/reporting/test_of08_01_row_decompositions.py``; its docstring
+# names which population puts inflow on which row (row 0030's only on a synthetic
+# book). The balance-sheet split is unambiguous: the side is a property of the
+# asset, not of substitution. Row 0030's own breakdown by conversion factor
+# (``boe_b0742``) takes the off-balance-sheet part split by the bucket of the leg it
+# came from (module docstring).
 #
 # ROWS 0070/0080 CARRY THE TREATMENT SPLIT, and binding them is only coherent
 # BECAUSE C 08.02 now carries the inflow too. Four live ERROR rules —

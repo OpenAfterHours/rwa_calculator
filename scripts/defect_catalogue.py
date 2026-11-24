@@ -124,29 +124,47 @@ CATALOGUE: tuple[Mutant, ...] = (
         id="known-p3-empty-class-tuple",
         category="known_defect",
         target="src/rwa_calc/reporting/pillar3/templates.py",
-        old='("15", "Equity", ("equity",)),',
-        new='("15", "Equity", ()),',
-        summary="A Pillar 3 SA disclosure row bound to no exposure class",
+        old='("6", "Institutions", ("institution",)),',
+        new='("6", "Institutions", ()),',
+        summary="Pillar 3 CR4/CR5 row 6 (institutions) bound to no exposure class",
         rationale=(
             "SA_DISCLOSURE_CLASSES row 11 (high_risk) is bound to an empty tuple "
-            "today, so the row can never populate. Same shape on a row that "
-            "currently works: the sheet is emitted, the row is present, and it "
-            "reports nothing."
+            "today, so the row can never populate while both Total rows still "
+            "count the leg (pinned by the strict xfail "
+            "test_high_risk_leg_reaches_a_pillar3_class_row). Same shape on a "
+            "single-class row that works and that the RUNS matrix populates, in "
+            "each regime: rich (2,000,000 on balance sheet), off-bs (2,500,000 off "
+            "balance sheet) and crm-substitution (EAD 4,300,000). ccr does not: "
+            "every money cell of its row 6 is 0.0 in both regimes. The sheet is "
+            "emitted, the row is present, and it reports nothing. This used to "
+            "empty row 15 (equity), which can never populate -- CR4/CR5 admit only "
+            "standardised-origin legs and "
+            "every equity leg is stamped 'equity' -- so its only catch was a test "
+            "pinning that known zero. Re-targeted under P5.76, together with the "
+            "probe change that made any Pillar 3 site visible at all."
         ),
     ),
     Mutant(
         id="known-sovereign-ladder-flattened",
         category="known_defect",
         target="src/rwa_calc/engine/sa/rgla.py",
-        old='has_sovereign_cqs = pl.col("cp_sovereign_cqs").is_not_null() & (pl.col("cp_sovereign_cqs") > 0)',
-        new="has_sovereign_cqs = pl.lit(False)",
-        summary="RGLA sovereign-derived ladder flattened to its fallback",
+        old='return is_sovereign_rgla & ((pl.col("cp_country_code") == "GB") | has_sovereign_cqs)',
+        new="return is_sovereign_rgla & has_sovereign_cqs",
+        summary="A GB devolved-government RGLA drops off the Art. 114 sovereign ladder",
         rationale=(
-            "The live Art. 121(1) Table 5 defect is exactly this on the "
-            "institution class: the sovereign CQS is never read, so every "
-            "unrated exposure takes the flat fallback -- conservative at CQS 1-2 "
-            "and ANTI-conservative at CQS 6. RGLA implements the same ladder "
-            "correctly, so flattening it reproduces the defect on a covered path."
+            "P1.282 found the other limb of this predicate missing: a non-GB "
+            "rgla_sovereign was not recognised at all and fell through to the "
+            "ordinary Art. 115(1) ladder instead of its central government's "
+            "Art. 114 one. This drops the "
+            "adjacent GB limb, the one the RUNS matrix exercises: sa-classes' "
+            "SAC-LN-RGLA-UK (GB, sterling-denominated and funded) leaves the "
+            "Art. 114 ladder at 0% for the Art. 115(5) 20%, in both regimes. It "
+            "used to flatten has_sovereign_cqs, the twin of the Art. 121(1) Table 5 "
+            "defect (fixed by P1.316), but that limb reads cp_sovereign_cqs and no "
+            "RUNS portfolio carries one (P5.22), so it moved nothing the probe sees. "
+            "The id predates the re-target (no ladder is flattened now) and is kept "
+            "because the banked verdict sets are keyed by id: a rename would leave "
+            "detected_ids and force a re-bank."
         ),
     ),
     # =========================================================================
@@ -264,13 +282,25 @@ CATALOGUE: tuple[Mutant, ...] = (
         id="generic-benefit-cap-inverted",
         category="generic",
         target="src/rwa_calc/engine/sa/rw_adjustments.py",
-        old='beneficial_rw = pl.min_horizontal(blended_rw, pl.col("risk_weight"))',
-        new='beneficial_rw = pl.max_horizontal(blended_rw, pl.col("risk_weight"))',
-        summary="CRM benefit cap inverted from min to max",
+        old='& (pl.col("guarantor_rw") < pl.col("pre_crm_risk_weight"))',
+        new='& (pl.col("guarantor_rw") > pl.col("pre_crm_risk_weight"))',
+        summary="SA guarantee benefit test inverted: only a worse guarantor is substituted",
         rationale=(
-            "LESSONS D1 territory: these adjustments are benefit-only capped, and "
-            "the SA pipe runs unconditionally to feed the Basel 3.1 output floor. "
-            "Inverting the cap moves the floor wherever it binds."
+            "CRR Art. 193(1): no exposure with CRM may produce a higher RWEA than "
+            "the identical unprotected one, and the Art. 235(1) blend carries no "
+            "min of its own, so apply_guarantee_substitution declines any guarantor "
+            "whose weight is not below the obligor's. Inverting that test keeps the "
+            "guarantees that raise the weight and declines every one that helps, "
+            "and the is_guarantee_beneficial flag it sets also gates the reporting "
+            "substitution flows. LESSONS D1 territory: these adjustments are "
+            "benefit-only, and the SA pipe runs unconditionally to feed the Basel "
+            "3.1 output floor. crm-substitution carries a beneficial SA guarantee "
+            "in both regimes. This used to invert the min cap in "
+            "apply_third_party_deposit_rw_mapping (Art. 232), the same shape, but "
+            "no RUNS portfolio holds a third-party deposit, so it moved nothing "
+            "the probe sees. The id predates the re-target (it is a benefit test "
+            "now, not a cap) and is kept because the banked verdict sets are keyed "
+            "by id: a rename would leave detected_ids and force a re-bank."
         ),
     ),
     Mutant(
@@ -346,15 +376,23 @@ CATALOGUE: tuple[Mutant, ...] = (
     Mutant(
         id="generic-scaling-regime-inverted",
         category="generic",
-        target=TARGET_IRB_FORMULAS,
-        old="scaling = 1.06 if apply_scaling_factor else 1.0",
-        new="scaling = 1.0 if apply_scaling_factor else 1.06",
-        summary="IRB scaling factor applied to the wrong regime",
+        target=TARGET_B31_PACK,
+        old='"irb_scaling_factor": ScalarParam(\n        name="irb_scaling_factor",\n        value=Decimal("1.0"),',
+        new='"irb_scaling_factor": ScalarParam(\n        name="irb_scaling_factor",\n        value=Decimal("1.06"),',
+        summary="Basel 3.1 IRB keeps the CRR 1.06 scaling factor",
         rationale=(
-            "CRR keeps the 1.06 factor and PS1/26 Art. 153(1)(c) removes it. "
-            "Inverting the branch leaves both regimes internally consistent and "
-            "moves every IRB risk weight in both -- a regime mix-up of exactly "
-            "the kind a dual-framework codebase invites."
+            "CRR Art. 153(1) keeps the 1.06 factor and PS1/26 Art. 153(1)(c) "
+            "removes it. The regime split lives in the two packs' "
+            "irb_scaling_factor entries, so the Basel 3.1 pack carrying the CRR "
+            "value is the regime mix-up a copy-paste between packs produces: every "
+            "Basel 3.1 IRB-formula risk weight rises 6% while CRR is untouched. Distinct "
+            "from generic-irb-scaling-factor, which moves the CRR value. This used "
+            "to invert the branch in engine/irb/formulas.py::calculate_irb_rwa, a "
+            "scalar wrapper nothing in src/ calls (only the CRR expected-output "
+            "workbook does), so no portfolio could reach it. The id predates the "
+            "re-target (nothing is inverted now) and is kept because the banked "
+            "verdict sets are keyed by id: a rename would leave detected_ids and "
+            "force a re-bank."
         ),
     ),
     Mutant(

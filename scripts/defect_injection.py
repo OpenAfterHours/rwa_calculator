@@ -116,7 +116,7 @@ import sys
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -564,6 +564,10 @@ NARROW_PROBE_PORTFOLIOS: tuple[str, ...] = ("rich",)
 #: suite are relative 1e-9).
 DIGEST_SIGNIFICANT_FIGURES = 10
 
+#: The ``Pillar3TemplateBundle`` fields that are not disclosure templates, so
+#: ``pillar3_frames`` skips them. Every other field is hashed or refused.
+PILLAR3_NON_TEMPLATE_FIELDS = frozenset({"framework", "errors"})
+
 
 class ProbeUnstable(RuntimeError):
     """Two captures of the same unmutated estate produced different digests."""
@@ -573,9 +577,19 @@ def output_digest(portfolios: tuple[str, ...] | None = NARROW_PROBE_PORTFOLIOS) 
     """A stable digest of what the estate produces, engine and reporting alike.
 
     Runs the named portfolios through both regimes and hashes every generated
-    template cell. ``None`` means the WHOLE matrix. Two regimes always, because a
-    Basel-3.1-only mutant moves nothing under CRR and the whole point is to avoid
-    mistaking "wrong regime" for "dead path".
+    template cell, one run at a time through ``digest_run``: the COREP tables
+    through the filing index, and every Pillar 3 disclosure frame
+    (``pillar3_frames``). ``None`` means the WHOLE matrix. Two regimes always,
+    because a Basel-3.1-only mutant moves nothing under CRR and the whole point
+    is to avoid mistaking "wrong regime" for "dead path".
+
+    Pillar 3 is hashed on its own because the filing index does not carry it:
+    ``build_template_index`` indexes the COREP tables the published rules
+    address and drops the Pillar 3 bundle by design. Before P5.76 the bundle
+    reached this digest only through that index, so every Pillar 3 mutant probed
+    UNREACHABLE wherever it pointed. Measured: CR4/CR5 row 6 bound to no class
+    left the digest unchanged on ``rich``, which holds 2,000,000 of SA
+    institution exposure in each regime.
 
     Why the default is narrow and ``probe_reachable`` escalates: one portfolio is
     ~11s and the full matrix ~60s, but ``rich`` alone does NOT exercise every
@@ -608,13 +622,76 @@ def output_digest(portfolios: tuple[str, ...] | None = NARROW_PROBE_PORTFOLIOS) 
             result.results, framework=run.framework
         )
         index = build_template_index(corep, pillar3, run.framework)
-        for attribute in sorted(index.frames):
-            for sheet in sorted(index.frames[attribute]):
-                frame = index.frames[attribute][sheet]
-                digest.update(f"{run.regime}/{attribute}/{sheet}".encode())
-                for column in sorted(frame.columns):
-                    digest.update(canonical_column(frame.get_column(column).to_list()).encode())
+        digest_run(digest, run.regime, index, pillar3)
     return digest.hexdigest()
+
+
+def digest_run(digest: Any, regime: str, index: Any, pillar3: Any) -> None:
+    """Feed one regime's templates into ``digest``: the COREP index, then all of Pillar 3.
+
+    ``index`` is the filing ``TemplateIndex`` (only its ``frames`` are read) and
+    ``pillar3`` the run's ``Pillar3TemplateBundle``. Split out of
+    ``output_digest`` so the two halves can be tested without a pipeline run:
+    the Pillar 3 half is the one that went missing before P5.76, and nothing
+    else would notice it going missing again -- a mutant a gate catches still
+    scores ``DETECTED``, and only the mismatch list would say the probe had
+    gone blind.
+    """
+    for attribute in sorted(index.frames):
+        for sheet in sorted(index.frames[attribute]):
+            frame = index.frames[attribute][sheet]
+            digest_frame(digest, f"{regime}/{attribute}/{sheet}", frame)
+    for label, frame in pillar3_frames(pillar3):
+        digest_frame(digest, f"{regime}/pillar3/{label}", frame)
+
+
+def pillar3_frames(bundle: Any) -> Iterator[tuple[str, Any]]:
+    """Every disclosure frame in a ``Pillar3TemplateBundle``, labelled, in a fixed order.
+
+    Read off the dataclass's own fields, so a template added to the bundle in
+    one of the two shapes it uses -- a ``DataFrame`` or ``None``, or a per-class
+    ``dict`` of ``DataFrame`` -- is hashed without an edit here. A single-table
+    template is labelled by its field name (``cr4``), a per-class one by field
+    and sheet (``cr6/corporate``). An absent template (``None``, or an empty
+    per-class dict) yields nothing. Only ``PILLAR3_NON_TEMPLATE_FIELDS`` are
+    skipped.
+
+    Any other shape raises ``TypeError`` naming the field. Skipping it would
+    blind the probe to that template, silently: a mutant there that a gate
+    catches still scores ``DETECTED``. Raised from the baseline capture, which
+    runs before any mutant, so a campaign stops in seconds, not hours in.
+
+    ``polars`` is imported here rather than at module level, so importing this
+    script still needs nothing outside the standard library and the catalogue.
+    """
+    import polars as pl
+
+    for spec in sorted(fields(bundle), key=lambda spec: spec.name):
+        if spec.name in PILLAR3_NON_TEMPLATE_FIELDS:
+            continue
+        value = getattr(bundle, spec.name)
+        if value is None:
+            continue
+        if isinstance(value, pl.DataFrame):
+            yield spec.name, value
+            continue
+        if not isinstance(value, dict):
+            raise TypeError(_unreadable_pillar3_field(spec.name, value))
+        for sheet in sorted(value):
+            if not isinstance(value[sheet], pl.DataFrame):
+                raise TypeError(_unreadable_pillar3_field(f"{spec.name}/{sheet}", value[sheet]))
+            yield f"{spec.name}/{sheet}", value[sheet]
+
+
+def digest_frame(digest: Any, label: str, frame: Any) -> None:
+    """Feed one template frame into ``digest``: its label, then each column in name order.
+
+    The COREP and the Pillar 3 halves of ``output_digest`` both go through here,
+    so the two cannot drift apart in how a cell is rendered (``canonical_column``).
+    """
+    digest.update(label.encode())
+    for column in sorted(frame.columns):
+        digest.update(canonical_column(frame.get_column(column).to_list()).encode())
 
 
 def canonical_column(values: list[Any]) -> str:
@@ -1387,6 +1464,15 @@ def _canonical_value(value: Any) -> str:
         # The ``f`` keeps a float distinct from an int: ``.10g`` renders 0.0 as "0".
         return "f" + format(value + 0.0, f".{DIGEST_SIGNIFICANT_FIGURES}g")
     return repr(value)
+
+
+def _unreadable_pillar3_field(label: str, value: Any) -> str:
+    """The refusal ``pillar3_frames`` raises for a bundle field it cannot hash."""
+    return (
+        f"Pillar3TemplateBundle.{label} is a {type(value).__name__}, which the reachability "
+        "probe cannot hash. Teach scripts/defect_injection.py::pillar3_frames that shape, or "
+        "list the field in PILLAR3_NON_TEMPLATE_FIELDS if it is not a disclosure template."
+    )
 
 
 if __name__ == "__main__":

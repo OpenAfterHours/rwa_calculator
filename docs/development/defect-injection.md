@@ -27,6 +27,18 @@ not in whether it does: `legacy` catches 18 mutants in `tests/unit` and 2 in
 `tests/acceptance`; `full` catches 7 in the oracle, 2 in the property suite, 9 in
 `tests/unit` and 2 in `tests/acceptance`.
 
+**P5.76 changed the catalogue and the probe after the banked run.** It
+re-targeted four mutants, keeping their ids (see
+[Re-targeted under P5.76](#re-targeted-under-p576-2026-11-24)), and made the
+probe hash the Pillar 3 bundle as well as the COREP tables. Each re-targeted
+mutant is caught by a `tests/unit` test, a gate on both ladders, so all four
+stay in `detected_ids` and the banked sets do not move. What the next campaign
+changes for them is the `reachable` value (false to true), the expectation
+mismatch list (four entries fewer) and, for the two that `tests/acceptance`
+used to catch, the gate that catches them. The ratchet reads none of those, so
+no re-bank is required. The table above is the banked run's, measured before
+P5.76.
+
 Read the 100% for what it is, not for the claim the plan wants to make:
 
 - **It counts the two controls.** Both come back `DETECTED` (a gate catches the
@@ -220,6 +232,27 @@ generated template cell, escalating to the whole RUNS matrix when `rich` shows
 nothing. Both regimes, because a Basel-3.1-only mutant moves nothing under CRR,
 and "wrong regime" must not be mistaken for "dead path".
 
+"Every generated template cell" means the COREP tables, read through the filing
+index, **and** every Pillar 3 disclosure frame (`pillar3_frames`). Both halves
+are hashed per regime run by `digest_run`. The second half arrived with P5.76.
+Before that, the Pillar 3 bundle went only to `build_template_index`, which
+indexes the COREP tables that published rules address and drops Pillar 3 by
+design. So every Pillar 3 mutant probed `UNREACHABLE`, wherever it pointed.
+Measured: binding CR4/CR5 row 6 (institutions) to no class left the digest
+unchanged on `rich`, which holds 2,000,000 of SA institution exposure in each
+regime. Under the widened digest, the three `expect_unreachable` mutants still
+probe `UNREACHABLE`, and both baselines are still stable across two captures.
+
+`pillar3_frames` reads the bundle's own dataclass fields, so a new template in
+one of the bundle's two shapes (a `DataFrame`, or a per-class `dict` of them) is
+hashed with no edit to the probe. A field in any other shape raises `TypeError`
+when the baseline is captured, before any mutant runs. It is never skipped,
+because a skipped template would blind the probe silently: a gate would still
+score its mutants `DETECTED`, and only the mismatch list would show it.
+`tests/contracts/test_defect_catalogue_reach.py` pins all of this. It tests
+`digest_run` directly, checks that every template field of a fully populated
+bundle reaches the digest, and checks that an unreadable shape is refused.
+
 **The gates run on every mutant; the probe never overrides one.** The probe sees
 only the RUNS portfolios' templates, and a unit test reaches paths no portfolio
 exercises: a scalar wrapper, or an (approach, class) pair no fixture carries. A
@@ -280,8 +313,9 @@ both regressing.
 catalogue expects to be reachable is judged on its *verdict*: it fails the trust
 check only when it scores `UNREACHABLE`, meaning no gate caught it *and* the
 probe saw nothing. The reachable control is `DETECTED` on both ladders, so if the
-probe stopped seeing it, `--check` would still pass. The same rule is why six
-mutants that probe unreachable but are caught by a gate do not block a bank (see
+probe stopped seeing it, `--check` would still pass. The same rule is why the
+mutants that probe unreachable but are caught by a gate (six in the banked run,
+two since P5.76) do not block a bank (see
 [What the first bank was waiting on](#what-the-first-bank-was-waiting-on)).
 
 The harness still records every probe result that contradicts its flag, in
@@ -357,6 +391,15 @@ refused rather than skipped, so a stray variable cannot switch the per-PR check
 off. Nothing is lost by the skip: the nightly runs the same self-test on the
 clean tree as its first step, and `injected()` refuses a mutant whose `old`
 string does not occur exactly once.
+
+`tests/contracts/test_defect_catalogue_reach.py` is the other per-PR check on
+the catalogue. It fails a mutant expected to be reachable whose edit sits in a
+function nothing under `src/` calls. That one does not skip inside the campaign.
+It reads each target with any applied catalogue mutant undone, so it gives the
+clean tree's answer there. A guard applies every mutant in turn and fails unless
+the undo is exact and no verdict moves. A new mutant whose `new` string already
+occurs in its target cannot be undone exactly. The guard fails on it, at the PR
+that adds it.
 
 A new mutant makes the banked baseline stale by construction: it appears in no
 banked set, so `--check` reports it and demands a re-bank. That is the intended
@@ -682,21 +725,61 @@ nothing in the RUNS matrix, and every one is `DETECTED` by a gate on both ladder
 |---|---|---|---|
 | `known-c02-phantom-class-key` | `reporting/corep/c02.py` | `tests/unit`, C 02.00 published identity `v0211_m` | the A-IRB institutions row, empty in every RUNS portfolio |
 | `generic-firb-corporate-stranded` | `reporting/corep/c02.py` | `tests/unit`, C 02.00 published identity `v0210_m` | the F-IRB specialised-lending row, empty in every RUNS portfolio |
-| `generic-scaling-regime-inverted` | `engine/irb/formulas.py` | `tests/unit`, `test_crr_irb.py` | `calculate_irb_rwa`, a scalar wrapper the pipeline never calls |
-| `known-p3-empty-class-tuple` | `reporting/pillar3/templates.py` | `tests/acceptance`, `test_p2_54_ciu_class_o.py` | not yet investigated |
-| `known-sovereign-ladder-flattened` | `engine/sa/rgla.py` | `tests/unit`, `test_rgla_risk_weights.py[crr]` | not yet investigated |
-| `generic-benefit-cap-inverted` | `engine/sa/rw_adjustments.py` | `tests/acceptance`, `test_p1_239_art_232_third_party_deposit.py` | not yet investigated |
+| `generic-scaling-regime-inverted` | `engine/irb/formulas.py` | `tests/unit`, `test_crr_irb.py` | `calculate_irb_rwa`, a scalar wrapper the pipeline never calls (re-targeted under P5.76) |
+| `known-p3-empty-class-tuple` | `reporting/pillar3/templates.py` | `tests/acceptance`, `test_p2_54_ciu_class_o.py` | the probe hashed no Pillar 3 template, and row 15 (equity) can never populate (re-targeted under P5.76) |
+| `known-sovereign-ladder-flattened` | `engine/sa/rgla.py` | `tests/unit`, `test_rgla_risk_weights.py[crr]` | `cp_sovereign_cqs` is null in every RUNS portfolio, P5.22 (re-targeted under P5.76) |
+| `generic-benefit-cap-inverted` | `engine/sa/rw_adjustments.py` | `tests/acceptance`, `test_p1_239_art_232_third_party_deposit.py` | no RUNS portfolio holds an Art. 232 third-party deposit (re-targeted under P5.76) |
 
 The trust check fails a mutant the catalogue expects to be reachable only when
 it scores `UNREACHABLE` — no gate caught it *and* the probe saw nothing — so
-these six do not block a bank. They are still coverage gaps in the
-`.claude/LESSONS.md` B5 sense (a registered portfolio, a dead cell). Two causes
-so far, covering three of the six: C 02.00 rows that are empty in every RUNS
-portfolio, and a scalar wrapper the pipeline never calls. Why the probe sees
-nothing for the other three (Pillar 3 templates, the RGLA ladder, the CRM
-benefit cap) has not been investigated. If a gate ever stops catching one of
-them, it scores `UNREACHABLE` and the trust check fails until it is re-targeted
-at a live site or a RUNS portfolio exercises its path.
+these six did not block a bank. They were still coverage gaps in the
+`.claude/LESSONS.md` B5 sense (a registered portfolio, a dead cell), and four
+causes account for them:
+
+- **C 02.00 rows that are empty in every RUNS portfolio** (the A-IRB
+  institutions and F-IRB specialised-lending lookups). Still open; P5.75 owns
+  both mutants.
+- **Dead code.** `engine/irb/formulas.py::calculate_irb_rwa` is a scalar wrapper
+  the pipeline never calls. It is dead only to the pipeline: the CRR
+  expected-output workbook calls it, through `workbooks/shared/irb_formulas.py`.
+- **Inputs no RUNS portfolio carries.** No portfolio has a non-null
+  `cp_sovereign_cqs` (P5.22), and none has an Art. 232 third-party deposit.
+- **A probe that could not see Pillar 3** (see
+  [Why UNREACHABLE has to exist](#why-unreachable-has-to-exist)). On top of that,
+  the old P3 site, CR4/CR5 row 15 (equity), cannot populate under any input:
+  CR4/CR5 admit only standardised-origin legs, and every equity leg is stamped
+  `equity`.
+
+P5.76 re-targeted the four mutants behind the last three causes at live sites
+(see [Re-targeted under P5.76](#re-targeted-under-p576-2026-11-24)), and
+`--reachability-only` over those four now reports all of them reachable. That
+leaves `known-c02-phantom-class-key` and `generic-firb-corporate-stranded` on
+the mismatch list until P5.75 lands; a `tests/unit` gate catches each on both
+ladders, so neither fails the trust check.
+
+Two guards came with it, both in `tests/contracts/test_defect_catalogue_reach.py`:
+
+- **Dead code is refused from the source.** The test fails any mutant expected
+  to be reachable whose edit sits in a function whose name nothing under `src/`
+  loads, outside the function itself. The match is by bare name, not resolved
+  through imports, so it is a necessary condition, not proof of a call. It can
+  pass silently when another function shares the name:
+  `apply_guarantee_substitution` is defined four times under `src/`. It can also
+  go red falsely when the only caller uses an import alias, as slotting calls the
+  SA function `sa_apply_guarantee_substitution`. The probe remains the measure.
+- **The check reads the same inside a campaign.** The campaign's `contracts`
+  rung collects that file with one mutant applied, and the applied mutant's
+  `old` string is gone from its target. A check that located each site by `old`
+  raised there, so it would have scored every mutant that reached the rung
+  `DETECTED`, whatever the mutant did (19 of the 19 reachable-expected mutants,
+  applied in turn). Each target is therefore read with any applied catalogue
+  mutant undone, judged from the text, so no campaign marker is needed. A guard
+  in the same file applies each of the 22 mutants in turn and requires every
+  verdict to equal the clean tree's.
+
+Gates still run on every mutant. Any mutant that **no** gate catches scores
+`UNREACHABLE` and fails the trust check until it is re-targeted at a live site,
+or a RUNS portfolio exercises its path.
 
 **A quiet tree** (task `0.1`). The campaign mutates `src/` one file at a time and
 refuses to start if any catalogue target is dirty in git, so a **local** run
@@ -752,6 +835,41 @@ The self-test is the guard against the first kind, and it now runs on every PR
 the nightly; it is skipped only inside the campaign's own gates, where the
 applied mutant is drift by construction (see [Adding a mutant](#adding-a-mutant)).
 Nothing but a campaign catches the second.
+
+### Re-targeted under P5.76 (2026-11-24)
+
+Four mutants that a gate caught but the probe called dead, each moved to the live
+site that does the same job. Each new site was measured with `--reachability-only`,
+in the foreground, and each is caught by a `tests/unit` test, so it scores
+`DETECTED` on both ladders:
+
+| Mutant | Was | Now | Exercised by | Caught by (unit) |
+|---|---|---|---|---|
+| `known-p3-empty-class-tuple` | CR4/CR5 row 15 (equity) bound to `()`. The row cannot populate: CR4/CR5 admit only standardised-origin legs, and every equity leg is stamped `equity`. | Row 6 (institutions) bound to `()`. | `rich` (2,000,000 on balance sheet), `off-bs` (2,500,000 off balance sheet), `crm-substitution` (EAD 4,300,000), in each regime. `ccr` is not one: its row 6 is all zeros. | `test_cr4_cr5.py` (3 tests) |
+| `known-sovereign-ladder-flattened` | `has_sovereign_cqs` forced false. It reads `cp_sovereign_cqs`, which is null in every run. | The GB limb of `is_rgla_sovereign_expr` dropped: a GB devolved-government RGLA leaves the Art. 114 ladder (0%) for Art. 115(5) (20%). | `sa-classes` `SAC-LN-RGLA-UK` | `test_rgla_risk_weights.py` (5 tests, both regimes) |
+| `generic-benefit-cap-inverted` | The Art. 232 third-party-deposit `min` cap became `max`. No run holds such a deposit. | The SA guarantee benefit test `<` became `>`. Only guarantors that raise the weight are substituted. | `crm-substitution` | `test_p1_253_crr_mdb_guarantor_institution_rw.py` |
+| `generic-scaling-regime-inverted` | `calculate_irb_rwa`, which nothing in `src/` calls. | The Basel 3.1 pack's `irb_scaling_factor` set to the CRR 1.06. | every Basel 3.1 IRB run | `test_irb_formulas.py`, `test_art_157_retail_dilution_formula.py`, `rulebook/test_v0.py` |
+
+The known-defect twins are now:
+
+- **Row 6.** It twins row 11 (high-risk items), which is still bound to `()`.
+  The strict xfail `test_high_risk_leg_reaches_a_pillar3_class_row` pins that.
+- **The RGLA GB limb.** It twins the non-GB limb that P1.282 found missing.
+
+So two of the four mutants behind the known-defect floor now measure different
+defects. Before, the P3 mutant was caught only by a test pinning the known zero
+on row 15, and the sovereign one twinned the Art. 121(1) Table 5 ladder. Once
+P5.22 gives a RUNS portfolio a non-null `cp_sovereign_cqs`, a mutant on the
+sovereign-derived ladders themselves becomes measurable. It can then be added
+alongside this one.
+
+The ids were kept, so three no longer describe their edit:
+`known-sovereign-ladder-flattened` flattens no ladder, `generic-benefit-cap-inverted`
+inverts a benefit test rather than a cap, and `generic-scaling-regime-inverted`
+inverts nothing. The banked verdict sets are keyed by id. A rename would drop
+the old id from `detected_ids`, so the ratchet would go red until the board was
+re-banked. Whether to pay that for clearer names is an operator call; each
+mutant's `summary` and `rationale` say what it does now.
 
 ## Reading the board
 

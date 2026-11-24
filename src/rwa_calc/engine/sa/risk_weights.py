@@ -272,6 +272,10 @@ _SA_CRR_RW: dict[str, float] = {
     "inst_st_mid": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS4]),
     "inst_st_high": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS6]),
     "inst_unrated_st": float(INSTITUTION_SHORT_TERM_UNRATED_RW_CRR),
+    # Art. 121(4) scope: Art. 162(3)(b) trade finance, residual <= 1y (inclusive).
+    "inst_trade_finance_max_residual": scalar_value(
+        _CRR_PACK.scalar_param("sa_unrated_institution_trade_finance_max_residual_maturity_years")
+    ),
     # Art. 131 Table 7 — dedicated short-term ECAI assessment (institutions and
     # corporates). CQS 1=20%, CQS 2=50%, CQS 3=100%, CQS 4-6/Others=150%.
     "st_ecai_cqs1": float(CRR_SHORT_TERM_ECAI_RISK_WEIGHTS[CQS.CQS1]),
@@ -380,7 +384,7 @@ def apply_risk_weights(
         )
     else:
         exposures = _apply_crr_risk_weight_overrides(
-            exposures, uc, is_domestic_currency_funded, is_uk_domestic_funded
+            exposures, uc, is_domestic_currency_funded, is_uk_domestic_funded, config
         )
 
     # Art. 140(2) obligor ST contamination (regime-invariant, post-ladder).
@@ -795,7 +799,9 @@ def _crr_append_real_estate_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThe
 
 
 @cites("CRR Art. 121")
-def _crr_append_institution_maturity_branches(chain: _RWChain, uc: pl.Expr) -> ChainedThen:
+def _crr_append_institution_maturity_branches(
+    chain: _RWChain, uc: pl.Expr, reporting_date: date
+) -> ChainedThen:
     """Append CRR Art. 120/121/131 institution branches, short-dated first.
 
     The Art. 131 Table 7 dedicated short-term ECAI branch is prepended ahead of
@@ -806,7 +812,8 @@ def _crr_append_institution_maturity_branches(chain: _RWChain, uc: pl.Expr) -> C
 
     The unrated limbs close the chain, short-dated before long-dated, so the
     Art. 121(3) flat 20% takes precedence over the Art. 121(1) Table 5
-    sovereign-derived lookup that follows it.
+    sovereign-derived lookup that follows it. ``reporting_date`` dates the
+    residual maturity that scopes Art. 121(4) trade finance.
     """
     is_institution = uc.str.contains("INSTITUTION", literal=True)
     is_rated = pl.col("cqs").is_not_null() & (pl.col("cqs") > 0)
@@ -844,8 +851,8 @@ def _crr_append_institution_maturity_branches(chain: _RWChain, uc: pl.Expr) -> C
             .otherwise(pl.lit(_SA_CRR_RW["inst_st_high"]))
         )
         # Art. 121(3): unrated institution with ORIGINAL effective maturity <= 3m.
-        # Overrides the Table 5 sovereign-derived fallback; Art. 121(6) sovereign
-        # floor (applied later) still raises this in FX.
+        # Overrides the Table 5 sovereign-derived fallback. (No sovereign floor
+        # follows under CRR: Art. 121(6) is PS1/26-only, pack Feature-gated.)
         .when(is_institution & is_unrated & (original_mty <= 0.25))
         .then(pl.lit(_SA_CRR_RW["inst_unrated_st"]))
         # Art. 121(1) Table 5: an unrated institution takes the risk weight of
@@ -856,21 +863,19 @@ def _crr_append_institution_maturity_branches(chain: _RWChain, uc: pl.Expr) -> C
         # government unrated -> 100%) is the ``unrated_default`` that
         # ``sovereign_derived_rw_expr`` applies when cp_sovereign_cqs is null.
         #
-        # Art. 121(4) trade finance is EXCLUDED at ANY maturity — see
-        # ``crr_art_121_4_trade_finance_expr``. Excluded rows are NOT given
-        # Art. 121(4)'s 50%: no such branch exists, so they fall through to the
-        # base CQS join and land on INSTITUTION_RISK_WEIGHTS_CRR[UNRATED] =
-        # 100%. That is a DELIBERATE INTERIM, not a derived answer, and it is
-        # conservative against BOTH candidate readings of the article:
-        #   - purposive (4) as a trade-finance floor  -> 50%
-        #   - literal (4) ("Notwithstanding paragraphs 2 and 3", NOT 1, so
-        #     Table 5 is never displaced)             -> 20% at sovereign CQS 1
-        # 100% over-states both. Settling which reading governs needs the
-        # primary text read against the PRA Rulebook rendering and is filed as
-        # a finding, not decided here. Pinned by
-        # ``test_p1_316_trade_finance_stays_on_the_100pct_residual`` so the
-        # value cannot drift silently between the three candidates.
-        .when(is_institution & is_unrated & ~crr_art_121_4_trade_finance_expr())
+        # Art. 121(4) trade finance — Art. 162(3)(b), RESIDUAL maturity up to
+        # one year — is EXCLUDED; a trade LC with longer to run takes Table 5.
+        # Excluded rows land on the base-join 100% (UNRATED): a DELIBERATE
+        # INTERIM, as neither Art. 121(4) rate is implemented (P1.338). See
+        # ``crr_art_121_4_trade_finance_expr`` for why it is not conservative
+        # on every reading; pinned by ``TestP1316Art1214TradeFinanceScope``.
+        .when(
+            is_institution
+            & is_unrated
+            & ~crr_art_121_4_trade_finance_expr(
+                reporting_date, _SA_CRR_RW["inst_trade_finance_max_residual"]
+            )
+        )
         .then(
             sovereign_derived_rw_expr(
                 INSTITUTION_RISK_WEIGHTS_SOVEREIGN_DERIVED,
@@ -1290,13 +1295,15 @@ def _apply_crr_risk_weight_overrides(
     uc: pl.Expr,
     is_domestic_currency_funded: pl.Expr,
     is_uk_domestic_funded: pl.Expr,
+    config: CalculationConfig,
 ) -> pl.LazyFrame:
     """Apply CRR class-specific risk-weight overrides (Art. 112-134).
 
     ``is_domestic_currency_funded`` (UK or EU domestic currency, denominated
     and funded) scopes the Art. 114(4)/(7) CGCB 0% branch;
     ``is_uk_domestic_funded`` (GB counterparty denominated and funded in GBP)
-    scopes the narrower Art. 115(5) flat-20% RGLA branch.
+    scopes the narrower Art. 115(5) flat-20% RGLA branch. ``config`` supplies
+    the reporting date that dates the Art. 121(4) residual-maturity scope.
     """
     chain = (
         pl.when(pl.col("risk_type") == _SETTLEMENT_FAILED_TRADE_RISK_TYPE)  # P8.43 failed trade
@@ -1434,7 +1441,7 @@ def _apply_crr_risk_weight_overrides(
         )
     )
 
-    chain = _crr_append_institution_maturity_branches(chain, uc)
+    chain = _crr_append_institution_maturity_branches(chain, uc, config.reporting_date)
     chain = _crr_append_corporate_maturity_branches(chain, uc)
 
     # Covered bond / high risk / other items / equity tail.

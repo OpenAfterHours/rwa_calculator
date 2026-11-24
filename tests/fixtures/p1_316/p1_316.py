@@ -23,14 +23,22 @@ Two-leg shape (LESSONS B5)
 A single moving row cannot distinguish "the fix works" from "the branch is now
 unconditional", so every leg that MOVES is paired with one that SURVIVES:
 
-    leg          sovereign_cqs  maturity  trade LC   pre-fix  post-fix  role
-    LN-SOV1      1              5y        no          100%      20%     MOVES (largest, reducing)
-    LN-SOV4      4              5y        no          100%     100%     SURVIVES (mis-keyed-table guard)
-    LN-SOV6      6              5y        no          100%     150%     MOVES (the capital shortfall)
-    LN-SOVNULL   null           5y        no          100%     100%     SURVIVES (Art. 121(2))
-    LN-SHORT     6              73d       no           20%      20%     SURVIVES (Art. 121(3))
-    LN-TRADE5Y   1              5y        YES         100%     100%     SURVIVES (Art. 121(4))
-    LN-RATED     6 (own CQS 2)  5y        no           50%      50%     SURVIVES (Art. 120 Table 3)
+    leg           sov_cqs  orig / residual  trade LC  pre-fix  post-fix  role
+    LN-SOV1       1        5y / 4.9y        no         100%      20%    MOVES (largest, reducing)
+    LN-SOV4       4        5y / 4.9y        no         100%     100%    SURVIVES (mis-keyed table)
+    LN-SOV6       6        5y / 4.9y        no         100%     150%    MOVES (capital shortfall)
+    LN-SOVNULL    null     5y / 4.9y        no         100%     100%    SURVIVES (Art. 121(2))
+    LN-SHORT      6        73d / 43d        no          20%      20%    SURVIVES (Art. 121(3))
+    LN-TRADE5Y    1        5y / 4.9y        YES        100%      20%    MOVES (outside 121(4))
+    LN-TRADE5Y6   6        5y / 4.9y        YES        100%     150%    MOVES (outside 121(4))
+    LN-TRADE1Y    1        1.08y / 1.0y     YES        100%     100%    SURVIVES (121(4) boundary)
+    LN-TRADESEAS  1        2.5y / 0.5y      YES        100%     100%    SURVIVES (121(4), residual)
+    LN-RATED      6 (own 2) 5y / 4.9y       no          50%      50%    SURVIVES (Art. 120 Table 3)
+
+"pre-fix" is the engine before P1.316 (a flat 100% for every unrated
+institution). The trade legs were also 100% at the intermediate state, when
+Art. 121(4) was held out at every maturity; only LN-TRADE5Y and LN-TRADE5Y6
+moved in the second change, and in opposite directions.
 
 ``LN-SOVNULL`` is the discriminator that no other leg supplies: an
 implementation that fires the sovereign-derived lookup unconditionally, instead
@@ -39,14 +47,36 @@ else. ``LN-SOV4`` is the mirror discriminator for a mis-keyed table — Table 5'
 CQS 4 cell is 100%, the same as the pre-fix flat fallback, so it can only move
 if the lookup reads the wrong row.
 
-``LN-TRADE5Y`` is the guard gap that dropped P1.316 on its first pass. Art.
-121(4) prescribes 50% for trade finance at ANY maturity (20% at residual <=3m),
-and the engine implements neither rate, so those rows must stay on the
-conservative Art. 121 100% residual. A maturity-gated exclusion copied from the
-sibling sovereign-floor exemption — which carries a one-year condition from
-CRE20.22 footnote 13, a different rule — passes every guard pinned inside a
-one-year window and re-opens 20% at sovereign CQS 1 on a longer trade LC. The
-leg is deliberately FIVE YEARS for that reason.
+Art. 121(4) scope — residual maturity, up to and including one year
+-------------------------------------------------------------------
+Art. 121(4) reaches only "trade finance exposures referred to in point (b) of
+the second subparagraph of Article 162(3)", and point (b) is "self-liquidating
+short-term trade finance transactions connected to the exchange of goods or
+services with a residual maturity of up to one year" (legislation.gov.uk, CRR
+as at 2026-01-01). A trade LC with more than a year to run is outside
+Art. 121(4) and Table 5 governs it like any other unrated-institution exposure.
+The engine implements neither Art. 121(4) rate (P1.326 / P1.338 / P7.8), so the
+rows INSIDE the scope stay on the 100% interim; the four trade legs pin both
+sides of the scope:
+
+- ``LN-TRADE5Y`` / ``LN-TRADE5Y6`` are outside it and take Table 5. The first
+  fix held every flagged row out at 100% on the belief that the 50% limb had no
+  maturity condition. It does — through the Art. 162(3)(b) cross-reference — so
+  both moved: CQS 1 from 100% to 20%, and CQS 6 from 100% to 150%. The old
+  100% at CQS 6 was a 50pp understatement under every reading of Art. 121(4),
+  because no reading of paragraph (4) reaches a row outside point (b).
+- ``LN-TRADE1Y`` sits exactly on the bound (residual 1.0y by the
+  ``exact_fractional_years_expr`` day count) and stays in scope: "up to one
+  year" is inclusive.
+- ``LN-TRADESEAS`` is the discriminator against keying on ORIGINAL maturity
+  (the shape of the sibling PS1/26 Art. 121(6)(b) floor exemption, a different
+  rule): 2.5 years original, half a year residual. An original-maturity gate
+  leaks it into Table 5 at 20%.
+
+Every pipeline exposure row carries ``residual_maturity_years`` as NULL — it is
+a collateral-schema column — so the residual is derived from ``maturity_date``
+and the reporting date. A gate on the column alone would hold every pipeline
+row in scope and these legs could not move.
 
 Fixture shape is load-bearing
 -----------------------------
@@ -83,14 +113,19 @@ Art. 121(1) Table 5 (crr.pdf PAGE_INDEX 119, verbatim):
     LN-SOV6     RW 1.50 -> RWA 1,500,000   (pre-fix 1,000,000)
     LN-SOVNULL  RW 1.00 -> RWA 1,000,000   (unchanged, Art. 121(2))
     LN-SHORT    RW 0.20 -> RWA   200,000   (unchanged, Art. 121(3))
-    LN-TRADE5Y  RW 1.00 -> RWA 1,000,000   (unchanged, Art. 121(4) held out)
-    LN-RATED    RW 0.50 -> RWA   500,000   (unchanged, Art. 120(1) Table 3 CQS 2)
+    LN-TRADE5Y    RW 0.20 -> RWA   200,000   (Table 5 CQS 1; residual 4.9y > 1y)
+    LN-TRADE5Y6   RW 1.50 -> RWA 1,500,000   (Table 5 CQS 6; residual 4.9y > 1y)
+    LN-TRADE1Y    RW 1.00 -> RWA 1,000,000   (Art. 121(4) interim; residual = 1.0y)
+    LN-TRADESEAS  RW 1.00 -> RWA 1,000,000   (Art. 121(4) interim; residual 0.5y)
+    LN-RATED      RW 0.50 -> RWA   500,000   (unchanged, Art. 120(1) Table 3 CQS 2)
 
-    Portfolio RWA: 5,400,000 post-fix vs 5,700,000 pre-fix — NET REDUCING by
-    300,000, because the one reducing step that bites (LN-SOV1, -800,000)
-    outweighs the one increasing step (LN-SOV6, +500,000). The fix is not a
-    capital increase; only LN-SOV6 rises. Both figures are asserted, so the
-    direction claim is measured rather than narrated.
+    Portfolio RWA: 8,100,000 post-fix vs 8,700,000 pre-fix — NET REDUCING by
+    600,000. Two reducing steps (LN-SOV1 and LN-TRADE5Y, -800,000 each)
+    outweigh two increasing steps (LN-SOV6 and LN-TRADE5Y6, +500,000 each).
+    The Art. 121(4) scope change alone, from the intermediate state, is
+    8,400,000 -> 8,100,000: also net reducing (-800,000 at CQS 1, +500,000 at
+    CQS 6). Both totals are asserted, so the direction claim is measured
+    rather than narrated.
 
 CRR ONLY. PS1/26 replaced Art. 121 with the Grade A/B/C SCRA, which routes
 through ``cp_scra_grade`` and has no sovereign-derived institution table, so
@@ -100,10 +135,13 @@ References:
     - CRR Art. 121(1) Table 5; Art. 121(2); Art. 121(3); Art. 121(4)
       (crr.pdf PAGE_INDEX 119).
     - CRR Art. 120(1) Table 3 (LN-RATED control).
-    - CRR Art. 162(3) second subparagraph point (b) (Art. 121(4) scope).
-    - src/rwa_calc/rulebook/packs/crr.py: ``institution_rw_sovereign_derived``.
-    - IMPLEMENTATION_PLAN.md: P1.316; P1.326 / P7.8 (the unimplemented
-      Art. 121(4) rates); P5.22 (``cp_sovereign_cqs`` dead in the register).
+    - CRR Art. 162(3) second subparagraph point (b) (Art. 121(4) scope:
+      residual maturity of up to one year).
+    - src/rwa_calc/rulebook/packs/crr.py: ``institution_rw_sovereign_derived``,
+      ``sa_unrated_institution_trade_finance_max_residual_maturity_years``.
+    - IMPLEMENTATION_PLAN.md: P1.316; P1.326 / P1.338 / P7.8 (the
+      unimplemented Art. 121(4) rates); P5.22 (``cp_sovereign_cqs`` dead in
+      the register).
     - tests/oracle/ORACLE_DERIVATIONS.md: ORC-105/020/106/107/108/109/021.
     - LESSONS.md B5 (two-leg fixture), B7 (strict xfail), D1 (output floor).
 
@@ -140,6 +178,14 @@ MATURITY_DATE_LONG = date(2029, 1, 1)
 # Short-dated: 73 days -> 73/365 ~= 0.1999y <= 0.25y (Art. 121(3)).
 MATURITY_DATE_SHORT = date(2024, 3, 14)
 
+# Art. 121(4) boundary leg: one calendar year after REPORTING_DATE_GUIDANCE, so
+# the residual is exactly 1.0y by ``exact_fractional_years_expr``.
+MATURITY_DATE_ONE_YEAR_RESIDUAL = date(2025, 1, 31)
+# Seasoned trade leg: 2.5 years original, half a year residual at the
+# reporting date — inside Art. 121(4) by residual, outside it by original.
+VALUE_DATE_SEASONED = date(2022, 1, 31)
+MATURITY_DATE_SEASONED = date(2024, 7, 31)
+
 # Reporting-date guidance for the acceptance test (not a parquet column): must
 # sit at or before MATURITY_DATE_SHORT so LN-SHORT is still live.
 REPORTING_DATE_GUIDANCE = date(2024, 1, 31)
@@ -165,6 +211,9 @@ class Leg:
     long_dated: bool = True
     is_trade_lc: bool = False
     own_cqs: int | None = None
+    #: (value_date, maturity_date) for a leg off the 5-year / 73-day shapes.
+    #: Such legs are not ``long_dated``: they mature before the Basel 3.1 run.
+    dates: tuple[date, date] | None = None
 
     @property
     def cp_ref(self) -> str:
@@ -179,7 +228,13 @@ class Leg:
         return f"P1316-FAC-{self.label}"
 
     @property
+    def value_date(self) -> date:
+        return self.dates[0] if self.dates is not None else VALUE_DATE
+
+    @property
     def maturity_date(self) -> date:
+        if self.dates is not None:
+            return self.dates[1]
         return MATURITY_DATE_LONG if self.long_dated else MATURITY_DATE_SHORT
 
     @property
@@ -191,8 +246,8 @@ class Leg:
         return self.expected_rw != self.pre_fix_rw
 
 
-#: The seven legs, keyed by label. Three MOVE-or-SURVIVE pairs plus the rated
-#: control — see the table in the module docstring.
+#: The ten legs, keyed by label. MOVE-or-SURVIVE pairs plus the rated control
+#: — see the table in the module docstring.
 LEGS: dict[str, Leg] = {
     leg.label: leg
     for leg in (
@@ -203,7 +258,42 @@ LEGS: dict[str, Leg] = {
         Leg("SOV6", 6, 1.50, 1.00, "MOVES — Table 5 CQS 6, the capital-shortfall limb"),
         Leg("SOVNULL", None, 1.00, 1.00, "SURVIVES — Art. 121(2), catches an unconditional branch"),
         Leg("SHORT", 6, 0.20, 0.20, "SURVIVES — Art. 121(3) <=3m flat 20%", long_dated=False),
-        Leg("TRADE5Y", 1, 1.00, 1.00, "SURVIVES — Art. 121(4) held out at 5y", is_trade_lc=True),
+        Leg(
+            "TRADE5Y",
+            1,
+            0.20,
+            1.00,
+            "MOVES — trade LC, residual > 1y is outside Art. 121(4): Table 5 CQS 1",
+            is_trade_lc=True,
+        ),
+        Leg(
+            "TRADE5Y6",
+            6,
+            1.50,
+            1.00,
+            "MOVES — trade LC, residual > 1y is outside Art. 121(4): Table 5 CQS 6",
+            is_trade_lc=True,
+        ),
+        Leg(
+            "TRADE1Y",
+            1,
+            1.00,
+            1.00,
+            "SURVIVES — trade LC, residual exactly 1y is inside Art. 121(4) (inclusive)",
+            long_dated=False,
+            is_trade_lc=True,
+            dates=(VALUE_DATE, MATURITY_DATE_ONE_YEAR_RESIDUAL),
+        ),
+        Leg(
+            "TRADESEAS",
+            1,
+            1.00,
+            1.00,
+            "SURVIVES — trade LC, 2.5y original / 0.5y residual: Art. 121(4) keys on residual",
+            long_dated=False,
+            is_trade_lc=True,
+            dates=(VALUE_DATE_SEASONED, MATURITY_DATE_SEASONED),
+        ),
         Leg("RATED", 6, 0.50, 0.50, "SURVIVES — rated, Art. 120(1) Table 3", own_cqs=RATED_OWN_CQS),
     )
 }
@@ -254,7 +344,7 @@ def create_p1316_facilities() -> pl.DataFrame:
             "product_type": "term_loan",
             "book_code": "FI_LENDING",
             "counterparty_reference": leg.cp_ref,
-            "value_date": VALUE_DATE,
+            "value_date": leg.value_date,
             "maturity_date": leg.maturity_date,
             "currency": CURRENCY,
             "limit": DRAWN_AMOUNT,
@@ -278,7 +368,7 @@ def create_p1316_loans() -> pl.DataFrame:
             "loan_reference": leg.loan_ref,
             "counterparty_reference": leg.cp_ref,
             "currency": CURRENCY,
-            "value_date": VALUE_DATE,
+            "value_date": leg.value_date,
             "maturity_date": leg.maturity_date,
             "drawn_amount": DRAWN_AMOUNT,
             "interest": 0.0,

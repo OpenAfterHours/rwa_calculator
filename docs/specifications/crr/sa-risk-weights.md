@@ -393,8 +393,9 @@ sovereign's CQS:
 | 6 | 150% |
 | Unrated | 100% |
 
-Unrated institutions with residual maturity ≤ 3 months receive **20%** regardless of
-sovereign CQS (Art. 121(3)).
+Unrated institutions with **original** effective maturity ≤ 3 months receive **20%**
+regardless of sovereign CQS (Art. 121(3)). Art. 121(4) trade finance — residual
+maturity up to one year — is held out of Table 5; see the next section.
 
 ### Trade Finance Preferential Treatment for Unrated Institutions (CRR Art. 121(4))
 
@@ -531,19 +532,33 @@ result (100%) by a factor of five.
     floor that otherwise applies under Art. 121(6).
     See [Basel 3.1 SA Risk Weights — Institution Risk Weights (SCRA, Art. 121)](../basel31/sa-risk-weights.md#institution-risk-weights-ecra-art-120).
 
-!!! bug "Implementation Status — Not implemented in CRR calculator"
-    The CRR SA calculator branch (`engine/sa/calculator.py`) does **not**
-    evaluate Art. 121(4) trade finance preferential. The calculator routes all
-    unrated institution exposures through Art. 121(1) Table 5 with the
-    Art. 121(3) 20% short-term override only. There is no `is_trade_finance`
-    schema field, no Art. 162(3)(b) self-liquidating gate, and no flat 50%/20%
-    trade-finance constant in `engine/sa/crr_risk_weight_tables.py`. Firms with
-    material trade-finance books to unrated institutions in CQS 2–6 jurisdictions
-    must apply the Art. 121(4) override outside the engine — the gap overstates
-    RW versus the regulation in those cells. The CRR-only nature of the rule
-    means this gap will not affect Basel 3.1 calculations from 1 January 2027
-    (SCRA-based PS1/26 Art. 121 replaces the framework entirely; see warning
-    callout above).
+!!! bug "Implementation Status — scope implemented, 50% / 20% rates not yet"
+    The CRR SA branch (`_crr_append_institution_maturity_branches` in
+    `engine/sa/risk_weights.py`) identifies the Art. 121(4) population with
+    `crr_art_121_4_trade_finance_expr` (`engine/sa/sovereign_derived.py`): an
+    unrated institution exposure flagged `is_short_term_trade_lc` whose
+    **residual** maturity is at most one year, inclusive (pack entry
+    `sa_unrated_institution_trade_finance_max_residual_maturity_years`, cited to
+    Art. 162(3) second subparagraph point (b)). The residual is the supplied
+    `residual_maturity_years`, otherwise the years from the reporting date to
+    `maturity_date`. A flagged exposure with no maturity at all stays in scope.
+
+    - **Inside the scope**, the exposure is held out of Table 5 and takes the
+      Art. 121 unrated **100%** residual. This is a deliberate interim, because
+      neither the 50% nor the 20% rate is implemented. It overstates the
+      purposive reading shown above (50%). On the literal reading
+      ("notwithstanding paragraphs 2 and 3", not paragraph 1, so Table 5 still
+      applies) it **understates** at sovereign CQS 6 (100% against 150%).
+    - **Outside the scope** (a trade LC with more than a year to run), the
+      exposure is an ordinary Art. 121(1) exposure and takes Table 5:
+      20% / 50% / 100% / 100% / 100% / 150% by sovereign CQS, and 100% where
+      the sovereign is unrated (Art. 121(2)).
+
+    Pinned by `tests/unit/crr/test_p1_316_art_121_1_table_5_unrated_institution.py`
+    (`TestP1316Art1214TradeFinanceScope` and the full-pipeline legs). The rule is
+    CRR-only and does not affect Basel 3.1 calculations from 1 January 2027
+    (SCRA-based PS1/26 Art. 121 replaces the framework; see the warning callout
+    above).
 
 ### National-Currency Short-Term Preferential Treatment (CRR Art. 119(2), 119(3))
 

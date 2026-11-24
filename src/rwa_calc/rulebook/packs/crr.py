@@ -1045,6 +1045,23 @@ ENTRIES: dict[str, RuleEntry] = {
         enabled=False,
         citation=Citation("CRR", "121", "four paragraphs; no sovereign floor limb"),
     ),
+    # CRR Art. 121(4) reaches only "trade finance exposures referred to in point
+    # (b) of the second subparagraph of Article 162(3)", and point (b) is
+    # "self-liquidating short-term trade finance transactions ... with a residual
+    # maturity of up to one year" — INCLUSIVE, and RESIDUAL (not original). A
+    # trade LC to an unrated institution with longer to run is an ordinary
+    # Art. 121(1) Table 5 exposure. Read by
+    # engine/sa/sovereign_derived.py::crr_art_121_4_trade_finance_expr on the
+    # CRR override path only (PS1/26 replaced Art. 121 with SCRA).
+    "sa_unrated_institution_trade_finance_max_residual_maturity_years": ScalarParam(
+        name="sa_unrated_institution_trade_finance_max_residual_maturity_years",
+        value=Decimal(1),
+        citation=Citation(
+            "CRR",
+            "162(3)",
+            "second subparagraph (b) trade finance residual maturity up to one year",
+        ),
+    ),
     # F-IRB collateral step-functions apply under CRR (Art. 230 Table 5): the
     # overcollateralisation divisor and the 30% C*/C** minimum threshold. Basel
     # 3.1 removes both (see packs/b31.py); the divisor/threshold values

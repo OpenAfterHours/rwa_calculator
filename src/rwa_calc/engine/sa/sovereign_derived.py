@@ -15,7 +15,8 @@ Key responsibilities:
 - ``cqs_table_lookup_expr``: the same shape parameterised on the source CQS
   column, so it can drive any CQS-keyed table off ``cqs`` or a lifted variant.
 - ``crr_art_121_4_trade_finance_expr``: the Art. 121(4) trade-finance predicate
-  that holds those exposures out of the Art. 121(1) Table 5 ladder.
+  that holds those exposures — trade finance with a residual maturity of up to
+  one year — out of the Art. 121(1) Table 5 ladder.
 
 Both lookups are **RW-valued**: they map a CQS to a risk weight directly rather
 than lifting a CQS into ``cqs``. That is deliberate — ``cp_sovereign_cqs`` is
@@ -28,7 +29,8 @@ References:
 - CRR Art. 116(1) Table 2: sovereign-derived PSE risk weights
 - CRR Art. 121(1) Table 5: sovereign-derived unrated-institution risk weights
 - CRR Art. 121(2): unrated central government -> 100%
-- CRR Art. 121(4); CRR Art. 162(3): trade-finance exposures to unrated institutions
+- CRR Art. 121(4); CRR Art. 162(3) second subparagraph point (b): trade-finance
+  exposures to unrated institutions, residual maturity of up to one year
 - CRR Art. 117(1): non-named MDBs risk-weighted as institutions
 - PRA PS1/26 Art. 115 / 116 (identical sovereign-derived values)
 """
@@ -42,8 +44,10 @@ import polars as pl
 from watchfire import cites
 
 from rwa_calc.domain.enums import CQS
+from rwa_calc.engine.utils import exact_fractional_years_expr
 
 if TYPE_CHECKING:
+    from datetime import date
     from decimal import Decimal
 
 logger = logging.getLogger(__name__)
@@ -101,44 +105,45 @@ def cqs_table_lookup_expr(
 
 
 @cites("CRR Art. 121")
-def crr_art_121_4_trade_finance_expr() -> pl.Expr:
+@cites("CRR Art. 162(3)")
+def crr_art_121_4_trade_finance_expr(reporting_date: date, max_residual_years: float) -> pl.Expr:
     """Art. 121(4) trade-finance exposures to unrated institutions.
 
-    Art. 121(4) prescribes a flat **50%** (20% where residual maturity is three
-    months or less) for trade finance under Art. 162(3) second subparagraph
-    point (b), "Notwithstanding paragraphs 2 and 3".
+    Art. 121(4) prescribes 50% (20% where residual maturity is three months or
+    less), "Notwithstanding paragraphs 2 and 3", for "trade finance exposures
+    referred to in point (b) of the second subparagraph of Article 162(3)".
+    Point (b) is "self-liquidating short-term trade finance transactions
+    connected to the exchange of goods or services with a residual maturity of
+    up to one year". So the population is a trade-LC-flagged row whose RESIDUAL
+    maturity is at most ``max_residual_years`` (the CRR pack's
+    ``sa_unrated_institution_trade_finance_max_residual_maturity_years``,
+    inclusive). A flagged row with longer to run is not an Art. 121(4)
+    exposure: Table 5 governs it like any other unrated institution.
 
-    **Which paragraph (4) displaces is genuinely ambiguous, and this predicate
-    does not resolve it.** It names (2) and (3), *not* (1). So:
+    The residual is the supplied ``residual_maturity_years``, else the years
+    from ``reporting_date`` to ``maturity_date`` on the same day count as the
+    IRB Art. 162(3) one-day-floor derivation. Pipeline exposure rows carry
+    ``residual_maturity_years`` as null (it is a collateral-schema column), so
+    the date derivation is the production path, not a fallback. A row with
+    neither stays IN scope: it is not shown to fall outside point (b).
 
-    - On a PURPOSIVE reading, (4) is a floor for trade finance generally and
-      the answer is 50%.
-    - On a LITERAL reading, (4) never displaces (1), so Table 5 still governs
-      and the answer is 20% at sovereign CQS 1.
+    Neither Art. 121(4) rate is implemented (P1.326 / P1.338 / P7.8), so
+    in-scope rows are held OUT of the ladder and land on the Art. 121 unrated
+    **100%** residual via the base CQS join. That interim over-states the
+    purposive reading (a 50% trade-finance rate). It is NOT conservative on the
+    literal reading ("Notwithstanding paragraphs 2 and 3", not 1, so Table 5
+    still governs): at sovereign CQS 6 that gives 150%. Settling the reading is
+    P1.338's; do not add a rate branch on the strength of this docstring.
 
-    The two readings differ by 30pp in OPPOSITE directions. Neither rate is
-    implemented and no pack entry exists for either (P1.326 / P7.8 own them),
-    so this predicate holds the rows OUT of the ladder and they land on the
-    Art. 121 unrated **100%** residual via the base CQS join — over-stating
-    both candidates, which is the right way to be wrong while the question is
-    open. Do NOT add a 50% branch on the strength of this docstring; settling
-    it needs the primary text read against the PRA Rulebook rendering.
-
-    What is NOT ambiguous is the direction of the error if these rows are let
-    into the ladder: 20% against a required 50% is a 30pp UNDERSTATEMENT, and
-    that is why the exclusion exists at all.
-
-    **There is deliberately no maturity gate.** Only Art. 121(4)'s 20% limb is
-    maturity-conditioned; its 50% limb applies at every maturity. The sibling
-    exemption in ``_apply_sovereign_floor_for_institutions`` does carry a
-    one-year condition — that is CRE20.22 footnote 13, a different rule — and
-    copying its shape here re-opens 20% at sovereign CQS 1 on any trade LC
-    longer than a year. That is the guard gap that dropped P1.316 on its first
-    pass, so the 5-year trade-LC case is pinned explicitly by
-    ``tests/unit/crr/test_p1_316_art_121_1_table_5_unrated_institution.py``.
-
-    ``eq_missing`` keeps the predicate null-safe without adding a ``fill_null``
-    site: the flag reaches the SA branch non-null today, but a negated Kleene
-    null would silently drop rows from the ladder.
+    Keyed on RESIDUAL maturity, never original: the one-year condition on the
+    sibling PS1/26 Art. 121(6)(b) floor exemption is on ORIGINAL maturity and
+    is a different rule. ``eq_missing`` and the ``is_null`` arm keep the
+    predicate null-safe without a ``fill_null`` site — a negated Kleene null
+    would silently drop rows from the ladder.
     """
-    return pl.col("is_short_term_trade_lc").eq_missing(True)
+    residual = pl.coalesce(
+        pl.col("residual_maturity_years"),
+        exact_fractional_years_expr(reporting_date, "maturity_date"),
+    )
+    within_point_b = residual.is_null() | (residual <= max_residual_years)
+    return pl.col("is_short_term_trade_lc").eq_missing(True) & within_point_b

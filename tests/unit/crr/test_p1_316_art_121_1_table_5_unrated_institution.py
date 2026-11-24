@@ -44,6 +44,22 @@ Direction is NOT uniform, and on balance the fix REDUCES capital:
 Two of six steps reduce. ``test_p1_316_portfolio_direction_is_net_reducing``
 asserts both portfolio totals so that claim is measured, not narrated.
 
+Art. 121(4) scope. Paragraph (4) reaches only "trade finance exposures referred
+to in point (b) of the second subparagraph of Article 162(3)", and point (b)
+reads (legislation.gov.uk, CRR as at 2026-01-01):
+
+    "(b) self-liquidating short-term trade finance transactions connected to
+    the exchange of goods or services with a residual maturity of up to one
+    year as referred to in point (80) of Article 4(1);"
+
+The first fix held every trade-LC-flagged row out of Table 5 at the 100%
+interim, at every maturity, on the belief that the 50% limb had no maturity
+condition. It has one, through that cross-reference: a trade LC with more than
+a year to run is not an Art. 121(4) exposure, and Table 5 governs it. At
+sovereign CQS 6 the blanket hold-out was 100% against 150% under every reading
+of paragraph (4). ``TestP1316Art1214TradeFinanceScope`` pins both sides of the
+one-year bound, inclusive, keyed on RESIDUAL maturity.
+
 Discharges oracle register entries ORC-105 (CQS 1), ORC-020 (CQS 2) and ORC-109
 (CQS 6), which were ``xfail(strict=True)`` in ``KNOWN_DISAGREEMENTS``. ORC-106 /
 107 / 108 (CQS 3/4/5) and ORC-021 (Art. 121(2)) already passed and are the
@@ -72,9 +88,10 @@ References:
       ``_crr_append_institution_maturity_branches``.
     - src/rwa_calc/engine/sa/sovereign_derived.py:
       ``sovereign_derived_rw_expr`` / ``crr_art_121_4_trade_finance_expr``.
-    - tests/fixtures/p1_316/p1_316.py: the seven legs and the hand-calc.
+    - tests/fixtures/p1_316/p1_316.py: the ten legs and the hand-calc.
     - tests/oracle/ORACLE_DERIVATIONS.md: ORC-105/020/106/107/108/109/021.
-    - IMPLEMENTATION_PLAN.md: P1.316; P1.326 / P7.8 (Art. 121(4) rates).
+    - IMPLEMENTATION_PLAN.md: P1.316; P1.326 / P1.338 / P7.8 (Art. 121(4)
+      rates).
 """
 
 from __future__ import annotations
@@ -134,7 +151,8 @@ def _unrated_institution_rw(
     config: CalculationConfig,
     *,
     sovereign_cqs: int | None,
-    maturity_years: float = 5.0,
+    maturity_years: float | None = 5.0,
+    original_maturity_years: float | None = None,
     is_trade_lc: bool = False,
     own_cqs: int | None = None,
 ) -> float:
@@ -143,6 +161,9 @@ def _unrated_institution_rw(
     ``local_currency == currency`` keeps the Art. 121(6) FX sovereign floor off
     structurally, so every number below is Table 5's and not the floor's. With
     the floor armed a CQS-6 row already returned 150% before this fix.
+
+    ``maturity_years`` is the residual maturity; the original maturity defaults
+    to the same value unless ``original_maturity_years`` is given.
     """
     return calculate_single_sa_exposure(
         calculator,
@@ -156,7 +177,9 @@ def _unrated_institution_rw(
         currency="GBP",
         local_currency="GBP",
         residual_maturity_years=maturity_years,
-        original_maturity_years=maturity_years,
+        original_maturity_years=(
+            maturity_years if original_maturity_years is None else original_maturity_years
+        ),
         is_short_term_trade_lc=is_trade_lc,
     )["risk_weight"]
 
@@ -262,58 +285,107 @@ class TestP1316Table5Ladder:
         assert from_pack == _TABLE_5_FROM_ARTICLE
 
 
-class TestP1316Art1214TradeFinanceIsHeldOut:
-    """Art. 121(4) trade finance must not reach the Table 5 ladder — at any maturity."""
+class TestP1316Art1214TradeFinanceScope:
+    """Art. 121(4) reaches trade finance with up to one year to run — no further."""
 
-    @pytest.mark.parametrize("maturity_years", [0.5, 1.0, 1.5, 5.0])
+    @pytest.mark.parametrize("residual_years", [0.5, 1.0])
     @pytest.mark.parametrize("sovereign_cqs", [1, 2, 6])
-    def test_p1_316_trade_finance_stays_on_the_100pct_residual(
+    def test_p1_316_trade_finance_within_one_year_stays_on_the_100pct_interim(
         self,
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
-        maturity_years: float,
+        residual_years: float,
         sovereign_cqs: int,
     ) -> None:
-        """Art. 121(4) trade finance lands on the 100% residual — the interim value.
+        """Inside Art. 121(4): held out of Table 5 on the 100% interim.
 
-        Three values are defensible for this population and the estate must not
-        drift between them silently:
+        Neither Art. 121(4) rate (50%, or 20% at residual <= 3m) is implemented
+        (P1.326 / P1.338 / P7.8), so the in-scope rows fall through to the
+        Art. 121 unrated 100% residual. That interim is NOT conservative against
+        every reading: on the literal one ("Notwithstanding paragraphs 2 and 3",
+        not 1, so Table 5 still governs) sovereign CQS 6 would be 150%. It is
+        pinned so that settling the reading is a visible, deliberate edit.
 
-            100%  what the engine returns today — the Art. 121 unrated residual
-                  reached by falling through the base CQS join. A DELIBERATE
-                  INTERIM: no Art. 121(4) branch exists.
-             50%  Art. 121(4) read purposively, as a trade-finance floor.
-             20%  Art. 121(4) read literally — it says "Notwithstanding
-                  paragraphs 2 and 3", NOT 1, so Table 5 would still govern
-                  and sovereign CQS 1 would give 20%.
-
-        The interim is conservative against both readings, which is the right
-        way to be wrong while the question is open; it is filed as a finding,
-        not settled here. This test pins 100% so that whichever way the
-        interpretation lands, the change is a visible, deliberate edit.
-
-        **The maturity parametrisation is the point of this test.** P1.316 was
-        dropped once because a maturity-gated exclusion —
-        ``~(trade_lc & (original_maturity <= 1.0))``, copied from the sibling
-        Art. 121(6) floor exemption, which carries a one-year condition from
-        CRE20.22 footnote 13, a different rule — passed every guard pinned
-        inside a one-year window and re-opened 20% at sovereign CQS 1 on a
-        longer trade LC. The 1.5y and 5.0y cases are what fail that variant.
-        Art. 121(4)'s 50% limb has no maturity condition at all.
+        1.0 is in the set because "up to one year" is inclusive.
         """
         actual = _unrated_institution_rw(
             sa_calculator,
             crr_config,
             sovereign_cqs=sovereign_cqs,
-            maturity_years=maturity_years,
+            maturity_years=residual_years,
             is_trade_lc=True,
         )
 
         assert actual == pytest.approx(1.00)
-        # Name both alternatives so a future edit toward either reading trips
-        # here rather than only shifting the number above.
         assert actual != pytest.approx(0.50), "an Art. 121(4) 50% branch was added"
-        assert actual != pytest.approx(0.20), "trade finance leaked into the Table 5 ladder"
+
+    @pytest.mark.parametrize("residual_years", [1.01, 1.5, 5.0])
+    @pytest.mark.parametrize("sovereign_cqs", [1, 2, 6])
+    def test_p1_316_trade_finance_beyond_one_year_takes_table_5(
+        self,
+        sa_calculator: SACalculator,
+        crr_config: CalculationConfig,
+        residual_years: float,
+        sovereign_cqs: int,
+    ) -> None:
+        """Outside Art. 121(4): a trade LC with more than a year to run takes Table 5.
+
+        Art. 162(3) second subparagraph point (b) is trade finance "with a
+        residual maturity of up to one year", so these rows are ordinary
+        Art. 121(1) exposures. Before this fix all nine returned 1.00: CQS 1
+        and 2 over-stated by 80pp and 50pp, CQS 6 UNDER-stated by 50pp.
+        """
+        actual = _unrated_institution_rw(
+            sa_calculator,
+            crr_config,
+            sovereign_cqs=sovereign_cqs,
+            maturity_years=residual_years,
+            is_trade_lc=True,
+        )
+
+        assert actual == pytest.approx(_TABLE_5_FROM_ARTICLE[sovereign_cqs])
+
+    @pytest.mark.parametrize("sovereign_cqs", [1, 6])
+    def test_p1_316_trade_finance_scope_keys_on_residual_not_original_maturity(
+        self, sa_calculator: SACalculator, crr_config: CalculationConfig, sovereign_cqs: int
+    ) -> None:
+        """Two years original, half a year residual: inside Art. 121(4).
+
+        The discriminator against an ORIGINAL-maturity gate — the shape of the
+        sibling PS1/26 Art. 121(6)(b) floor exemption, which is a different
+        rule. Such a gate would leak this row into Table 5 (20% at CQS 1, 150%
+        at CQS 6).
+        """
+        actual = _unrated_institution_rw(
+            sa_calculator,
+            crr_config,
+            sovereign_cqs=sovereign_cqs,
+            maturity_years=0.5,
+            original_maturity_years=2.0,
+            is_trade_lc=True,
+        )
+
+        assert actual == pytest.approx(1.00)
+
+    @pytest.mark.parametrize("sovereign_cqs", [1, 6])
+    def test_p1_316_trade_finance_with_no_maturity_stays_inside_art_121_4(
+        self, sa_calculator: SACalculator, crr_config: CalculationConfig, sovereign_cqs: int
+    ) -> None:
+        """No residual maturity and no maturity date: the row stays in scope.
+
+        A trade LC whose maturity is unknown is not shown to be outside
+        Art. 162(3)(b), so it keeps the Art. 121(4) interim rather than being
+        priced off Table 5.
+        """
+        actual = _unrated_institution_rw(
+            sa_calculator,
+            crr_config,
+            sovereign_cqs=sovereign_cqs,
+            maturity_years=None,
+            is_trade_lc=True,
+        )
+
+        assert actual == pytest.approx(1.00)
 
     @pytest.mark.parametrize("maturity_years", [0.5, 1.0, 1.5, 5.0])
     def test_p1_316_the_same_row_without_the_trade_flag_takes_the_ladder(
@@ -321,8 +393,8 @@ class TestP1316Art1214TradeFinanceIsHeldOut:
     ) -> None:
         """The live control for the exclusion above.
 
-        Without this, an exclusion that accidentally swallowed every long-dated
-        unrated institution would pass the trade-finance test set and look
+        Without this, an exclusion that accidentally swallowed every unrated
+        institution would pass the in-scope trade-finance tests and look
         correct. Same rows, same maturities, flag off -> 20% at CQS 1.
         """
         actual = _unrated_institution_rw(
@@ -337,7 +409,7 @@ class TestP1316Art1214TradeFinanceIsHeldOut:
 
 
 class TestP1316ThroughTheFullPipeline:
-    """The seven-leg P1.316 fixture through ``PipelineOrchestrator``."""
+    """The ten-leg P1.316 fixture through ``PipelineOrchestrator``."""
 
     @staticmethod
     def _run(config: CalculationConfig) -> dict[str, dict[str, float]]:
@@ -364,9 +436,9 @@ class TestP1316ThroughTheFullPipeline:
     def test_p1_316_every_leg_carries_its_expected_risk_weight(
         self, crr_results: dict[str, dict[str, float]], label: str
     ) -> None:
-        """Each of the seven legs, end to end through the real pipeline.
+        """Each of the ten legs, end to end through the real pipeline.
 
-        Three legs MOVE and four SURVIVE (LESSONS B5): a single moving row
+        Five legs MOVE and five SURVIVE (LESSONS B5): a single moving row
         cannot distinguish "the ladder works" from "the branch is
         unconditional". The full-pipeline run is what proves
         ``cp_sovereign_cqs`` actually arrives on the SA branch off the sealed
@@ -379,6 +451,24 @@ class TestP1316ThroughTheFullPipeline:
         assert row["risk_weight"] == pytest.approx(leg.expected_rw), leg.role
         assert row["ead_final"] == pytest.approx(DRAWN_AMOUNT)
         assert row["rwa_final"] == pytest.approx(leg.expected_rwa), leg.role
+
+    @pytest.mark.parametrize("label", sorted(k for k, v in LEGS.items() if v.is_trade_lc))
+    def test_p1_316_trade_legs_reach_the_sa_branch_with_no_residual_column(
+        self, crr_results: dict[str, dict[str, float]], label: str
+    ) -> None:
+        """Adequacy: the Art. 121(4) scope can only be read off ``maturity_date``.
+
+        Exposure rows carry ``residual_maturity_years`` as NULL (it is a
+        collateral-schema column), so the trade legs above move only if the
+        residual is derived from ``maturity_date`` and the reporting date. A
+        gate on the column alone would hold all four in scope at 100%, and the
+        two that must move could not.
+        """
+        row = crr_results[LEGS[label].loan_ref]
+
+        assert row["is_short_term_trade_lc"] is True
+        assert row["residual_maturity_years"] is None
+        assert row["maturity_date"] == LEGS[label].maturity_date
 
     def test_p1_316_portfolio_direction_is_net_reducing(
         self, crr_results: dict[str, dict[str, float]]
@@ -393,8 +483,8 @@ class TestP1316ThroughTheFullPipeline:
         total = sum(row["rwa_final"] for row in crr_results.values())
 
         assert total == pytest.approx(EXPECTED_PORTFOLIO_RWA)
-        assert total == pytest.approx(5_400_000.0)
-        assert pytest.approx(5_700_000.0) == PRE_FIX_PORTFOLIO_RWA
+        assert total == pytest.approx(8_100_000.0)
+        assert pytest.approx(8_700_000.0) == PRE_FIX_PORTFOLIO_RWA
         assert total < PRE_FIX_PORTFOLIO_RWA
 
     def test_p1_316_basel_31_sa_rw_is_invariant_to_sovereign_cqs(self) -> None:
@@ -415,8 +505,9 @@ class TestP1316ThroughTheFullPipeline:
            ``feature("sa_revised_risk_weight_overrides")`` is False — i.e.
            exactly when the floor does not run.
         2. Under Basel 3.1 the SA-equivalent comes from the SCRA chain, which
-           never reads ``cp_sovereign_cqs``. So the same six unrated-institution
-           legs are invariant across the sovereign ladder, as asserted below.
+           never reads ``cp_sovereign_cqs``, nor the CRR Art. 121(4) scope. So
+           the six long-dated unrated-institution legs — the two 5-year trade
+           LCs among them — are invariant across the sovereign ladder.
         """
         results = self._run(CalculationConfig.basel_3_1(reporting_date=date(2027, 6, 30)))
         unrated = [
@@ -425,7 +516,7 @@ class TestP1316ThroughTheFullPipeline:
             if leg.own_cqs is None and leg.long_dated
         ]
 
-        assert len(unrated) == 5
+        assert len(unrated) == 6
         assert len(set(unrated)) == 1, (
             "a Basel 3.1 unrated-institution RW varied with cp_sovereign_cqs; "
             "the CRR Table 5 ladder has leaked into the SCRA path and the "

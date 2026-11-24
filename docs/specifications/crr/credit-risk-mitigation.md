@@ -1078,6 +1078,45 @@ unfunded protection is applied to the original exposure (Part 3).
   recognised collateral value across all covered exposures must not exceed the collateral's
   market value.
 
+    *Implementation.* The item is stated once on the collateral table and each exposure it
+    covers is listed in `collateral_links`; `engine/crm/link_allocation.py` splits the finite
+    value so the slices never exceed it. A `collateral_reference` repeated on several
+    collateral rows is one item supplied twice: the input gate raises **DQ004** naming the
+    collateral (`contracts/errors.py::duplicate_collateral_reference_error`). When
+    collateral-link splitting is enabled (`enable_collateral_link_splitting`, the default) and
+    `collateral_links` names the item, the link allocator values it once, at the **smallest**
+    value its rows state, with that row's attributes. Over the same exposures, its CRM slices
+    are then those a well-formed feed (the item stated once) receives, which can be lower or
+    higher RWA than the duplicated feed received before, because a duplicated row also changed
+    the order in which items drew against a shared beneficiary (measured for cash collateral in
+    `tests/integration/test_duplicate_collateral_reference_pipeline.py`, both regimes).
+
+    The repair is confined to that split. Two consumers read the collateral rows one by one,
+    each by its own `beneficiary_reference`, before the allocator runs and whether or not
+    `collateral_links` names the item:
+
+    - **Real-estate property attributes.** The hierarchy stage reads `property_ltv`,
+      `property_type`, the qualifying and income flags and property coverage from every row
+      (`engine/hierarchy/enrich.py::add_collateral_ltv`), and the Art. 124/125/126 loan split
+      follows them. It never reads `collateral_links`. A duplicated property therefore still
+      secures each row's beneficiary with its full value. Where the linked loans together
+      exceed the part of the property value that earns the secured risk weight, that value is
+      recognised more than once and RWA is understated. The well-formed feed has the opposite
+      gap: only its row's own beneficiary gets the property, so the other linked loans get no
+      real-estate treatment (P1.450). The correct figure shares the property's value between
+      the linked loans, and neither feed produces it today.
+    - **Third-party deposits** (Art. 232(2)). They leave the collateral frame before the
+      allocator runs, so they are never split. A `collateral_links` row naming one is not
+      supported: like any links row naming an item absent from the allocator's input, it
+      currently fails the CRM stage (a known defect, separate from P1.444).
+
+    With no links table, or with splitting disabled (the allocator then never runs), every
+    row is applied to its own beneficiary as stated — the engine reports the breach but does
+    not re-allocate the firm's rows (P1.444, owner decision). On each of these paths DQ004 is
+    the only control, and the firm must repair the feed. Paragraph 7 is PS1/26 text: the
+    onshored CRR Art. 193 (legislation.gov.uk) has paragraphs (1)-(6) only, and the same
+    behaviour applies under CRR because it rests on the input contract.
+
 ### Art. 194 — Eligibility Conditions
 
 **Funded credit protection** (Art. 194(1)-(4)):

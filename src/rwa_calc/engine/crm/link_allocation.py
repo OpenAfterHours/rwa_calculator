@@ -15,6 +15,20 @@ Key responsibilities:
 - Emit an expanded collateral frame with the same shape as the single-
   beneficiary collateral table, so the existing Art. 231 waterfall in
   ``apply_collateral`` consumes it unchanged.
+- Treat a ``collateral_reference`` stated on several collateral rows (a breach
+  of the input contract, reported as DQ004 by the input gate) as ONE item: the
+  row stating the smallest finite value supplies the value and the attributes,
+  so no item is credited more than any single row states, and over the same
+  exposure frame THIS module's slices are those a feed stating the item once
+  at that value would receive (PS1/26 Art. 193(7)(b), "without any
+  double-counting"; review CL-03, P1.444). This module runs only with collateral-link splitting enabled; with
+  it disabled the duplicate rows are applied as stated. The repair is local to
+  this split: real-estate property attributes (LTV, property type, property
+  coverage, the loan split) are read per raw row upstream, in the hierarchy
+  stage, and third-party deposits leave the collateral frame before this
+  module runs (``processor.py`` Step 3.65), so both are still applied once per
+  row even when links name the item (and a duplicated property's per-row loan
+  split also changes the exposure frame this module receives).
 
 The split is a JOINT, residual-demand-aware fill across all collateral items
 at once: link edges are walked in a single global order (explicit ``priority``
@@ -33,6 +47,8 @@ supply cap preserves the ``Σ slices ≤ V`` guarantee for every item.
 References:
 - CRR Art. 193/194/207: CRM eligibility and recognition conditions
 - CRR Art. 230-231: substitution / sequential allocation of collateral
+- PS1/26 Art. 193(7): an item covering several exposures is subdivided into
+  portions, each allocated to one exposure without double-counting
 """
 
 from __future__ import annotations
@@ -110,11 +126,12 @@ class CollateralLinkAllocator:
         if "collateral_reference" not in coll_cols or not required.issubset(link_cols):
             return CollateralLinkAllocation(collateral=collateral, audit=None)
 
+        items = _one_row_per_item(collateral, self._finite_value_expr(collateral), coll_cols)
         demand_metric = self._beneficiary_demand_metric(exposures)
-        links = self._resolve_links(collateral_links, collateral, demand_metric, link_cols)
+        links = self._resolve_links(collateral_links, items, demand_metric, link_cols)
         links = self._allocate_slices(links)
 
-        expanded = self._build_expanded_collateral(collateral, links, coll_cols)
+        expanded = self._build_expanded_collateral(items, links, coll_cols)
         passthrough = collateral.join(
             collateral_links.select(pl.col("collateral_reference").cast(pl.String)).unique(),
             on="collateral_reference",
@@ -205,11 +222,15 @@ class CollateralLinkAllocator:
     def _resolve_links(
         self,
         collateral_links: pl.LazyFrame,
-        collateral: pl.LazyFrame,
+        items: pl.LazyFrame,
         demand_metric: dict[str, pl.LazyFrame],
         link_cols: set[str],
     ) -> pl.LazyFrame:
-        """Attach demand, ranking metric and finite value to each link row."""
+        """Attach demand, ranking metric and finite value to each link row.
+
+        ``items`` is :func:`_one_row_per_item`'s frame, so the value join adds
+        at most one row per link edge.
+        """
         links = collateral_links.select(
             pl.col("collateral_reference").cast(pl.String),
             pl.col("beneficiary_type").cast(pl.String),
@@ -264,10 +285,7 @@ class CollateralLinkAllocator:
             .alias("_metric"),
         )
 
-        value_lookup = collateral.select(
-            pl.col("collateral_reference").cast(pl.String),
-            self._finite_value_expr(collateral).alias("_value"),
-        )
+        value_lookup = items.select("collateral_reference", "_value")
         return links.join(value_lookup, on="collateral_reference", how="left")
 
     @staticmethod
@@ -340,12 +358,16 @@ class CollateralLinkAllocator:
 
     @staticmethod
     def _build_expanded_collateral(
-        collateral: pl.LazyFrame,
+        items: pl.LazyFrame,
         links: pl.LazyFrame,
         coll_cols: list[str],
     ) -> pl.LazyFrame:
-        """One collateral row per non-empty slice, in the original column shape."""
-        schema = collateral.collect_schema()
+        """One collateral row per non-empty slice, in the original column shape.
+
+        Attributes come from :func:`_one_row_per_item`'s frame, so each slice
+        joins exactly one collateral row.
+        """
+        schema = items.collect_schema()
         # Columns sourced from the link / slice rather than the collateral row:
         # the slice amount is written to market_value; nominal_value and
         # pledge_percentage are nulled so the sliced value is authoritative.
@@ -357,7 +379,7 @@ class CollateralLinkAllocator:
             "pledge_percentage",
         }
         attr_cols = [c for c in coll_cols if c not in override]
-        attrs = collateral.select(attr_cols)
+        attrs = items.select(attr_cols)
 
         sliced = links.filter(pl.col("_slice") > 1e-9).join(
             attrs, on="collateral_reference", how="left"
@@ -379,6 +401,50 @@ class CollateralLinkAllocator:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+@cites("PS1/26, paragraph 193")
+def _one_row_per_item(collateral: pl.LazyFrame, value: pl.Expr, columns: list[str]) -> pl.LazyFrame:
+    """One row per non-null ``collateral_reference``, carrying its finite ``_value``.
+
+    A reference names one item, so a reference on several rows is the same
+    item supplied twice (DQ004 at the input gate). Keyed on the reference
+    alone, the value and attribute joins fanned out on it — an item stated
+    twice at 60 reached its beneficiary as two slices of 60 — the value
+    seeded for the split depended on which duplicate sorted first, and the
+    doubled edges inflated the item's ``_item_fanout``, so at a beneficiary it
+    shares with another item it drew in a different order than it would from a
+    well-formed feed. Over the same exposure frame, one row per item restores
+    this split's well-formed slices exactly, which can move RWA either way against the duplicated feed's old
+    result: lower where the fan-out had pushed a more useful item's supply onto
+    the wrong beneficiary. It does not reach what is read before this module
+    (real-estate property attributes in the hierarchy stage, third-party
+    deposits split out at ``processor.py`` Step 3.65): those still see every
+    duplicate row.
+
+    The surviving row is the one stating the SMALLEST finite ``value`` (ties:
+    beneficiary, then input order), and it supplies the attributes too, so the
+    slice is valued and haircut as one stated row. The minimum is the only
+    choice that credits no item more than any of its rows states — not the
+    keep-largest rule of the guarantee pool
+    (``protection_value.py::attach_shared_cap``), which can lower RWA here.
+    PS1/26 Art. 193(7)(b): each portion is allocated "without any
+    double-counting". Null references are not keys: they are dropped here (no
+    link can name them) and pass through the caller's anti-join intact.
+    ``columns`` is the collateral frame's column list, already resolved by the
+    caller.
+    """
+    tie_break = [c for c in ("beneficiary_type", "beneficiary_reference") if c in columns]
+    return (
+        collateral.filter(pl.col("collateral_reference").is_not_null())
+        .with_columns(pl.col("collateral_reference").cast(pl.String), value.alias("_value"))
+        .sort(
+            ["collateral_reference", "_value", *tie_break],
+            nulls_last=True,
+            maintain_order=True,
+        )
+        .unique(subset=["collateral_reference"], keep="first", maintain_order=True)
+    )
 
 
 def _residual_fill(

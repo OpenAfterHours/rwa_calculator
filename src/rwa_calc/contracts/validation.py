@@ -92,6 +92,7 @@ from rwa_calc.contracts.errors import (
     ErrorSeverity,
     absent_reference_error,
     dfc_allocation_input_missing_error,
+    duplicate_collateral_reference_error,
     duplicate_input_key_error,
     engine_only_risk_type_error,
     exposure_reference_collision_error,
@@ -1187,7 +1188,11 @@ def validate_duplicate_keys(
     """Flag natural keys naming more than one row (``DQ004``) or namespace (``DQ019``).
 
     Reads ``data/schemas.py``'s ``TABLE_UNIQUE_KEYS`` — the tables where a
-    repeated key is silent data loss rather than a visible fan-out — and its
+    repeated key is silent data loss or silent double-counting rather than a
+    visible fan-out (a repeated ``collateral_reference`` credits one item once
+    per row, PS1/26 Art. 193(7)(b), everywhere except the CRM link allocator's
+    value split -- real-estate property attributes and third-party deposits
+    included; its finding names the collateral, not an exposure) — and its
     ``EXPOSURE_REFERENCE_NAMESPACES``: uniqueness WITHIN a table is not enough,
     because every input that becomes an exposure row shares one
     ``exposure_reference`` space, and a loan and a contingent (or a user row
@@ -1251,6 +1256,12 @@ def validate_duplicate_keys(
     for row in found.iter_rows(named=True):
         if row["_kind"] == _KIND_COLLISION:
             collisions.append(_namespace_collision_error(row["_value"], row["_table"].split(", ")))
+            continue
+        if row["_table"] == "collateral":
+            # The key names an item of collateral, not an exposure or obligor.
+            errors.append(
+                duplicate_collateral_reference_error(value=row["_value"], count=int(row["_count"]))
+            )
             continue
         errors.append(
             duplicate_input_key_error(

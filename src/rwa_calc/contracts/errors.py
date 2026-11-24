@@ -1783,7 +1783,8 @@ def duplicate_input_key_error(
     ``names_a_counterparty`` routes the offending value to the right reference
     field. Both fields are read by consumers that triage by row, and putting a
     counterparty reference in ``exposure_reference`` would make the error
-    unjoinable to the obligor it is actually about.
+    unjoinable to the obligor it is actually about. A collateral key names
+    neither and has its own factory, :func:`duplicate_collateral_reference_error`.
     """
     return CalculationError(
         code=ERROR_DUPLICATE_KEY,
@@ -1801,6 +1802,82 @@ def duplicate_input_key_error(
         field_name=column,
         expected_value="one row per key",
         actual_value=str(count),
+    )
+
+
+def duplicate_collateral_reference_error(*, value: str, count: int) -> CalculationError:
+    """Create a DQ004 error for a ``collateral_reference`` stated on several rows.
+
+    The collateral table's key is the ITEM of collateral: its row states the
+    item's finite value once, and a pledge backing several exposures is split
+    through ``collateral_links`` (``data/schemas.py::COLLATERAL_LINK_SCHEMA``).
+    A repeated reference therefore means one item supplied twice. Only ONE
+    consumer of the collateral table repairs it:
+
+    - The CRM collateral-link allocator (``engine/crm/link_allocation.py``).
+      When collateral-link splitting is enabled
+      (``enable_collateral_link_splitting``, the default) and
+      ``collateral_links`` names the item, the allocator splits the item's CRM
+      collateral value once, at the SMALLEST value its rows state.
+    - Every other consumer reads the rows one by one, each by its own
+      ``beneficiary_reference``, whether or not ``collateral_links`` names the
+      item. Real-estate property attributes (LTV, property type, the qualifying
+      and income flags, property coverage, and the loan split they drive) are
+      read in the hierarchy stage
+      (``engine/hierarchy/enrich.py::add_collateral_ltv`` and the
+      property-coverage lookup, then ``engine/re_split``), which never reads
+      ``collateral_links``, so a duplicated property secures every row's
+      beneficiary. Third-party deposits leave the collateral frame before the
+      allocator runs
+      (``engine/crm/third_party_deposit.py::split_third_party_deposits``), so
+      they are never split either; a links row naming one currently fails the
+      CRM stage, as does any links row naming an item absent from the
+      allocator's input (a separate defect).
+    - With no links table, a links table that does not name the item, or
+      splitting disabled (the allocator then never runs,
+      ``engine/crm/processor.py``), every row is applied to its own beneficiary
+      as stated, so an item supplied at its full value on two rows protects two
+      exposures in full.
+
+    The engine cannot tell a copied row from two assets sharing a name or from
+    a per-row split of one value, so the firm must repair the feed; on every
+    path but the allocator's, this finding is the only control.
+
+    A sibling of :func:`duplicate_input_key_error`, not a branch of it, because
+    the reference names no exposure and no obligor: ``exposure_reference`` and
+    ``counterparty_reference`` stay None (a collateral reference equal to a loan
+    reference would otherwise attach the finding to that loan in every
+    per-exposure triage join), and the reference travels in ``actual_value``
+    beside ``field_name``. Uncapped, one per duplicated reference, for the
+    reason the sibling gives.
+
+    Reference: PS1/26 Art. 193(2) ("shall not double count the effect of credit
+    risk mitigation") and Art. 193(7)(b) (each portion of an item is allocated
+    to one exposure "without any double-counting"). CRR Art. 193 has no
+    paragraph (7); the control rests on the input contract in both regimes.
+    """
+    return CalculationError(
+        code=ERROR_DUPLICATE_KEY,
+        message=(
+            f"[collateral] {count} input rows share 'collateral_reference' = '{value}'. "
+            "A collateral reference names one item, whose finite value is stated once; "
+            "pledge one item to several exposures through collateral_links instead. "
+            "When collateral-link splitting is enabled (the default) and collateral_links "
+            "names the item, its CRM collateral value is split once, at the smallest "
+            "value its rows state. Real-estate property attributes (LTV, property type, "
+            "property coverage, loan split) are still applied once per row even when "
+            "collateral_links names the item, and third-party deposits are never split "
+            "(each row is applied as stated; a collateral_links row naming a third-party "
+            "deposit is not supported). Otherwise (no links table, the item not in it, or "
+            "splitting disabled) every row is applied to its own beneficiary as stated, so "
+            "an item supplied on several rows at its full value is recognised once per row."
+        ),
+        severity=ErrorSeverity.ERROR,
+        category=ErrorCategory.DATA_QUALITY,
+        regulatory_reference="PS1/26 Art. 193(2); Art. 193(7)(b)",
+        field_name="collateral_reference",
+        expected_value="one collateral row per collateral_reference",
+        actual_value=value,
     )
 
 

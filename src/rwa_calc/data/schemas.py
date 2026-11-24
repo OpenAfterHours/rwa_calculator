@@ -3170,8 +3170,8 @@ TABLE_KEY_COLUMNS: dict[str, str] = {
 #: ``specialised_lending`` on ``counterparty_reference``. Uniqueness is a
 #: separate claim about each table and is stated separately.
 #:
-#: The four listed are the tables where a repeat is silent data loss rather
-#: than a fan-out an operator would notice:
+#: The tables listed are those where a repeat is silent data loss or silent
+#: double-counting rather than a fan-out an operator would notice:
 #:
 #: - ``loans`` / ``contingents`` / ``facilities`` — the exposure tables. The
 #:   model-permission join de-duplicates on ``exposure_reference``
@@ -3184,16 +3184,37 @@ TABLE_KEY_COLUMNS: dict[str, str] = {
 #:   left join), double-counting capital. This is the exposure-table analogue of
 #:   the ``org_mappings`` duplicate-child fan-out that ``DQ004`` already reports
 #:   from ``engine/hierarchy/graph.py``.
+#: - ``collateral`` — one item of collateral per reference (review CL-03,
+#:   P1.444). The collateral row states the item's finite value once; a pledge
+#:   backing several exposures is split through ``collateral_links``
+#:   (:data:`COLLATERAL_LINK_SCHEMA`), whose repeats are legal and checked on
+#:   the link triple (``CRM011``). A repeated collateral row is applied once
+#:   per row, so an item supplied at its full value on two rows protects two
+#:   exposures in full — the double-counting PS1/26 Art. 193(7)(b) forbids.
+#:   Only the CRM link allocator's value split repairs it (splitting enabled,
+#:   the default, and ``collateral_links`` names the item: valued once, at the
+#:   smallest stated value). Real-estate property attributes (LTV, property
+#:   type, property coverage, loan split — read per row in the hierarchy stage,
+#:   which never reads ``collateral_links``) and third-party deposits (taken out
+#:   of the collateral frame before the allocator runs) are still applied once
+#:   per row even when links name the item.
+#:   The finding names the collateral, never an exposure
+#:   (``contracts/errors.py::duplicate_collateral_reference_error``). Null
+#:   references (e.g. a life-insurance policy row) are not keys and stay legal.
 #:
 #: ``guarantees`` is deliberately absent: rows sharing a ``guarantee_reference``
 #: are ONE contract with one cap (the pool / aggregate-cap form, Art. 233(1)),
 #: valued once by ``engine/crm/protection_value.py``; inconsistent sharing is
-#: reported there as ``CRM028``, not as a duplicate key.
+#: reported there as ``CRM028``, not as a duplicate key. The contrast with
+#: ``collateral`` is the documented contract: a shared ``guarantee_reference``
+#: is the pool form, while a shared ``collateral_reference`` is no documented
+#: form at all (the M:N form is ``collateral_links``).
 TABLE_UNIQUE_KEYS: dict[str, str] = {
     "loans": "loan_reference",
     "contingents": "contingent_reference",
     "facilities": "facility_reference",
     "counterparties": "counterparty_reference",
+    "collateral": "collateral_reference",
 }
 
 #: The exposure_reference NAMESPACES: every input whose key becomes an exposure

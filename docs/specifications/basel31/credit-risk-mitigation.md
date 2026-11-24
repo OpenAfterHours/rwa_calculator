@@ -869,6 +869,19 @@ collateral.
   portion of an exposure (no double-counting).
 - **Para 3**: An institution must use the same CRM method for the same type of unfunded
   credit protection across its portfolio (consistency requirement).
+- **One item, several exposures (Art. 193(7))**: an item of eligible collateral covering
+  multiple exposures is subdivided into portions, each allocated to one exposure "without any
+  double-counting" (Art. 193(7)(b)). The item is stated once on the collateral table and its
+  beneficiaries listed in `collateral_links`; the link allocator never credits more than its
+  finite value. A `collateral_reference` repeated on several collateral rows raises **DQ004**
+  naming the collateral. When collateral-link splitting is enabled
+  (`enable_collateral_link_splitting`, the default) and `collateral_links` names the item, its
+  CRM collateral value is split once at the **smallest** value its rows state. That is the
+  only repair: real-estate property attributes (LTV, property type, property coverage, the
+  Art. 124 loan split) and third-party deposits are still applied once per row even when
+  links name the item, and with no links table, or with splitting disabled, every row is
+  applied as stated (P1.444) — see the
+  [CRR CRM spec, Art. 193](../crr/credit-risk-mitigation.md#art-193-general-principles).
 - **AIRB own-LGD anti-double-counting (Art. 169A)**: Where collateral has been used to
   construct the firm's own LGD model, that collateral must not also contribute supervisory
   CRM benefit to non-AIRB exposures of the same counterparty. The pipeline supports this via

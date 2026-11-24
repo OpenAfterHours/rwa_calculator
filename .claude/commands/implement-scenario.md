@@ -51,12 +51,29 @@ Invoke `premise-auditor`. Prompt:
 > {{PDF text with filename + page index, or an explicit statement
 > that it could not be located}}
 
+**Before acting on any verdict, apply Wave 0 criterion C0.9 from
+`/next-items` Step 4d yourself** — this path has no Wave 0 reviewer, so
+you are the only check on the auditor's "Scope sentence and operative
+verb" section. If the audit rejects or narrows a bullet claim toward
+what the code already does, or cites a `file:line` as evidence of what
+a rule requires, and that section is missing, says "not triggered", or
+lacks the scope-sentence quote, its page index, the modifying-provisions
+line (a quote, or "none found: <where looked>"), the verb quote or the
+code-mechanism-vs-verb line, re-invoke `premise-auditor` once and name
+the gap. This includes a `refuted` verdict, before you stop on it: a
+refutation closes its bullet for good. If the second audit still fails
+C0.9, act on neither verdict — stop and report it to the operator, and
+leave the bullet open. Unlike a reviewer, you can read the PDF: extract
+the quoted scope sentence yourself and confirm it is verbatim. A reading
+that agrees with the code is the one most likely to have been read off
+the code (escape log 2026-11-16).
+
 Then:
 
 - `PREMISE: confirmed` → continue to Step 1 on the bullet as written.
 - `PREMISE: rescoped` → continue to Step 1 on the auditor's
   **Corrected premise**; correct the bullet in the plan file at Step 5.
-- `PREMISE: refuted` → **stop.** Close the bullet as
+- `PREMISE: refuted`, once it has passed C0.9 above → **stop.** Close the bullet as
   `[x] closed-claim-invalid: <basis>`, commit that alone, and report
   to the operator. This is the cheapest possible outcome — do not
   argue your way past it into building something.

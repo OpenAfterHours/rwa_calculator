@@ -29,7 +29,9 @@ chain against itself. The result is a green gate around a regulatory defect.
 Answer each explicitly. Any one of them can kill the bullet.
 
 1. **Does the rule say what the bullet says it says?** Quote the article
-   verbatim. Not paraphrased, not recalled — quoted.
+   verbatim. Not paraphrased, not recalled — quoted. If your reading
+   agrees with the code, the scope sentence and the operative verb come
+   first — see the next section.
 2. **Does the code actually diverge from it?** Read the cited source. A
    surprising fraction of bullets describe a gap that was closed, targets
    dead code, or names a symbol nothing reads.
@@ -39,6 +41,66 @@ Answer each explicitly. Any one of them can kill the bullet.
 4. **Is the scope right?** Bullets routinely overstate ("flat 100%",
    "uniform", "all classes") a rule that has a cap, a blend, a
    secured/unsecured split, or a single-limb application.
+
+## A reading that agrees with the code — scope sentence and operative verb
+
+The audit most likely to be wrong is the one that sides with the code,
+because it may have read the code. P1.296's audit described PS1/26 Credit
+Risk: General Provisions rules 4.2 / 4.3 by the code's `max_horizontal`
+floor, cited the code line, and recorded the bullet's correct claim about
+the 2027 transitional weight as WRONG — inside an audit that otherwise
+*confirmed* the diagnosis. It never quoted rule 4.1, which limits 4.2 / 4.3
+to firms *without* IRB permission on 31 December 2026, and rule 4.2's verb
+is "shall be assigned", not "the higher of". The floor never bound, and
+capital was overstated for months (escape log, 2026-11-16).
+
+**Trigger — on any verdict**, `confirmed` and `rescoped` as much as
+`refuted`, whenever either holds:
+
+- **(a)** you reject or narrow any claim in the bullet, in whole or in part,
+  and the reading you put in its place is what the code at HEAD already
+  does; or
+- **(b)** you cite a source line (`file:line`) as evidence of what a rule
+  requires, whom it applies to, or how it operates. Citing a line to show
+  what the *code* does (question 2) is not (b); citing it as your account
+  of the *rule* is.
+
+When it fires, before you rely on the code's mechanism, quote verbatim, with
+PDF filename and page index:
+
+1. **The scope sentence** of the controlling provision — whom or what it
+   applies to. In PS1/26 it is often a separate rule: General Provisions 4.1
+   scopes 4.2 / 4.3.
+2. **Every provision that modifies it**, including one in another Part. Rule
+   4.2 "modifies paragraph 3 of ... Article 133"; a quote of the article
+   alone (as oracle case ORC-080 had) misses the rule that changes it. Then
+   look for the provisions that re-apply it: rule 4.5(1) applies 4.2 / 4.3
+   to some exposures of firms that *do* hold IRB permission.
+3. **The operative verb** — "shall be assigned", "only apply to", "the higher
+   of", "shall not exceed", "may".
+
+Then state, in one line, whether the code's mechanism (floor, max, min, cap,
+override, gate) matches that verb. **A max or a floor where the verb is
+"shall be assigned" is a finding, not a confirmation**: answer question 2
+`yes`.
+
+Record it in the `## Scope sentence and operative verb` output section, which
+is mandatory on every audit — "not triggered", with the reason, when neither
+(a) nor (b) holds. The Wave 0 review checks it on every verdict, a refutation
+included — the `reviewer` in `/next-items` (criterion C0.9), the orchestrator
+itself in `/implement-scenario` Step 0. It fails an audit that meets (a) or
+(b) and has no scope-sentence quote, no page index, no modifying-provisions
+line (a quote, or "none found: <where you looked>"), no verb quote, or no
+verb-versus-mechanism line. The modifying-provisions line is not optional:
+an audit that takes the article as the controlling provision can quote its
+scope and its verb, find them matching the code, and never reach the rule
+in another Part that changes it.
+
+`regulation_text.py show` resolves articles only; a PRA Part rule such as
+General Provisions 4.1 fails there ("Could not read ... as an article"). Find
+it with pymupdf by iterating `doc[i].get_text()` — General Provisions chapter
+4 is at page indices 19-21 of `ps126app1.pdf` (4.1-4.2 on 19, 4.3-4.8 on 20,
+the end of 4.8 and 4.9-4.11 on 21; 4.5 and 4.6 are "Subject to 4.9").
 
 ## Sourcing rules — non-negotiable
 
@@ -64,9 +126,11 @@ Your verdict is worthless if it rests on recalled regulation.
   `[Note: Provision left blank]` (**deleted**) from `[Note: Provision not in
   PRA Rulebook]` (**survives in CRR**) — they are not synonyms, and
   conflating them has already produced one refuted item.
-- `docs/assets/` contains **no** PRA Credit Risk Mitigation Part. If the
-  bullet turns on a PS1/26-side CRM citation, say the text is unreadable
-  here rather than implying you verified it.
+- `ps126app1.pdf` is a multi-Part document. The Credit Risk Mitigation (CRR)
+  Part is its Annex F, from page index 161 (Art. 195 on page index 170,
+  Art. 205 on 179, each with its `[Note: corresponds to Article NNN]`
+  line). A "not readable here" caveat is itself a claim: before you
+  write one, iterate `doc[i].get_text()` for the article (LESSONS A3).
 - `docs/specifications/` is an in-repo transcription, not a source. Use it
   to locate, never to verify.
 
@@ -104,6 +168,21 @@ actually does.>
 filename + page index. If you could not obtain source text, say so plainly
 here — do not substitute recollection.>
 
+## Scope sentence and operative verb
+<Mandatory on every audit, whatever the verdict. Either
+"not triggered: <why — no bullet claim rejected or narrowed toward what the
+code does, and no file:line cited as evidence of what a rule requires>",
+or, when triggered:
+- Trigger: <(a) and/or (b) — the bullet claim rejected or narrowed, and/or
+  the file:line cited>
+- Scope sentence: "<verbatim>" — <PDF filename, page index>
+- Modifying provisions: "<verbatim>" — <PDF filename, page index>; or
+  "none found: <where you looked>"
+- Operative verb: "<verbatim verb phrase>"
+- Code mechanism vs verb: <match|MISMATCH> — <file:line, the mechanism
+  (floor, max, min, cap, override, gate), one line>. A MISMATCH makes
+  question 2 below a `yes`.>
+
 ## The four questions
 1. Rule says what the bullet claims: <yes|no> — <one line>
 2. Code diverges: <yes|no> — <file:line, one line>
@@ -128,7 +207,9 @@ that will need registering. "none" is an acceptable answer.>
 Verdict meanings:
 
 - `confirmed` — all four questions clean. Downstream proceeds on the bullet
-  as written.
+  as written. A `confirmed` that rejects or narrows any claim of the bullet
+  is a `rescoped`; if the narrower reading is what the code already does,
+  the scope-and-verb section is triggered.
 - `rescoped` — a real gap exists, but the bullet states it wrongly.
   Downstream proceeds on your **Corrected premise**, not the bullet.
 - `refuted` — the bullet describes no real gap, or the prescribed fix would

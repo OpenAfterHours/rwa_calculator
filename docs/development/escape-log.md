@@ -4166,10 +4166,79 @@ requires every register reason on such a rule to cite the issue or rebut it.
   - With the next entry's fix (`ee96beb`), the registered
     `b31/equity-transitional` portfolio (`RUNS`, Basel 3.1 only), which closes
     the `path-never-exercised` limb.
-  - Owed, for the contributing class's prescription (strengthen Wave 0): a
-    premise-auditor criterion that a refutation agreeing with the code must
-    quote the rule's scope sentence and operative verb before it relies on the
-    code's mechanism. Filed as P5.78.
+  - For the contributing class's prescription (strengthen Wave 0), P5.78:
+    `.claude/agents/premise-auditor.md` now requires an audit whose reading
+    agrees with the code to quote the rule's scope sentence, any modifying
+    provision and the operative verb, with page index, before it relies on the
+    code's mechanism. It must also say in one line whether the mechanism matches
+    the verb. Its mandatory `## Scope sentence and operative verb` output section
+    holds this. The criterion fires on **any** verdict, not only `refuted`,
+    because P1.296 rejected one claim inside a confirmed diagnosis. It fires when
+    the audit narrows a bullet claim to what the code already does, or cites a
+    `file:line` as evidence of a rule. Wave 0 reviewer criterion C0.9
+    (`.claude/commands/next-items.md` Step 4d) checks the section. All three
+    lists of what fails a triggered audit (the auditor's, C0.9's `revise`
+    sentence, `/implement-scenario` Step 0's) name the modifying-provisions
+    line: an audit that treats the article as controlling can quote its scope
+    and verb, match them to the code, and never reach the rule in another Part
+    that changes it, which is how ORC-080 read Art. 133(3) without rule 4.2.
+    Step 3a used to drop a `refuted` audit without a reviewer, so C0.9 could not
+    fire on the verdict that closes a bullet for good. It now sends every
+    verdict to the Wave 0 reviewer first and stops a refuted item only on a
+    pass. The state table's `pass` row defers a refuted Wave 0 item to Step 3a
+    rather than advancing it to Wave 1. Step 7 closes a refuted bullet only on
+    drop reason `premise-refuted:`, and leaves open the bullet of a refutation
+    dropped as `revision-failed-premise_audit` or `reviewer-drop-premise_audit`.
+    `/implement-scenario` Step 0 makes its orchestrator apply C0.9 itself on
+    every verdict, a refutation expressly included, before its refuted branch
+    stops. Pinned by `tests/contracts/test_wave0_scope_verb_criterion.py` (27
+    tests). It reads the section title from the auditor's output format, the
+    verdict tokens from its `PREMISE:` line, Wave 0's name from the waves table
+    and the drop reasons from Step 3a and the state table. It asserts the quote
+    requirements of the auditor's body and of C0.9 on their text with that
+    title (and C0.9's own title sentence) stripped. The verdict-gating detector
+    runs on C0.9, the auditor's criterion, its output placeholder and Step 0's
+    paragraph. It sees five gate shapes and is self-tested on the repo's own
+    gated text (C0.5 and the Corrected-premise placeholder) and on paraphrases
+    built from each verdict token. Red on the three harness files at `7dadcaf`
+    (the batch base): `26 failed, 1 passed`. The pass is that self-test on the
+    repo's gated text, green in both states by design. 43 mutations of scratch
+    copies each turned at least one test red, and the unmutated copy gives `27
+    passed`; each mutation asserted that it applied. They covered:
+    - the scope-sentence quote removed from the auditor's list, its placeholder,
+      C0.9's requirement and C0.9's `revise` list; the verb quote removed from
+      the first three of those;
+    - the modifying provision removed from the auditor's list, from C0.9's
+      requirement, from each of the three fail lists, and its "none found" form
+      from the placeholder;
+    - the verb-versus-mechanism line removed from the auditor's body, from
+      C0.9's requirement, from C0.9's `revise` list and from Step 0's;
+    - the "shall be assigned" finding sentence removed from either file;
+    - trigger (a) dropped from the auditor, trigger (b) from C0.9, and the (b)
+      exception widened past question 2 three ways;
+    - C0.9 deleted, or gated by an opening "When the verdict is", "It is
+      checked when the verdict is" or "If the verdict is"; the auditor's
+      trigger made refuted-only or "triggered on a `refuted` or `rescoped`
+      verdict"; its placeholder opened "`refuted` and `rescoped` only";
+    - the "not triggered" form dropped;
+    - Step 3a's refuted branch reverted, or stopping "on pass or on a second
+      revise"; the table's `pass` row reverted, or advancing the refutation;
+    - Step 7 closing "or any other", or on `revision-failed-premise_audit`, or
+      not leaving `reviewer-drop-premise_audit` open;
+    - Step 0's paragraph removed, its refutation excluded, or its refuted branch
+      stopping without naming C0.9;
+    - the stale "no PRA CRM Part" caveat restored.
+
+    The verdict-gating guard failed twice in review before this. Its first
+    version read only the opening clause and missed a gate behind C0.9's title
+    sentence. Its second ran only on C0.9 and knew two gate shapes, so "If the
+    verdict is `refuted`", the placeholder copied from its Corrected-premise
+    sibling, and a gated auditor trigger were all green. These are text
+    detectors. They see the shapes listed, not every way the criterion could be
+    weakened in prose. This checks conformance only. A reviewer can see that the
+    quote is there and cited, but not that it is true: it has no `uv run
+    python`, and `regulation_text.py` cannot resolve a PRA Part rule such as
+    General Provisions 4.1.
 - **Verified red** (`e9a84a7`, observed in the lane and reproduced by both
   reviewers against `ba53bd0`):
   - `tests/oracle`: ORC-080 `risk_weight oracle 1.6000000000 engine

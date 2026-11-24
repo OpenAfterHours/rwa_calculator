@@ -31,7 +31,8 @@ wrong premise, two of them prescribing actively unsafe fixes.
 
 Wave 0 exists to kill those before any work is done, and the `skeptic`
 exists so at least one node in each item is allowed to disagree with
-the chain. Treat a `PREMISE: refuted` as the batch's cheapest success.
+the chain. Treat a `PREMISE: refuted` that passes its Wave 0 review as
+the batch's cheapest success.
 
 Parse `$ARGUMENTS` as an integer **N** (default 3, cap 5) optionally
 followed by a **scope** token. The integer is N (if absent or not an
@@ -326,7 +327,7 @@ the operator or processing notifications:
    | `agent_status: in_flight` | (no completion yet) | keep waiting |
    | `agent_status: returned` (role-agent just finished) | — | dispatch the review set for this wave per Step 4c; set `agent_status: in_review`; reset `review_verdicts` to nulls |
    | `agent_status: in_review` | **some** dispatched reviewer still outstanding | record the returned verdict in `review_verdicts` and keep waiting — do **not** advance on a single `pass` |
-   | `agent_status: in_review` | all dispatched reviewers returned, **worst** verdict `pass` | advance `current_wave` to the next wave; if past Wave 4, set `current_wave: merge_ready` and stop dispatching for this item; otherwise dispatch the next role-agent (Step 4c again, with that wave's prompt) and set `agent_status: in_flight` with `current_agent_name: <next-wave>-<P-CODE>-r0` |
+   | `agent_status: in_review` | all dispatched reviewers returned, **worst** verdict `pass` | **Wave 0 with `premise_verdict: refuted`: do not advance** — stop the item per Step 3a, `drop_reason: "premise-refuted: …"`. Otherwise advance `current_wave` to the next wave; if past Wave 4, set `current_wave: merge_ready` and stop dispatching for this item; otherwise dispatch the next role-agent (Step 4c again, with that wave's prompt) and set `agent_status: in_flight` with `current_agent_name: <next-wave>-<P-CODE>-r0` |
    | `agent_status: in_review` | worst verdict `revise` AND `revision_count[<wave>] == 0` | re-dispatch the original role-agent per Step 4e with **both** reviewers' feedback; increment `revision_count[<wave>]`; set `agent_status: in_flight` with `current_agent_name: <wave>-<P-CODE>-r1` |
    | `agent_status: in_review` | worst verdict `revise` AND `revision_count[<wave>] >= 1` | drop. Set `agent_status: dropped`, `drop_reason: "revision-failed-<wave>"`. Stop dispatching for this item. |
    | `agent_status: in_review` | worst verdict `drop` | drop. Set `agent_status: dropped`, `drop_reason: "reviewer-drop-<wave>: <drop-reason text>"`. Stop dispatching for this item. |
@@ -337,9 +338,12 @@ the operator or processing notifications:
    case — it is the whole reason the skeptic exists, so do not treat
    the disagreement as an error to be arbitrated.
 
-3a. **Wave 0 verdict handling** (before the table above applies).
-   When the `premise-auditor` returns, record `premise_verdict` and
-   act on it:
+3a. **Wave 0 verdict handling.** It governs two events. When the
+   `premise-auditor` returns, record `premise_verdict` and dispatch its
+   review (the table's `returned` row). When that review returns, the
+   table's `revise` and `drop` rows apply as on any wave, and its
+   `pass` row applies per verdict as below — for `refuted`, this step
+   decides, not the table's advance:
 
    - `confirmed` → dispatch `reviewer` per Step 4c, then proceed
      normally.
@@ -349,13 +353,23 @@ the operator or processing notifications:
      context marked *superseded*. Note the rescope in `retro_notes`
      and surface it to the operator — the bullet in
      `IMPLEMENTATION_PLAN.md` will need correcting at Step 7.
-   - `refuted` → **stop the item.** Set `agent_status: dropped`,
+   - `refuted` → dispatch `reviewer` per Step 4c **first**. A
+     refutation closes its bullet for good, so it is reviewed like any
+     other verdict — C0.9 above all: a refutation that agrees with the
+     code is the reading most likely to have been read off the code
+     (escape log 2026-11-16). On `revise`, re-dispatch the
+     `premise-auditor` once, as below. **Only on pass, stop the item**
+     — do not advance to Wave 1. Set `agent_status: dropped`,
      `drop_reason: "premise-refuted: <auditor's one-line basis>"`.
      Append the refutation to `retro_notes`. This is a **success**, not
      a failure — report it that way to the operator, and note that
      Step 7 must close the bullet in `IMPLEMENTATION_PLAN.md` as
      `closed-claim-invalid` rather than leaving it to be re-picked by
-     the next batch.
+     the next batch. A refutation still at `revise` after its one
+     retry is dropped by the table as
+     `revision-failed-premise_audit`, and one the reviewer drops as
+     `reviewer-drop-premise_audit`; Step 7 leaves either bullet open:
+     the refutation was never shown sound.
 
    Wave 0 gets the same one-revision allowance as any other wave: a
    `reviewer` `revise` on a thin or unsourced audit re-dispatches the
@@ -424,6 +438,7 @@ a claim you could not test is `revise`, not `pass`.
 --- premise (authoritative over the plan bullet) ---
 Verdict: {{premise_verdict}}
 {{the auditor's Corrected premise and Verbatim regulatory text}}
+{{the auditor's Scope sentence and operative verb section}}
 {{the auditor's Defect-pinning tests and Hazards sections}}
 
 --- prior context ---
@@ -480,6 +495,34 @@ C0.7 — Use Read on the cited source file to confirm the divergence
 C0.8 — The verdict follows from the four answers. A `confirmed` with
        any question answered against the bullet is incoherent —
        `revise`.
+C0.9 — SCOPE SENTENCE AND OPERATIVE VERB. Applies on any verdict,
+       not only `refuted`: P1.296 rejected one claim inside a
+       confirmed diagnosis (escape log 2026-11-16), and Step 3a
+       reviews a refutation before it closes a bullet. The "Scope
+       sentence and operative verb" section is present on every
+       audit. It is TRIGGERED when the audit (a) rejects or narrows
+       any claim of the bullet, wholly or in part, and the reading it
+       puts in its place is what the code at HEAD already does; or
+       (b) cites a `file:line` as evidence of what a rule requires,
+       whom it applies to, or how it operates (question 2's citation
+       of what the code does is not (b)). When triggered, the
+       section quotes the scope sentence verbatim with PDF filename +
+       page index, quotes any modifying provision (or says where it
+       looked), quotes the operative verb verbatim, and gives the
+       one-line code-mechanism-vs-verb comparison. `revise` if the
+       section is missing; if it says "not triggered" on an audit
+       that meets (a) or (b); or if the scope-sentence quote, its page
+       index, the modifying-provisions line (a quote, or "none found:
+       <where looked>"), the verb quote or the mechanism line is
+       missing. An audit that quotes only the article it treats as
+       controlling can match its scope and verb to the code and never
+       reach the rule in another Part that modifies it (rule 4.2
+       modifies Article 133(3)). A "match" that pairs a floor or a
+       max with the verb "shall be assigned" is a finding recorded as
+       a confirmation — `revise`.
+       A MISMATCH line with question 2 answered "no" is incoherent
+       (C0.8). This is conformance only: you check that the quote is
+       there, cited and compared with the code — not that it is true.
 ```
 
 #### Wave 1 — scenario-architect proposal
@@ -898,9 +941,14 @@ gate, edit `IMPLEMENTATION_PLAN.md` at the top level: toggle from
 **Also resolve the Wave 0 outcomes** — otherwise a refuted bullet sits
 in the queue and the next batch pays to refute it again:
 
-- `premise_verdict: refuted` → close the bullet as
+- `premise_verdict: refuted` with `drop_reason: "premise-refuted: …"`
+  (its Wave 0 review passed) → close the bullet as
   `[x] closed-claim-invalid: <auditor's one-line basis>` and move it
-  to `## Completed`. Do **not** leave it unchecked.
+  to `## Completed`. Do **not** leave it unchecked. A refutation
+  dropped as `revision-failed-premise_audit` (it failed its review
+  twice) or as `reviewer-drop-premise_audit` (its reviewer dropped
+  it) was never shown sound: leave that bullet open and record the
+  reviewer's objection against it.
 - `premise_verdict: rescoped` → rewrite the bullet's summary and
   `Ref:` to the auditor's corrected premise, whether or not the item
   went on to merge. The next reader must not inherit the wrong claim.

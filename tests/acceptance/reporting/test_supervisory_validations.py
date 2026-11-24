@@ -283,14 +283,14 @@ Why the key is ``(regime, rule_id)`` and not the failing coordinate:
     both side inputs, so no register rule sees either cell populated.
 
 Cost, and why every run is load-bearing:
-    This file is the most expensive test in the suite: sixteen portfolios x two
+    This file is the most expensive test in the suite: seventeen portfolios x two
     regimes plus ``equity-transitional`` under Basel 3.1 alone and ``irb-mdb``
-    under CRR alone (thirty-four runs, seventeen of them Basel 3.1), plus a
-    prior-period run for each of the fifteen IRB ones, is FORTY-NINE full pipeline
-    runs, plus two for leg (m)'s probe
+    under CRR alone (thirty-six runs, eighteen of them Basel 3.1), plus a
+    prior-period run for each of the seventeen IRB ones, is FIFTY-THREE full
+    pipeline runs, plus two for leg (m)'s probe
     (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not this prose.
     The gateway leg adds one canonical return and one ``validate_return`` per
-    Basel 3.1 run (seventeen) and no pipeline run: the pack is loaded once per
+    Basel 3.1 run (eighteen) and no pipeline run: the pack is loaded once per
     process and the COREP bundle is the one the template leg already generated.
     Timed directly (2026-11-16, 4-core box, when the matrix held fifteen Basel 3.1
     runs): 0.6 s to load the pack plus 5.4 s for the fifteen filings (0.2-1.0 s
@@ -449,6 +449,9 @@ from tests.fixtures.reporting_crm_substitution_portfolio import (
     build_reporting_crm_substitution_bundle,
 )
 from tests.fixtures.reporting_crr_irb_mdb_portfolio import build_reporting_crr_irb_mdb_bundle
+from tests.fixtures.reporting_declined_guarantee_portfolio import (
+    build_reporting_declined_guarantee_bundle,
+)
 from tests.fixtures.reporting_equity_transitional_portfolio import (
     build_reporting_equity_transitional_bundle,
 )
@@ -1395,6 +1398,34 @@ RUNS: tuple[GateInput, ...] = (
         build_reporting_crr_irb_mdb_bundle,
         lambda: _irb_config("CRR"),
         lambda: _prior_config("CRR"),
+    ),
+    # A DECLINED SA-routed guarantee on an IRB off-balance-sheet leg — LESSONS B5,
+    # P1.398. The CRM stage puts the covered undrawn amount of such a leg on the SA
+    # conversion factor before the IRB stage decides whether to recognise the
+    # guarantee, and a declined guarantee must leave the leg on its own IRB
+    # exposure value (CRR Art. 166(8)-(10), PS1/26 Art. 166A-166D). Measured over
+    # every run above before this one was registered: ZERO IRB legs with an
+    # SA-routed guarantor and an off-balance-sheet amount, in either regime, so no
+    # register cell could see C 08.01 / OF 08.01 col 0110 or RWEA move. Three
+    # declined obligors (an F-IRB commitment that moves under CRR only, an A-IRB
+    # own-CCF commitment that moves in both, a CRR short-term trade LC that moves
+    # DOWN) and one recognised guarantee whose SA factor must SURVIVE (the two-leg
+    # rule). IRB permission and a prior frame, like the other IRB runs.
+    GateInput(
+        "crr",
+        "CRR",
+        "declined-guarantee",
+        build_reporting_declined_guarantee_bundle,
+        lambda: _irb_config("CRR"),
+        lambda: _prior_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "declined-guarantee",
+        build_reporting_declined_guarantee_bundle,
+        lambda: _irb_config("BASEL_3_1"),
+        lambda: _prior_config("BASEL_3_1"),
     ),
 )
 

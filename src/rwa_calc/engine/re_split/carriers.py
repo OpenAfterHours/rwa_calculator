@@ -102,6 +102,13 @@ The three classes of carrier:
     group sums at :516-520) and no post-split reader exists. If a post-split
     consumer is ever added, MOVE THEM TO ``_PRORATA_CARRIERS`` rather than
     reasoning about them as aggregates.
+  * *IRB-only carriers* — ``ead_pre_cross_approach_ccf``, the pre-swap IRB
+    exposure value of a cross-approach CCF leg (P1.398). The CRM stage sets it
+    only on an F-IRB / A-IRB covered leg. This splitter passes those legs
+    through unsplit, carrying the value unchanged, and splits only SA / equity
+    rows, on which it is null — so no split leg ever carries a value to
+    pro-rate. The IRB stage consumes it, and no calculator output edge declares
+    it, so the branch seal strips it before the collapse.
   * *Splitter decision provenance* — ``re_split_mode``,
     ``re_split_target_class``, ``re_split_property_type``,
     ``re_split_property_value``, ``re_split_residential_value``,

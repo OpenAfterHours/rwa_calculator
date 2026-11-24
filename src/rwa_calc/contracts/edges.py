@@ -79,6 +79,15 @@ LOAN_SPLIT_CARRIERS: tuple[str, str, str] = (
 # (``reporting/corep/c07_sheet_scope.py``; PS1/26 Annex II ¶54).
 REPORTING_CLASS_PRE_DEFAULT_COL: str = "reporting_class_pre_default"
 
+# The covered leg's OWN IRB exposure value before the cross-approach CCF swap,
+# named once for its two sites: the CRM stage writes it where it re-values the
+# covered part of an IRB leg at the SA conversion factor (``engine/crm/
+# guarantees.py::_apply_cross_approach_ccf``), and the IRB stage settles the leg
+# back on it wherever the guarantee is NOT finally SA risk-weight substituted —
+# declined, or double default (``engine/irb/guarantee.py``; P1.398). Null where
+# no swap.
+CROSS_APPROACH_CCF_OWN_EAD_COL: str = "ead_pre_cross_approach_ccf"
+
 
 class EdgeContractViolation(Exception):
     """A frame failed its edge contract, or a bundle field lacks its brand.
@@ -1482,6 +1491,15 @@ def _crm_added_columns() -> dict[str, EdgeColumn]:
         "guarantee_reference": EdgeColumn(dtype=pl.String, required=False),
         "guarantor": EdgeColumn(dtype=pl.String, required=False),
         "guarantor_seniority": EdgeColumn(dtype=pl.String, required=False),
+        # P1.398: the covered leg's own IRB exposure value before the cross-approach
+        # CCF swap. Injected as a typed null when the guarantee sub-step did not run,
+        # which is also its meaning on every row the swap did not touch.
+        CROSS_APPROACH_CCF_OWN_EAD_COL: EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            citation="CRR Art. 166",
+            null_meaning="null = no cross-approach CCF substitution on this row",
+        ),
         # guarantor_entity_type stays CONDITIONAL (inject=False): it is the
         # run-level presence SENTINEL for the SA/IRB guarantee-substitution
         # machinery (engine/sa/namespace.py, engine/irb/guarantee.py), which

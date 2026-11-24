@@ -16,6 +16,7 @@ Usage with transforms:
         apply_firb_lgd,
         classify_approach,
         prepare_columns,
+        restore_own_irb_exposure_value,
     )
 
     config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
@@ -23,6 +24,7 @@ Usage with transforms:
         lf.pipe(classify_approach, config)
         .pipe(apply_firb_lgd, config)
         .pipe(prepare_columns, config)
+        .pipe(restore_own_irb_exposure_value)  # P1.398: before the formulas
         .pipe(apply_all_formulas, config)
     )
 

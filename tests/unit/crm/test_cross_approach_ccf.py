@@ -18,6 +18,13 @@ The "SA guarantor" throughout is an unrated institution with no internal PD — 
 eligible provider under Art. 201(1)(f) that routes to SA risk-weight substitution.
 These tests used an ``individual`` until P1.384: a natural person is in no limb of
 Art. 201, so the gate now rejects it and no cross-approach CCF would be applied.
+
+Every figure here is the CRM-EXIT value, before the IRB stage decides whether the
+guarantee is recognised. The swap is provisional (P1.398): an unrated institution
+takes a CRR weight above a typical obligor's IRB weight, so in a full run most of
+these guarantees are DECLINED and the IRB stage puts the leg back on its own IRB
+exposure value (``ead_pre_cross_approach_ccf``). The final values are pinned by
+``tests/integration/test_p1_398_declined_guarantee_irb_exposure_value.py``.
 """
 
 from __future__ import annotations
@@ -32,6 +39,7 @@ from rwa_calc.contracts.bundles import (
     ClassifiedExposuresBundle,
 )
 from rwa_calc.contracts.config import CalculationConfig
+from rwa_calc.contracts.edges import CROSS_APPROACH_CCF_OWN_EAD_COL
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.crm.processor import CRMProcessor
 
@@ -756,3 +764,75 @@ class TestBasel31CrossApproachUsesTableA1:
         # Assert: pre-fix LR 0.0 and OC 0.5 (the CRR Annex I table).
         row = _get_guar_row(result)
         assert row["ccf_guaranteed"][0] == pytest.approx(expected_ccf)
+
+
+# =============================================================================
+# Test: the swap keeps the leg's own IRB exposure value for the IRB stage
+# =============================================================================
+
+
+class TestSwapKeepsTheOwnIrbExposureValue:
+    """The CRM swap is provisional: the pre-swap value rides to the IRB stage (P1.398).
+
+    Whether the guarantee is recognised is decided in the IRB stage, and a
+    declined guarantee leaves the leg on its own IRB exposure value (CRR
+    Art. 166(8)-(10), Art. 193(3); PS1/26 Art. 166A-166D, Art. 193(2A)). The CRM
+    stage therefore keeps that value on ``CROSS_APPROACH_CCF_OWN_EAD_COL`` beside
+    the swapped one, and leaves it null wherever it did not swap.
+    """
+
+    def test_swapped_leg_carries_its_pre_swap_exposure_value(
+        self, crm_processor: CRMProcessor, firb_config: CalculationConfig
+    ) -> None:
+        """Guarantor leg: 0.6 x (520 + 0.75 x 300) = 447, beside the swapped 402."""
+        # Arrange
+        exposure = _base_exposure()
+        counterparties = [
+            _base_counterparty("GUARANTOR01", "institution"),
+            _base_counterparty("BORROWER01", "corporate"),
+        ]
+
+        # Act
+        result = _run_crm(
+            crm_processor, firb_config, [exposure], [_base_guarantee()], counterparties
+        )
+
+        # Assert
+        row = _get_guar_row(result)
+        assert row["ead_final"][0] == pytest.approx(402.0)
+        assert row[CROSS_APPROACH_CCF_OWN_EAD_COL][0] == pytest.approx(447.0)
+
+    def test_unswapped_rows_carry_no_pre_swap_value(
+        self, crm_processor: CRMProcessor, firb_config: CalculationConfig
+    ) -> None:
+        """The remainder and an IRB-guarantor leg are not swapped: null, not a copy."""
+        # Arrange
+        exposures = [_base_exposure(), _base_exposure(ref="EXP002")]
+        guarantees = [_base_guarantee(), _base_guarantee(beneficiary="EXP002", guarantor="G_IRB")]
+        counterparties = [
+            _base_counterparty("GUARANTOR01", "institution"),
+            _base_counterparty("G_IRB", "corporate"),
+            _base_counterparty("BORROWER01", "corporate"),
+        ]
+        ratings = [
+            {
+                "counterparty_reference": "G_IRB",
+                "cqs": None,
+                "pd": 0.001,
+                "internal_pd": 0.001,
+                "rating_type": "internal",
+            }
+        ]
+
+        # Act
+        result = _run_crm(
+            crm_processor, firb_config, exposures, guarantees, counterparties, ratings
+        )
+
+        # Assert
+        unswapped = result.filter(
+            pl.col("exposure_reference").str.ends_with("__REM")
+            | (pl.col("guarantor_approach") == "irb")
+        )
+        assert unswapped.height == 3, "expected two remainders and one IRB-guarantor leg"
+        assert unswapped[CROSS_APPROACH_CCF_OWN_EAD_COL].null_count() == unswapped.height

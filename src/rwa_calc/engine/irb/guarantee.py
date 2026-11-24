@@ -30,8 +30,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import polars as pl
+import polars.selectors as cs
 from watchfire import cites
 
+from rwa_calc.contracts.edges import CROSS_APPROACH_CCF_OWN_EAD_COL
 from rwa_calc.data.schemas import DOUBLE_DEFAULT_PROVIDER_ENTITY_TYPES
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.eu_sovereign import (
@@ -53,6 +55,12 @@ from rwa_calc.rulebook.compile import scalar_value
 if TYPE_CHECKING:
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.rulebook.resolve import ResolvedRulepack
+
+#: Transient: a swapped leg's CRM-exit exposure value and covered amount on the SA
+#: conversion factor, captured before ``redistribute_non_beneficial`` and consumed
+#: by :func:`_settle_cross_approach_ccf` in the same call.
+_SA_CCF_EAD_COL = "_ead_sa_ccf"
+_SA_CCF_COVERED_COL = "_covered_sa_ccf"
 
 
 @cites("CRR Art. 161(3)")
@@ -174,12 +182,38 @@ def apply_guarantee_substitution(
         ]
     )
 
+    # The cross-approach CCF carrier is written wherever the CRM guarantee step
+    # ran (``engine/crm/guarantees.py::apply_guarantees``), whether or not
+    # ``restore_own_irb_exposure_value`` ran before the formulas — the settle
+    # step below works from either basis. Keep each swapped leg's CRM-exit
+    # (SA-factor) exposure value and covered amount BEFORE redistribution moves
+    # them: a leg that stays SA-substituted takes the value back, and a reverted
+    # leg's own cover is told apart from cover redistribution moves onto it.
+    settles_ccf_swap = CROSS_APPROACH_CCF_OWN_EAD_COL in cols
+    if settles_ccf_swap:
+        swapped = pl.col(CROSS_APPROACH_CCF_OWN_EAD_COL).is_not_null()
+        no_swap = pl.lit(None, dtype=pl.Float64)
+        lf = lf.with_columns(
+            pl.when(swapped)
+            .then(pl.col("ead_after_collateral"))
+            .otherwise(no_swap)
+            .alias(_SA_CCF_EAD_COL),
+            pl.when(swapped)
+            .then(pl.col("guaranteed_portion"))
+            .otherwise(no_swap)
+            .alias(_SA_CCF_COVERED_COL),
+        )
+
     # Redistribute non-beneficial guarantee portions to beneficial guarantors.
     # For multi-guarantor exposures, non-beneficial guarantors' EAD is reallocated
     # to the most beneficial (lowest RW) guarantors using greedy fill.
     from rwa_calc.engine.crm.guarantees import redistribute_non_beneficial
 
     lf = redistribute_non_beneficial(lf)
+
+    if settles_ccf_swap:
+        stored = [expr.meta.output_name() for expr in store_originals]
+        lf = _settle_cross_approach_ccf(lf, present={*cols, *stored})
 
     # Calculate blended RWA using substitution approach. The predicate and the
     # retained share are named once and reused below, so the post-model-adjustment
@@ -332,9 +366,213 @@ def apply_guarantee_substitution(
     return lf
 
 
+@cites("CRR Art. 166")
+@cites("CRR Art. 193")
+@cites("PS1/26, paragraph 166C")
+@cites("PS1/26, paragraph 166D")
+@cites("PS1/26, paragraph 193")
+def restore_own_irb_exposure_value(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Run the IRB formulas of a cross-approach CCF leg on its own exposure value.
+
+    The CRM stage re-values the covered part of an F-IRB / A-IRB leg at the SA
+    conversion factor as soon as its guarantor routes to risk-weight
+    substitution (``engine/crm/guarantees.py::_apply_cross_approach_ccf``), but
+    whether the guarantee is recognised is only decided in
+    :func:`apply_guarantee_substitution`. A guarantee that is not recognised
+    leaves the exposure value of an IRB exposure with no protection — CRR
+    Art. 166(8)-(10) (Art. 193(3) "may amend"; not amending changes nothing) /
+    PS1/26 Art. 166A-166D (Art. 193(2A): a disregarded item of protection) —
+    and the double-default RWEA is "RW · exposure value · (0.15 + 160 · PD_pp)"
+    (CRR Art. 153(3)) on that same value.
+
+    So ``ead_final`` takes ``CROSS_APPROACH_CCF_OWN_EAD_COL`` wherever the CRM
+    stage swapped, and the formulas run on it. That value is always positive on
+    a swapped leg (the CRM stage swaps only a leg with a positive covered amount,
+    which is part of it); the ``> 0`` guard is defensive, keeping the formulas
+    off a zero basis on a hand-built frame.
+
+    This step decides no result on its own: :func:`apply_guarantee_substitution`
+    puts every swapped leg on its final value — the own one, or the SA-factor
+    one where the guarantee ends SA risk-weight substituted — by rescaling the
+    IRB amounts from whatever value they were computed on (all linear in
+    ``ead_final``), so a chain that skips this step settles to the same figures.
+    Running it first means the main population, a declined guarantee, needs no
+    rescale at all. ``IRBCalculator`` runs it immediately before
+    :func:`~rwa_calc.engine.irb.transforms.apply_all_formulas`. An absent
+    carrier (a frame that never passed the CRM guarantee step) or a null one
+    (no swap on that row) leaves ``ead_final`` untouched.
+
+    References:
+        CRR Art. 166(8)-(10), 193(1)/(3), 153(3); PS1/26 Art. 166C, 166D,
+        193(2A) (P1.398)
+    """
+    # A selector, so a frame without the carrier needs no schema probe: it then
+    # selects nothing and the coalesce falls through to the typed null.
+    own_ead = pl.coalesce(
+        cs.by_name(CROSS_APPROACH_CCF_OWN_EAD_COL, require_all=False),
+        pl.lit(None, dtype=pl.Float64),
+    )
+    return lf.with_columns(
+        pl.when(own_ead > 0).then(own_ead).otherwise(pl.col("ead_final")).alias("ead_final")
+    )
+
+
 # =============================================================================
 # PRIVATE HELPERS
 # =============================================================================
+
+
+@cites("CRR Art. 153(3)")
+@cites("CRR Art. 166")
+@cites("CRR Art. 236")
+def _settle_cross_approach_ccf(lf: pl.LazyFrame, *, present: set[str]) -> pl.LazyFrame:
+    """Keep the SA conversion factor only on a leg that stays SA-substituted.
+
+    A swapped leg (``CROSS_APPROACH_CCF_OWN_EAD_COL`` not null) has two values:
+    its OWN IRB exposure value (the carrier) and its CRM-exit value on the SA
+    factor (``_SA_CCF_EAD_COL``, captured before ``redistribute_non_beneficial``).
+    Its final value depends on the outcome:
+
+    - **Kept** — SA risk-weight substituted (beneficial, neither parameter-
+      substituted nor double default): the SA-factor value, the basis of the
+      covered part under that method. Portions and CCF carriers stay as the CRM
+      stage left them.
+    - **Reverted** — declined, or double default (Art. 153(3) prices the IRB
+      exposure value): the own value. ``ccf_guaranteed`` returns to
+      ``ccf_original`` so the reported CCF and the exposure value agree;
+      ``ead_from_ccf`` moves by exactly the exposure-value move;
+      ``ead_after_guarantee`` (an output carrier no template reads), where the
+      frame has it, takes the own value, since no substitution happened.
+
+    THE IRB AMOUNTS ARE RESCALED FROM WHATEVER VALUE THEY WERE COMPUTED ON. Every
+    amount the formulas, the defaulted treatment and the post-model adjustments
+    derive from ``ead_final`` — and the pre-substitution copies taken from them —
+    is LINEAR in it, so each is multiplied by ``final value / ead_final on
+    entry``. That makes the outcome independent of whether
+    :func:`restore_own_irb_exposure_value` ran before the formulas (the
+    ``IRBCalculator`` chain, where entry is the own value) or not (a composition
+    that skipped it, where entry is the CRM-exit value): either way a leg leaves
+    with the amounts it would have had with no swap at all, to floating-point
+    rounding. A rescale cannot repair amounts computed on a ZERO ``ead_final``
+    whose final value is not zero, so such a leg is left exactly as it reached
+    this function. No frame from the CRM stage produces one — the restore puts
+    the positive own value on every swapped leg, and the CRM-exit value of a
+    swapped leg is positive too (a 0% SA factor leaves its exposure value on the
+    own one: ``_apply_cross_approach_ccf`` re-reads the covered amount it has just
+    zeroed) — so the guard is for a hand-built frame.
+
+    THE PORTIONS OF A REVERTED LEG. ``guarantee_ratio`` is the leg's pre-swap
+    covered share (``_apply_cross_approach_ccf``), so its own covered and
+    uncovered amounts are ``own x ratio`` and ``own x (1 - ratio)`` — not the
+    CRM-exit portions times ``own / SA``, which is wrong wherever the uncovered
+    part never left the own factor. ``redistribute_non_beneficial`` has already
+    run on the CRM-exit amounts, and the two things it can have done are kept
+    apart:
+
+    - a row it ZEROED (a non-beneficial guarantor in a group with a beneficial
+      one) keeps its zero portions: its cover was handed to another row;
+    - a row it FILLED (a double-default row in such a group) keeps the absorbed
+      amount UNSCALED — it is another row's cover, not this row's — and only up
+      to the protection still unused on the own basis,
+      ``original_guarantee_amount - own x ratio``: the covered portion never
+      exceeds the protection amount GA (CRR Art. 236(1)/(3)). Without that bound
+      the absorbed amount, measured against headroom on the SA basis, could
+      take the row past GA.
+
+    ``ead_after_collateral`` is then ``guaranteed + unguaranteed`` on the row,
+    as ``redistribute_non_beneficial`` sets it for a guarantor row, and the
+    double-default protection amount (C 08.01 col 0220, set from the
+    pre-redistribution cover) becomes the own covered amount. So
+    ``guaranteed_portion + unguaranteed_portion == ead_final`` holds on a
+    reverted leg redistribution did not touch, and does NOT hold on one it did:
+    a zeroed row keeps its whole own ``ead_final`` and RWEA with zero portions,
+    and a filled row's covered portion includes cover from its co-guarantor's
+    exposure. Both are ``redistribute_non_beneficial``'s own behaviour (its
+    headroom compares the CCF = 100% ``original_guarantee_amount`` with a
+    post-CCF ``guaranteed_portion``), present before P1.398 and left as it is.
+
+    Runs after ``redistribute_non_beneficial`` and before the RWA blend reads
+    ``guaranteed_portion`` and ``ead_final``. ``present`` is the frame's column
+    set, which names the amounts to rescale.
+    """
+    ead_linear = (
+        "rwa",
+        "expected_loss",
+        "rwa_irb_original",
+        "pre_crm_rwa",
+        "expected_loss_irb_original",
+        "rwa_pre_adjustments",
+        "post_model_adjustment_rwa",
+        "mortgage_rw_floor_adjustment",
+        "unrecognised_exposure_adjustment",
+        "el_pre_adjustment",
+        "post_model_adjustment_el",
+        "el_after_adjustment",
+    )
+    own_ead = pl.col(CROSS_APPROACH_CCF_OWN_EAD_COL).clip(lower_bound=0.0)
+    sa_ead = pl.col(_SA_CCF_EAD_COL).clip(lower_bound=0.0)
+    entry_ead = pl.col("ead_final")
+    swapped = pl.col(CROSS_APPROACH_CCF_OWN_EAD_COL).is_not_null()
+    kept = (
+        swapped
+        & pl.col("is_guarantee_beneficial")
+        & ~pl.col("_is_pd_substitution")
+        & ~pl.col("_is_dd_applied")
+    )
+    final_ead = pl.when(kept).then(sa_ead).otherwise(own_ead)
+    stranded = (entry_ead <= 0) & (final_ead > 0)
+    settles = swapped & ~stranded
+    reverted = settles & ~kept
+    scale = pl.when(entry_ead > 0).then(final_ead / entry_ead).otherwise(pl.lit(1.0))
+
+    # The reverted leg's own portions, kept apart from what redistribution did.
+    ratio = pl.col("guarantee_ratio")
+    own_covered = own_ead * ratio
+    covered_before = pl.col(_SA_CCF_COVERED_COL)
+    covered_after = pl.col("guaranteed_portion")
+    zeroed = covered_after < covered_before
+    # ``original_guarantee_amount`` is written by the same CRM guarantee step as
+    # the carrier, on every row it emits (``_apply_guarantee_splits``).
+    unused_protection = (pl.col("original_guarantee_amount") - own_covered).clip(lower_bound=0.0)
+    absorbed = pl.min_horizontal(
+        (covered_after - covered_before).clip(lower_bound=0.0), unused_protection
+    )
+    reverted_covered = pl.when(zeroed).then(covered_after).otherwise(own_covered + absorbed)
+    reverted_uncovered = (
+        pl.when(zeroed).then(pl.col("unguaranteed_portion")).otherwise(own_ead * (1.0 - ratio))
+    )
+
+    def _on_reverted(name: str, value: pl.Expr) -> pl.Expr:
+        return pl.when(reverted).then(value).otherwise(pl.col(name)).alias(name)
+
+    settled = [
+        _on_reverted("guaranteed_portion", reverted_covered),
+        _on_reverted("unguaranteed_portion", reverted_uncovered),
+        _on_reverted("ead_after_collateral", reverted_covered + reverted_uncovered),
+        _on_reverted("ead_from_ccf", pl.col("ead_from_ccf") + own_ead - sa_ead),
+        _on_reverted("ccf_guaranteed", pl.col("ccf_original")),
+        # C 08.01 col 0220: always present (``_apply_double_default`` writes it on
+        # both of its branches), non-zero only where double default is eligible.
+        _on_reverted(
+            "double_default_unfunded_protection",
+            pl.when(pl.col("double_default_unfunded_protection") > 0)
+            .then(own_covered)
+            .otherwise(pl.col("double_default_unfunded_protection")),
+        ),
+        pl.when(settles).then(final_ead).otherwise(pl.col("ead_final")).alias("ead_final"),
+        # Written by the CRM stage's ``_finalize_ead`` only, so absent from a frame
+        # taken straight from ``apply_guarantees``: the selector then expands to
+        # nothing. The selector sits in ``then`` so the output keeps its name.
+        pl.when(~reverted)
+        .then(cs.by_name("ead_after_guarantee", require_all=False))
+        .otherwise(own_ead),
+    ]
+    settled.extend(
+        pl.when(settles).then(pl.col(name) * scale).otherwise(pl.col(name)).alias(name)
+        for name in ead_linear
+        if name in present
+    )
+    return lf.with_columns(settled).drop(_SA_CCF_EAD_COL, _SA_CCF_COVERED_COL)
 
 
 @cites("CRR Art. 122")

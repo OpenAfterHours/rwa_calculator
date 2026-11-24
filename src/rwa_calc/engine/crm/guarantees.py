@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.contracts.edges import CROSS_APPROACH_CCF_OWN_EAD_COL
 from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import COUNTERPARTY_SCHEMA, DIRECT_BENEFICIARY_TYPES
 from rwa_calc.domain.enums import ApproachType
@@ -758,6 +759,17 @@ def _apply_cross_approach_ccf(
     otherwise. Before, the CRR table was used in both regimes, so a Basel 3.1
     F-IRB unconditionally cancellable line took 0% on its guaranteed part.
 
+    THE SWAP IS PROVISIONAL. Whether the guarantee is recognised is decided
+    later, in the IRB stage, so the leg's own IRB exposure value before the
+    swap is kept on ``CROSS_APPROACH_CCF_OWN_EAD_COL`` (null where no swap
+    happened). ``engine/irb/guarantee.py`` settles the leg back on it wherever
+    the guarantee is not finally SA risk-weight substituted: a declined guarantee is not
+    recognised, so the exposure keeps the IRB exposure value of CRR
+    Art. 166(8)-(10) / PS1/26 Art. 166A-166D (CRR Art. 193(1)/(3), PS1/26
+    Art. 193(2A)), and double default is priced on that value too (CRR
+    Art. 153(3)). The CRM-exit ``ead_final`` keeps the swapped value, which
+    is the Art. 111 basis the SA-equivalent for the output floor reads (P1.398).
+
     Returns:
         Exposures with CCF-adjusted guaranteed/unguaranteed portions
     """
@@ -791,6 +803,10 @@ def _apply_cross_approach_ccf(
             )
             .otherwise(pl.lit(0.0))
             .alias("guarantee_ratio"),
+            pl.when(needs_ccf_sub)
+            .then(pl.col("ead_after_collateral"))
+            .otherwise(pl.lit(None, dtype=pl.Float64))
+            .alias(CROSS_APPROACH_CCF_OWN_EAD_COL),
             pl.col("ccf").alias("ccf_original"),
             pl.when(needs_ccf_sub).then(sa_ccf).otherwise(pl.col("ccf")).alias("ccf_guaranteed"),
             pl.col("ccf").alias("ccf_unguaranteed"),

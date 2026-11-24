@@ -43,6 +43,7 @@ from rwa_calc.engine.irb.transforms import (
     classify_approach,
     compute_el_shortfall_excess,
     prepare_columns,
+    restore_own_irb_exposure_value,
 )
 from rwa_calc.engine.supporting_factors import SupportingFactorCalculator
 from rwa_calc.rulebook import RulepackV0
@@ -114,6 +115,12 @@ class IRBCalculator:
             exposures.pipe(classify_approach, config)
             .pipe(apply_firb_lgd, config, pack=resolved_pack)
             .pipe(prepare_columns, config, pack=resolved_pack)
+            # A declined (or double-default) guarantee leaves the leg on its own
+            # IRB exposure value, so the formulas run on it wherever it is
+            # positive; apply_guarantee_substitution then settles every swapped
+            # leg on its final value, handing the SA conversion factor back only
+            # where the guarantee ends SA risk-weight substituted (P1.398).
+            .pipe(restore_own_irb_exposure_value)
             .pipe(apply_all_formulas, config, pack=resolved_pack)
             .pipe(apply_post_model_adjustments, config, pack=resolved_pack)
             .pipe(apply_guarantee_substitution, config, pack=resolved_pack)

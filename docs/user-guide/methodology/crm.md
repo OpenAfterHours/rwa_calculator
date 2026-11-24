@@ -701,6 +701,22 @@ ead_guaranteed = guarantee_ratio × (drawn + undrawn × ccf_sa)
 ead_unguaranteed = (1 - guarantee_ratio) × (drawn + undrawn × ccf_irb)
 ```
 
+### Only When the Guarantee Is Recognised
+
+The split above is provisional. The IRB stage decides afterwards whether the guarantee
+is recognised (the guarantor's risk weight must be below the borrower's IRB risk
+weight). If it is **declined** — or double default applies (CRR only) — the covered
+leg goes back to the borrower's own IRB exposure value, `drawn + undrawn × ccf_irb`
+(or the A-IRB own EAD), and its RWEA and expected loss are computed on that value.
+Only a guarantee that ends as SA risk-weight substitution keeps the SA conversion
+factor on its covered part, and that leg is unchanged by the check (CRR Art. 166(8)-(10)
+and 193; PS1/26 Art. 166A-166D and 193(2A)).
+
+For example, an F-IRB loan of 500,000 drawn under an 800,000 commitment, 60%
+guaranteed by a CQS 3 corporate whose 100% weight is above the borrower's IRB weight,
+keeps an exposure value of 500,000 + 75% × 300,000 = 725,000 under CRR — not the
+680,000 the provisional split gives.
+
 ### Output Columns
 
 The cross-approach CCF process adds these columns:
@@ -708,11 +724,12 @@ The cross-approach CCF process adds these columns:
 | Column | Description |
 |--------|-------------|
 | `ccf_original` | Original IRB CCF |
-| `ccf_guaranteed` | CCF for guaranteed portion (SA if cross-approach) |
+| `ccf_guaranteed` | CCF for guaranteed portion (SA if cross-approach; back to `ccf_original` on a declined or double-default leg) |
 | `ccf_unguaranteed` | CCF for unguaranteed portion (IRB) |
 | `guarantee_ratio` | Proportion guaranteed |
 | `guarantor_approach` | "sa" or "irb" |
 | `guarantor_rating_type` | "internal" or "external" |
+| `ead_pre_cross_approach_ccf` | CRM exit only: the covered leg's own IRB exposure value before the split (null where no split) |
 
 ### Regulatory Reference
 

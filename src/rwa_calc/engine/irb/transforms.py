@@ -22,6 +22,7 @@ Usage:
         apply_firb_lgd,
         classify_approach,
         prepare_columns,
+        restore_own_irb_exposure_value,
     )
 
     config = CalculationConfig.crr(reporting_date=date(2024, 12, 31))
@@ -29,6 +30,7 @@ Usage:
         lf.pipe(classify_approach, config)
         .pipe(apply_firb_lgd, config)
         .pipe(prepare_columns, config)
+        .pipe(restore_own_irb_exposure_value)  # P1.398: before the formulas
         .pipe(apply_all_formulas, config)
     )
 
@@ -72,6 +74,9 @@ from rwa_calc.engine.irb.formulas import (
 )
 from rwa_calc.engine.irb.guarantee import (
     apply_guarantee_substitution as _apply_guarantee_substitution,  # noqa: E501
+)
+from rwa_calc.engine.irb.guarantee import (
+    restore_own_irb_exposure_value as _restore_own_irb_exposure_value,
 )
 from rwa_calc.engine.thresholds import regulatory_threshold
 from rwa_calc.engine.utils import (
@@ -664,6 +669,19 @@ def apply_guarantee_substitution(
     Delegates to ``guarantee.apply_guarantee_substitution``.
     """
     return _apply_guarantee_substitution(lf, config, pack=pack)
+
+
+def restore_own_irb_exposure_value(lf: pl.LazyFrame) -> pl.LazyFrame:
+    """Run a cross-approach CCF leg's IRB formulas on its own exposure value (P1.398).
+
+    Runs before :func:`apply_all_formulas`. :func:`apply_guarantee_substitution`
+    settles every swapped leg on its final value (the own one, or the SA-factor
+    one where the guarantee ends SA risk-weight substituted) by rescaling from
+    whichever value the formulas ran on; this step keeps that value non-zero
+    wherever the own one is. Delegates to
+    ``guarantee.restore_own_irb_exposure_value``.
+    """
+    return _restore_own_irb_exposure_value(lf)
 
 
 # =============================================================================

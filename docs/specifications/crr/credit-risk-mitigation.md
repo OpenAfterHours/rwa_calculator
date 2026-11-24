@@ -907,10 +907,83 @@ ead_guaranteed = guarantee_ratio × (drawn + undrawn × ccf_sa)
 ead_unguaranteed = (1 - guarantee_ratio) × (drawn + undrawn × ccf_irb)
 ```
 
+### Only a Recognised Guarantee Keeps the SA Factor (P1.398)
+
+The CRM stage makes the split as soon as the guarantor routes to SA, but whether the
+guarantee is **recognised** is decided later, in the IRB stage (the RW-only benefit
+test of Art. 193). A guarantee the IRB stage declines is not recognised, so the leg
+keeps the exposure value of an IRB exposure with no protection: CRR Art. 166(8)-(10)
+(Art. 193(3) "may amend"; not amending changes nothing) and PS1/26 Art. 166A-166D
+(Art. 193(2A): an item of protection the firm disregards). Double default is priced
+on that same value — CRR Art. 153(3): "RW · exposure value · (0.15 + 160 · PD_pp)".
+
+So the swap is provisional:
+
+| Final treatment of the covered part | Exposure value of the covered leg |
+|---|---|
+| SA risk-weight substitution (`guarantee_status = SA_RW_SUBSTITUTION`) | SA factor: `drawn + undrawn × ccf_sa` (as above) |
+| Declined (`GUARANTEE_NOT_APPLIED_NON_BENEFICIAL`) | own IRB value: `drawn + undrawn × ccf_irb` (or the A-IRB own EAD) |
+| Double default (`DOUBLE_DEFAULT`, CRR only) | own IRB value |
+
+The CRM stage keeps the leg's pre-swap value on `ead_pre_cross_approach_ccf` (null where
+it did not swap). After the benefit decision, `engine/irb/guarantee.py::
+_settle_cross_approach_ccf` puts every swapped leg on its final value:
+
+- a leg that ends SA risk-weight substituted takes its CRM-exit value on the SA factor;
+  its portions and CCF carriers stay as the CRM stage left them;
+- every other swapped leg (declined, or double default) takes the own value:
+  `guaranteed_portion` and `unguaranteed_portion` become `own × guarantee_ratio` and
+  `own × (1 − guarantee_ratio)` (the pre-swap covered share), `ead_after_collateral`
+  their sum, `double_default_unfunded_protection` (C 08.01 col 0220) the own covered
+  amount, and `ccf_guaranteed` returns to `ccf_original`, so C 08.01 / OF 08.01
+  column 0110 reports the Art. 166 / 166A-166D value and a declined leg books no
+  substitution outflow (cols 0040 / 0070).
+
+Every IRB amount derived from `ead_final` — RWEA, EL, the post-model adjustments and the
+pre-substitution copies `rwa_irb_original`, `pre_crm_rwa`, `expected_loss_irb_original`
+— is linear in it, so the settle step rescales each by `final value / ead_final as the
+formulas saw it`. The result therefore does not depend on which value the formulas ran
+on: the IRB calculator runs them on the own value (`restore_own_irb_exposure_value`,
+before `apply_all_formulas`), so a declined leg needs no rescale, and a caller composing
+the transforms without that step settles to the same figures. The one leg a rescale
+cannot repair — amounts computed on a zero `ead_final` with a non-zero final value — is
+left as it reached the settle step; no CRM-stage frame produces one. A leg that ends SA
+risk-weight substituted carries the same figures as before P1.398, to floating-point
+rounding.
+
+Multi-guarantor groups. `redistribute_non_beneficial` runs before the settle step, on
+the CRM-exit amounts. A reverted row it zeroed (its cover handed to a beneficial
+co-guarantor) keeps zero portions. A reverted row it filled (a double-default row) keeps
+the absorbed cover unscaled — it is the co-guarantor's cover, not this row's — and only
+up to the protection still unused on the own basis, so its covered portion never
+exceeds the protection amount `original_guarantee_amount` (CRR Art. 236(1)/(3)). On
+those redistributed rows `guaranteed_portion + unguaranteed_portion` does not equal
+`ead_final`. That is not new with P1.398: `redistribute_non_beneficial` compares the
+CCF = 100% `original_guarantee_amount` with a post-CCF `guaranteed_portion`, so any leg
+with a conversion factor below 100% shows headroom its guarantor does not have, and the
+row it takes cover from keeps its whole RWEA. That is an open residual, not handled
+here.
+
+Measured direction: CRR F-IRB commitments rise (Art. 166(8)(d) 75% against SA
+50/20/0%); a CRR short-term trade letter of credit booked medium-risk issued falls
+(Art. 166(8)(b) 20% against the SA 50%); A-IRB own estimates — an own conversion
+factor (CRR Art. 166(8), PS1/26 Art. 166D(1)(a)) or a Basel 3.1 own estimate of EAD
+(Art. 166D(3)) — move either way. A Basel 3.1 F-IRB leg on the plain Table A1 factor
+does not move (Art. 166C(1) makes the F-IRB factor the SA one); one whose F-IRB factor
+carries an engine override the swap's raw Table A1 lookup omits (Row 4(b) UK
+residential commitments, the Art. 111(1)(c) lower-of, Art. 166A(5) purchased
+receivables) can, and is not measured here. The SA-equivalent for the Basel 3.1
+output floor (`sa_rwa`) is computed by the
+SA calculator before the IRB stage runs, on the CRM-exit value — on a swapped covered
+leg that is the Art. 111 basis — and is not changed; the floor threshold moves only
+through OF-ADJ, because the IRB expected loss moves.
+
 ### Output Fields
 
 - `ccf_original`, `ccf_guaranteed`, `ccf_unguaranteed`
 - `guarantee_ratio`, `guarantor_approach`, `guarantor_rating_type`
+- `ead_pre_cross_approach_ccf` (CRM exit only): the covered leg's own IRB exposure
+  value before the swap; null where no swap was made
 
 ## Provision Resolution (Before CRM)
 

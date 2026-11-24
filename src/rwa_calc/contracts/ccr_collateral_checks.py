@@ -16,7 +16,10 @@ Key responsibilities:
   values of the same CSA term; the conservative value is applied
   (``engine/ccr/margin_terms.py``).
 - CCR026 (ERROR) — an amount with no spot rate to the reporting currency is used
-  unconverted (``engine/ccr/reporting_currency.py``).
+  unconverted (``engine/ccr/reporting_currency.py``); for an FX trade's second
+  payment leg, the leg's notional enters the Art. 279b(1)(b) adjusted notional
+  unconverted, the larger of the two legs is taken and the trade is its own FX
+  hedging set (P1.406).
 - Follow the input gate's sampling contract: up to ``sample_cap`` row-named
   errors per (code, table / term / reason), then one summary carrying the
   truthful count of the rows it omits.
@@ -219,6 +222,53 @@ def reporting_currency_errors(
                 citation,
             )
         )
+    return errors
+
+
+def fx_leg_currency_errors(findings: pl.DataFrame, sample_cap: int = 5) -> list[CalculationError]:
+    """CCR026 — an FX trade's second payment leg with no rate to the reporting currency.
+
+    Args:
+        findings: Collected
+            ``engine/ccr/reporting_currency.py::fx_leg_currency_findings``.
+        sample_cap: Maximum row-named errors.
+
+    Returns:
+        The errors: up to ``sample_cap`` row-named, then one summary.
+    """
+    citation = "CCR (CRR) Part Art. 279b(1)(b), 279b(3)"
+    errors = [
+        CalculationError(
+            code=ERROR_CCR_NO_REPORTING_CURRENCY_RATE,
+            message=(
+                f"[ccr.trades] FX trade '{row['record_id']}' (netting set "
+                f"'{row['netting_set_id']}'): its second payment leg is denominated in "
+                f"{_shown(row['currency'])}, which has no fx_rates row to the reporting "
+                "currency; the leg's notional enters the Art. 279b(1)(b) adjusted "
+                "notional unconverted and the largest of the two legs' notionals is "
+                "taken, so the add-on is not at spot; the trade is its own FX hedging "
+                "set, offsetting none of the pair's other trades."
+            ),
+            severity=ErrorSeverity.ERROR,
+            category=ErrorCategory.DATA_QUALITY,
+            regulatory_reference=citation,
+            field_name="currency_leg2",
+            expected_value="a currency with an fx_rates row to the reporting currency",
+            actual_value=_shown(row["currency"]),
+        )
+        for row in findings.head(sample_cap).iter_rows(named=True)
+    ]
+    errors.extend(
+        _summary(
+            ERROR_CCR_NO_REPORTING_CURRENCY_RATE,
+            "ccr.trades",
+            "currency_leg2",
+            findings.height,
+            sample_cap,
+            ErrorSeverity.ERROR,
+            citation,
+        )
+    )
     return errors
 
 

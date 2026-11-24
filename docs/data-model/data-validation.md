@@ -199,6 +199,44 @@ the engine, so `"Interest_Rate"` or `"ig"` is recognised and raises nothing.
 | `CCR022` | Credit trade with `credit_quality` null or outside `IG` / `HY` / `NON_RATED`; commodity trade with `commodity_type` null or outside the five buckets (Art. 277a(1)(c)/(e), Art. 280) | Highest factor of the table: single-name `NON_RATED` (6%), index `HY` (1.06%), commodity `ELECTRICITY` (40%) |
 | `CCR023` | `netting_set_id` names no row in `ccr.netting_sets` | Priced as its own non-enforceable netting set with no counterparty (unrated fallback weight, α 1.4; Art. 274(1)). An entity-scoped run (reporting entity set) keeps trades only through their netting set's booking, so it excludes the trade |
 
+The same gate raises **CCR035** (WARNING, one row-named entry per trade up to
+five, then a summary): an `equity` or `commodity` derivative trade (matched as
+above) whose `market_price` or `number_of_units` is null. Without the product
+of the two, the trade is read as "contractually expressed as a notional amount"
+and its `|notional|` is the adjusted notional — CCR (CRR) Part
+Art. 279b(1)(c)'s own second limb, so a warning rather than an error: the engine
+cannot see the contract's form. Before P1.406 the null product left the trade
+out of the equity / commodity add-on with no finding
+(`contracts/ccr_input_checks.py::ccr_notional_limb_findings`). Being the rule's
+value, the notional nets like any other: where it offsets a trade in its hedging
+set the netting set's add-on falls. Where that notional is 0 or null too, neither
+limb gives the trade an adjusted notional and it adds nothing to its add-on; the
+gate then raises **CCR038** (ERROR, same sampling) in place of CCR035 — the
+common shape is a unit-priced trade's 0.0 placeholder notional with
+`number_of_units` or `market_price` missing.
+
+It also reports an `fx` derivative trade (matched as above) whose
+`notional_leg2` is null and whose value is not the rule's, one row-named entry
+per trade up to five per code, then a summary
+(`contracts/ccr_input_checks.py::ccr_fx_second_leg_findings`). The engine takes
+the trade's first-leg notional (at spot) as its Art. 279b(1)(b) adjusted
+notional and, for a reported trade, makes it its own FX hedging set
+(Art. 277a(1)(b)), so it offsets none of the netting set's other FX trades. A
+trade whose stated `currency_leg2` is the reporting currency (and whose
+`currency` is not) is not reported: rule (ii) takes "the notional amount of the
+other payment leg", the first leg at spot, so the missing notional is never
+needed and the trade nets in its pair.
+
+| Code | Severity | Trigger | Reading |
+|------|----------|---------|---------|
+| `CCR036` | WARNING | `notional_leg2` and `currency_leg2` both null | A transaction of one payment leg, whose adjusted notional is the contract notional (rule (i)); a warning because the engine cannot see the contract's form, and with no second currency the trade states no pair to share |
+| `CCR037` | ERROR | `currency_leg2` stated and not the reporting currency (or both legs in it), `notional_leg2` null | The input names a second payment leg whose notional rule (ii) / (iii) needs and is unknown; the first leg's notional stands in for it as an estimate. Reads `CalculationConfig.base_currency`, so it is raised by the configured pipeline-entry call only (as DQ020) |
+
+Before P1.406 such a trade priced at zero when its first leg was in the
+reporting currency, and otherwise netted in the pair's hedging set, with no
+finding; read as one payment leg in the pair's hedging set it could offset a
+real forward on the pair to zero.
+
 #### SA-CCR collateral, CSA terms and reporting currency — CCR024 / CCR025 / CCR026
 
 Raised by the `ccr_sa_ccr` and `sft_fccm` stages rather than the input gate,
@@ -212,7 +250,8 @@ then a summary carrying the omitted count, category `DATA_QUALITY`.
 |------|----------|---------|------------------|
 | `CCR024` | WARNING | A `ccr.ccr_collateral` item that is not Art. 197 eligible financial collateral (non-financial type, debt security below the Art. 197(1)(b)/(d) credit quality, equity without `is_main_index`, credit-linked note), or one pledged against a non-enforceable netting set holding several trades (CCR (CRR) Part Art. 276(1)(a)/(b), Art. 274(1)) | Left out of VM and NICA: no relief if received, no exposure if posted. A single-trade non-enforceable set's collateral follows its synthetic netting set |
 | `CCR025` | WARNING | A netting set and the margin agreement it names both state `margin_threshold`, `minimum_transfer_amount`, `nica` or `mpor_days`, with different values (Art. 275(2), Art. 285) | The conservative value: the larger TH / MTA / MPOR, the smaller signed NICA |
-| `CCR026` | ERROR | A CCR trade, CCR collateral item, SFT or SFT collateral item whose `currency` is null or has no `fx_rates` row to the reporting currency (Art. 279b(3), Art. 275; CRR Art. 223(5)) | Amounts used unconverted (the FXConverter's own treatment of a missing rate); the netting set's exposure value is not in the reporting currency |
+| `CCR026` | ERROR | A CCR trade, CCR collateral item, SFT or SFT collateral item whose `currency` is null or has no `fx_rates` row (with a non-null rate) to the reporting currency (Art. 279b(3), Art. 275; CRR Art. 223(5)) | Amounts used unconverted (the FXConverter's own treatment of a missing rate); the netting set's exposure value is not in the reporting currency |
+| `CCR026` | ERROR | An FX trade with a second payment leg whose `currency_leg2` is null or has no rate (field `currency_leg2`; Art. 279b(1)(b), 279b(3)) | The leg enters the Art. 279b(1)(b) adjusted notional unconverted and the larger of the two legs is taken, so the missing rate does not leave the trade's adjusted notional null (before P1.406 it did, and the trade added nothing to the FX add-on, with no finding). The trade is then its own FX hedging set, so the estimate offsets none of the pair's other trades |
 
 A collateral item naming no netting set at all is the `ccr.ccr_collateral`
 foreign key's `DQ005` (below), not `CCR024`.

@@ -453,6 +453,27 @@ is **39 passed**.
   and the `BASEL_3_1-low_lgd` direction. That is the only cell whose direction
   the LGD floor decides — under CRR the same owner's demotion RAISES RWA.
 
+## The SA-CCR notional-limb set
+
+Written for P1.406 (2026-11-24): the Art. 279b(1)(c) notional limb an equity or
+commodity trade with no market price x units is priced on. The design chain
+cited the other-risks shape `|notional| x max(1, SD(S, E))` as precedent, and at
+one year `SD` is about 0.93, so that shape equals `|notional|` on every 1-year
+guard. Baseline for the 44 guards below (`tests/unit/ccr/test_adjusted_notional_{equity,commodity}.py`,
+`tests/unit/ccr/test_p1_406_notional_limb_gate.py` and the five notional-limb
+functions of `tests/acceptance/ccr/test_p1_406_incomplete_notional_inputs.py`)
+is **44 passed**.
+
+| plugin | what it changes | red / green | reddens |
+|---|---|---|---|
+| `mutate_notional_limb_scaled_by_duration` | `notional` scaled by `max(1, SD)` on rows with no price x units, before the original equity / commodity functions run | **6 / 38** | the two 5-year tests only, each regime on its own: notional-only equity 98,190,203.84 against 22,400,000, commodity 11,046,397.93 against 2,520,000, and the hedged book EAD **0.00** against 75,790,203.84 (CRR) — capital understated in full |
+
+- **The green 38 are blind by construction, not by accident.** The unit tests
+  call the functions with no `years_to_maturity` (the mutant's `SD` is null, so
+  `max(1, null) = 1`), and every acceptance guard before the 5-year tests used a
+  1-year trade. The plugin prints how many dated frames it changed (36 on this
+  set) and fails the session at zero.
+
 ## Writing another
 
 Five rules, all learned the expensive way in the batch that produced these:

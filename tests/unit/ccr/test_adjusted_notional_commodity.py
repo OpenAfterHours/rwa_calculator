@@ -179,6 +179,53 @@ def test_returns_lazyframe() -> None:
 
 
 # ===========================================================================
+# 4b. No market price x units -> the contractual notional (Art. 279b(1)(c))
+# ===========================================================================
+
+
+@pytest.mark.parametrize(
+    ("market_price", "number_of_units"),
+    [(None, 20_000.0), (50.0, None), (None, None)],
+)
+def test_commodity_without_price_times_units_takes_the_notional(
+    market_price: float | None, number_of_units: float | None
+) -> None:
+    """A trade expressed as a notional amount: d = |notional| (reported CCR035).
+
+    Before P1.406 the product's null priced the commodity add-on at zero.
+    """
+    from rwa_calc.engine.ccr.adjusted_notional import compute_adjusted_notional_commodity
+
+    # Arrange
+    trades = pl.LazyFrame(
+        {
+            "trade_id": ["T_CO_001"],
+            "asset_class": ["commodity"],
+            "notional": [-3_000_000.0],
+            "currency": ["GBP"],
+            "market_price": [market_price],
+            "number_of_units": [number_of_units],
+            "commodity_type": ["OIL_GAS"],
+        },
+        schema={
+            "trade_id": pl.String,
+            "asset_class": pl.String,
+            "notional": pl.Float64,
+            "currency": pl.String,
+            "market_price": pl.Float64,
+            "number_of_units": pl.Float64,
+            "commodity_type": pl.String,
+        },
+    )
+
+    # Act
+    result = compute_adjusted_notional_commodity(trades).collect()
+
+    # Assert
+    assert result["adjusted_notional"][0] == pytest.approx(3_000_000.0, rel=1e-12)
+
+
+# ===========================================================================
 # 5. Coalesce-safe: prior IR/FX adjusted_notional must be preserved
 # ===========================================================================
 

@@ -537,7 +537,9 @@ def _new_input_domain_errors(
     loader path the only survivors are therefore errors the loader could NOT
     have produced: the configuration-dependent checks, which only this call
     can run (the loader has no ``CalculationConfig``) — today DQ020, a
-    currency with no FX rate into ``config.base_currency``. The scrub between
+    currency with no FX rate into ``config.base_currency``, and CCR037, an FX
+    second leg whose missing notional the rule needs (one in
+    ``config.base_currency`` does not). The scrub between
     the two calls (``scrub_non_finite_values``) can only remove errors.
 
     Never raises: a validator defect must not stop a run, exactly as in

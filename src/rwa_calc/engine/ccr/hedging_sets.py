@@ -20,7 +20,13 @@ Key responsibilities:
                  — one per (currency, maturity bucket).
     * FX:        ``"FX-<netting_set_id>-<pair>"`` where ``<pair>`` is the
                  order-independent ``min(currency, currency_leg2)/max(...)`` —
-                 one hedging set per currency pair (Art. 277(3)(a)).
+                 one hedging set per currency pair (Art. 277(3)(a)). A trade
+                 flagged ``fx_own_hedging_set`` (a leg with no spot rate, or a
+                 missing second-leg notional the rule needs, so its adjusted
+                 notional is an estimate, or no second leg, so it states no
+                 pair) is its own hedging set,
+                 ``"FX-<netting_set_id>-<pair>-trade-<trade_id>"``: it
+                 offsets nothing (P1.406).
     * Credit:    ``"CR-<netting_set_id>"``               — Art. 277(2)(c)
     * Equity:    ``"EQ-<netting_set_id>"``               — Art. 277(2)(d)
     * Commodity: ``"CO-<netting_set_id>-<bucket>"``      — Art. 277(3)(b)
@@ -36,6 +42,8 @@ References:
   class per netting set.
 - CRR Art. 277(3)(a) / BCBS CRE52.34: FX hedging set = currency pair, no
   maturity sub-bucketing.
+- CRR Art. 277a(1)(b): FX trades share a hedging set "only where their primary
+  risk driver ... is based on the same currency pair".
 - CRR Art. 277(3)(b) / BCBS CRE52.67: commodity hedging set keyed on
   commodity_type bucket (ELECTRICITY / OIL_GAS / METALS / AGRICULTURAL /
   OTHER).
@@ -48,9 +56,15 @@ import logging
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.column_spec import ColumnSpec, ensure_columns
 from rwa_calc.data.schemas import ASSET_CLASS_SHORT_CODE
+from rwa_calc.engine.ccr.adjusted_notional import FX_OWN_HEDGING_SET
 
 logger = logging.getLogger(__name__)
+
+# Written by compute_adjusted_notional_fx; frames built without that branch (unit
+# tests) read as no unconverted leg.
+_OPTIONAL_COLUMNS = {FX_OWN_HEDGING_SET: ColumnSpec(pl.Boolean, default=False, required=False)}
 
 
 @cites("CRR Art. 277")
@@ -103,21 +117,36 @@ def assign_hedging_set(trades: pl.LazyFrame) -> pl.LazyFrame:
     The hedging-set identifier composes the asset-class short code, the
     netting-set id, the trade currency and the maturity bucket as
     ``"<asset_short>-<netting_set_id>-<currency>-<maturity_bucket>"`` —
-    e.g. ``"IR-NS-IR-01-GBP-GT_5Y"``. Non-IR rows receive a null
-    ``hedging_set_id`` until the corresponding asset-class batch lands.
+    e.g. ``"IR-NS-IR-01-GBP-GT_5Y"``. FX, credit, equity and commodity rows
+    take the keys listed in the module docstring.
+
+    An FX trade flagged ``fx_own_hedging_set`` gets its own hedging set,
+    ``"FX-<netting_set_id>-<pair>-trade-<trade_id>"`` (the pair dropped when no
+    leg has a currency; the ``trade`` token keeps the key off every pair key).
+    Its adjusted notional is an estimate — a leg with no spot rate entered
+    unconverted, or a stated second leg has no notional and the rule needs it
+    (a reporting-currency second leg does not: Art. 279b(1)(b)(ii) takes the
+    first leg, and that trade is not flagged) — or it states no second
+    currency, so no pair (Art. 277a(1)(b)); either way it is kept out of
+    the pair's netting, as a trade with an unknown risk driver is kept out of
+    the other-risks netting (``engine/ccr/risk_categories.py::compute_addon_other``).
+    Netted, the estimate could offset a correctly priced trade and lower the
+    netting set's add-on below its value with complete inputs (P1.406).
 
     Args:
-        trades: LazyFrame with ``asset_class``, ``netting_set_id``,
-            ``currency``, ``years_to_maturity`` columns.
+        trades: LazyFrame with ``trade_id``, ``asset_class``,
+            ``netting_set_id``, ``currency``, ``currency_leg2``,
+            ``years_to_maturity`` columns, and optionally
+            ``fx_own_hedging_set`` (absent reads as False).
 
     Returns:
         The input LazyFrame with new ``maturity_bucket: Utf8`` and
         ``hedging_set_id: Utf8`` columns.
 
     References:
-        CRR Art. 277(1)-(2); BCBS CRE52.30-32.
+        CRR Art. 277(1)-(2); CRR Art. 277a(1)(b); BCBS CRE52.30-32.
     """
-    trades = assign_ir_maturity_bucket(trades)
+    trades = assign_ir_maturity_bucket(ensure_columns(trades, _OPTIONAL_COLUMNS))
 
     # Defensive: upstream stages that pre-date the credit/equity/commodity
     # branches may pass frames without ``commodity_type``. The column is
@@ -157,6 +186,13 @@ def assign_hedging_set(trades: pl.LazyFrame) -> pl.LazyFrame:
         [pl.lit("FX"), pl.col("netting_set_id"), fx_pair],
         separator="-",
     )
+    # A trade priced with an unconverted leg: its own hedging set. ignore_nulls
+    # keeps the trade id in the key when no leg has a currency (pair null).
+    isolated_fx_hs = pl.concat_str(
+        [pl.lit("FX"), pl.col("netting_set_id"), fx_pair, pl.lit("trade"), pl.col("trade_id")],
+        separator="-",
+        ignore_nulls=True,
+    )
 
     credit_hs = pl.concat_str(
         [pl.lit("CR"), pl.col("netting_set_id")],
@@ -177,7 +213,7 @@ def assign_hedging_set(trades: pl.LazyFrame) -> pl.LazyFrame:
         pl.when(pl.col("asset_class") == "interest_rate")
         .then(pl.when(pl.col("maturity_bucket").is_not_null()).then(ir_hs).otherwise(None))
         .when(pl.col("asset_class") == "fx")
-        .then(fx_hs)
+        .then(pl.when(pl.col(FX_OWN_HEDGING_SET)).then(isolated_fx_hs).otherwise(fx_hs))
         .when(pl.col("asset_class") == "credit")
         .then(credit_hs)
         .when(pl.col("asset_class") == "equity")

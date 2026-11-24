@@ -4,7 +4,9 @@ Unit tests for compute_adjusted_notional_equity (P8.36).
 Pins the expected behaviour of the equity adjusted-notional branch per
 CRR Art. 279b(1)(c):
 
-    d = abs(market_price × number_of_units)
+    d = abs(market_price × number_of_units)      when both are supplied
+    d = abs(notional)                            otherwise (P1.406: the
+                                                 article's notional limb)
 
 Direction lives on ``is_long`` / ``delta``; the adjusted-notional value
 itself is an absolute quantity.
@@ -29,13 +31,14 @@ def _equity_trade_row(
     asset_class: str = "equity",
     market_price: float | None = 50.0,
     number_of_units: float | None = 1_000_000.0,
+    notional: float | None = 0.0,
 ) -> pl.LazyFrame:
     """Single-row equity trade LazyFrame in the canonical CCR-A5 shape."""
     return pl.LazyFrame(
         {
             "trade_id": [trade_id],
             "asset_class": [asset_class],
-            "notional": [0.0],
+            "notional": [notional],
             "currency": ["GBP"],
             "market_price": [market_price],
             "number_of_units": [number_of_units],
@@ -210,56 +213,51 @@ def test_equity_branch_coalesces_with_prior_ir_and_fx_adjusted_notional() -> Non
 
 
 # ===========================================================================
-# 5. Missing market_price → null adjusted_notional
+# 5-6. No market price x units -> the contractual notional (Art. 279b(1)(c))
+#      (P1.406; these tests used to pin a null result, which priced the
+#      equity add-on at zero with no error)
 # ===========================================================================
 
 
-def test_equity_missing_market_price_yields_null_adjusted_notional() -> None:
-    """If market_price is null, adjusted_notional must be null.
+@pytest.mark.parametrize(
+    ("market_price", "number_of_units"),
+    [(None, 1_000_000.0), (50.0, None), (None, None)],
+)
+def test_equity_without_price_times_units_takes_the_notional(
+    market_price: float | None, number_of_units: float | None
+) -> None:
+    """A trade expressed as a notional amount: d = |notional| (reported CCR035).
 
-    The orchestrator detects the null at the pipeline-adapter boundary and
-    emits the CCR data-quality error — this function stays LazyFrame-pure.
+    Art. 279b(1)(c): "where a transaction mapped to the equity risk category or
+    commodity risk category is contractually expressed as a notional amount,
+    institutions shall use the notional amount of the transaction".
     """
     # Arrange
     from rwa_calc.engine.ccr.adjusted_notional import compute_adjusted_notional_equity
 
-    trades = _equity_trade_row(market_price=None, number_of_units=1_000_000.0)
+    trades = _equity_trade_row(
+        market_price=market_price, number_of_units=number_of_units, notional=-40_000_000.0
+    )
 
     # Act
     result = compute_adjusted_notional_equity(trades).collect()
 
     # Assert
-    actual = result["adjusted_notional"][0]
-    assert actual is None, (
-        f"Missing market_price must produce null adjusted_notional "
-        f"(orchestrator emits CCR error), got {actual!r}. CRR Art. 279b(1)(c)."
-    )
+    assert result["adjusted_notional"][0] == pytest.approx(40_000_000.0, rel=1e-12)
 
 
-# ===========================================================================
-# 6. Missing number_of_units → null adjusted_notional
-# ===========================================================================
-
-
-def test_equity_missing_number_of_units_yields_null_adjusted_notional() -> None:
-    """If number_of_units is null, adjusted_notional must be null.
-
-    Null propagation through multiplication per IEEE 754 / Polars semantics.
-    """
+def test_equity_price_times_units_takes_precedence_over_the_notional() -> None:
+    """Both limbs supplied: market price x units is used (CCR-A5 / A6 do not move)."""
     # Arrange
     from rwa_calc.engine.ccr.adjusted_notional import compute_adjusted_notional_equity
 
-    trades = _equity_trade_row(market_price=50.0, number_of_units=None)
+    trades = _equity_trade_row(market_price=50.0, number_of_units=1_000_000.0, notional=1.0)
 
     # Act
     result = compute_adjusted_notional_equity(trades).collect()
 
     # Assert
-    actual = result["adjusted_notional"][0]
-    assert actual is None, (
-        f"Missing number_of_units must produce null adjusted_notional, "
-        f"got {actual!r}. CRR Art. 279b(1)(c)."
-    )
+    assert result["adjusted_notional"][0] == pytest.approx(50_000_000.0, rel=1e-12)
 
 
 # ===========================================================================

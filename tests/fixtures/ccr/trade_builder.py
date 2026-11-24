@@ -325,8 +325,11 @@ def make_equity_trade(**overrides: Any) -> Trade:
     Default values represent the canonical CCR-A5 single-trade scenario:
     a 1-year GBP single-name equity TRS (T_EQ_001) in netting set NS_EQ_001.
     The adjusted notional is derived from market_price × number_of_units
-    (CRR Art. 279b(1)(c)); the ``notional`` field is 0.0 as a placeholder
-    (the equity branch ignores it).
+    (CRR Art. 279b(1)(c)); the ``notional`` field is 0.0 as a placeholder —
+    the equity branch reads it only when market_price or number_of_units is
+    null (the article's notional limb, reported CCR035). Left at 0.0 with a
+    unit input missing, the trade has no adjusted notional at all and is
+    reported CCR038 (ERROR).
 
     Args:
         **overrides: Any ``Trade`` field keyword arguments. The caller only
@@ -346,7 +349,7 @@ def make_equity_trade(**overrides: Any) -> Trade:
         "netting_set_id": "NS_EQ_001",
         "asset_class": "equity",
         "transaction_type": "derivative",
-        "notional": 0.0,  # placeholder — equity branch uses market_price × number_of_units
+        "notional": 0.0,  # placeholder — read only when market_price × units is null
         "currency": "GBP",
         "maturity_date": date(2027, 1, 15),
         "start_date": date(2026, 1, 15),

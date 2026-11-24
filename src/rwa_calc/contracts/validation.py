@@ -19,7 +19,9 @@ Key responsibilities:
 - Non-finite (NaN / +-inf) input scrubbing
 - Collateral-link referential integrity
 - SA-CCR trade inputs priced with a conservative fallback (CCR021-CCR023,
-  ``contracts/ccr_input_checks.py``)
+  CCR037), on the Art. 279b(1)(c) notional limb (CCR035) or with no adjusted
+  notional at all (CCR038), or as an FX transaction of one payment leg
+  (CCR036), ``contracts/ccr_input_checks.py``
 - Regulatory output bounds on the aggregated results frame
 - Branch-reason findings at the pipeline exit: BR001 (a row on
   ``UNKNOWN_FALLBACK``) and IRB009 (a retail IRB row priced on an Art. 161(1)
@@ -56,7 +58,14 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 from watchfire import cites
 
-from rwa_calc.contracts.ccr_input_checks import ccr_trade_errors, ccr_trade_findings
+from rwa_calc.contracts.ccr_input_checks import (
+    ccr_fx_second_leg_errors,
+    ccr_fx_second_leg_findings,
+    ccr_notional_limb_errors,
+    ccr_notional_limb_findings,
+    ccr_trade_errors,
+    ccr_trade_findings,
+)
 from rwa_calc.contracts.errors import (
     ERROR_CCF_OUT_OF_RANGE,
     ERROR_COLLATERAL_LINK_DUPLICATE,
@@ -544,14 +553,21 @@ def validate_bundle_values(
     - **Ratings** — the short-term rating scope contract (DQ002).
     - **SA-CCR trades** — inputs engine/ccr prices with a conservative fallback:
       unrecognised risk category (CCR021), credit quality / commodity type
-      (CCR022), netting set missing from the netting-set table (CCR023)
+      (CCR022), netting set missing from the netting-set table (CCR023); and
+      equity / commodity trades priced on their notional because market price x
+      units is not supplied (CCR035), or at zero because that notional is 0 or
+      null too (CCR038); FX trades with no second-leg notional, read as one
+      payment leg (CCR036) or with a stated second leg whose notional the rule
+      needs (CCR037, configuration-dependent — see below)
       (:mod:`rwa_calc.contracts.ccr_input_checks`).
 
-    And, when ``config`` is supplied, one cross-table check: every amount in a
-    currency with no FX rate into the reporting currency (DQ020,
-    :func:`_validate_missing_fx_rates`), which needs the run's
-    ``base_currency`` and ``apply_fx_conversion`` and is therefore skipped by
-    the configless file-loader call and raised by the pipeline entry.
+    And, when ``config`` is supplied, the checks that need the run's
+    ``base_currency``: every amount in a currency with no FX rate into the
+    reporting currency (DQ020, :func:`_validate_missing_fx_rates`, which also
+    reads ``apply_fx_conversion``), and CCR037 (a stated second FX leg in the
+    reporting currency needs no notional, Art. 279b(1)(b)(ii)). Both are
+    therefore skipped by the configless file-loader call and raised by the
+    pipeline entry.
 
     Every per-table check is a :class:`_TableCheck`; all of them are executed
     in ONE ``pl.collect_all`` (:func:`_run_table_checks`) and decoded in
@@ -596,6 +612,24 @@ def validate_bundle_values(
     ccr_findings = ccr_trade_findings(bundle, columns.get("ccr.trades", frozenset()))
     if ccr_findings is not None:
         checks.append(_TableCheck(plan=ccr_findings, decode=ccr_trade_errors))
+    # Equity / commodity trades engine/ccr prices on the Art. 279b(1)(c) notional
+    # limb because market price x units is not supplied (CCR035), or at zero
+    # because that notional is 0 / null too (CCR038), P1.406.
+    limb_findings = ccr_notional_limb_findings(bundle, columns.get("ccr.trades", frozenset()))
+    if limb_findings is not None:
+        checks.append(_TableCheck(plan=limb_findings, decode=ccr_notional_limb_errors))
+    # FX trades engine/ccr prices with no second-leg notional and makes their own
+    # hedging set: read as one payment leg (CCR036) or a stated second leg whose
+    # notional the rule needs (CCR037), P1.406. CCR037 reads the reporting
+    # currency (a stated reporting-currency second leg needs no notional, rule
+    # (ii)), so the configless call plans CCR036 only.
+    fx_leg_findings = ccr_fx_second_leg_findings(
+        bundle,
+        columns.get("ccr.trades", frozenset()),
+        base_currency=None if config is None else config.base_currency,
+    )
+    if fx_leg_findings is not None:
+        checks.append(_TableCheck(plan=fx_leg_findings, decode=ccr_fx_second_leg_errors))
     if config is not None:
         fx_check = _validate_missing_fx_rates(frames, columns, config)
         if fx_check is not None:

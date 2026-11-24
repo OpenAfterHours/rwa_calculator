@@ -527,6 +527,43 @@ ERROR_CCR_UNRECOGNISED_RISK_FACTOR = "CCR022"
 # non-enforceable netting set with no counterparty (unrated fallback weight,
 # alpha 1.4) rather than dropped.
 ERROR_CCR_ORPHAN_TRADE = "CCR023"
+# Equity / commodity trade priced on its notional (CCR (CRR) Part Art. 279b(1)(c),
+# P1.406): the trade's market_price or number_of_units is null, so its adjusted
+# notional cannot be the market price x number of units. engine/ccr reads it as
+# "contractually expressed as a notional amount" and takes |notional| — the
+# article's own second limb — rather than the null product, which used to leave
+# the trade out of the add-on. WARNING (the treatment is the rule's, but the engine cannot
+# see the contract's form), one row-named entry per trade up to a sample cap.
+# Numbered after the CCR030-CCR034 range reserved for the ccp_cva cluster.
+ERROR_CCR_NOTIONAL_LIMB_APPLIED = "CCR035"
+# FX trade with no second payment leg (CCR (CRR) Part Art. 279b(1)(b)(i),
+# Art. 277a(1)(b), P1.406): notional_leg2 and currency_leg2 are both null.
+# engine/ccr reads the trade as "consist[ing] of one payment leg" and takes its
+# notional as the adjusted notional; with no currency pair stated it shares no
+# FX hedging set (its own). WARNING (the treatment is the rule's, but the engine
+# cannot see whether the contract really has one payment leg), one row-named
+# entry per trade up to a sample cap.
+ERROR_CCR_FX_SINGLE_PAYMENT_LEG = "CCR036"
+# FX trade whose second leg is stated without the notional the rule needs (CCR
+# (CRR) Part Art. 279b(1)(b), Art. 277a(1)(b), P1.406): currency_leg2 is set,
+# notional_leg2 is null, and rule (ii) / (iii) needs that leg's notional — the
+# stated second leg is not the reporting currency (or both legs are). engine/ccr
+# takes the first leg's notional (at spot where it has a rate) as an estimate
+# and makes the trade its own FX hedging set, so the estimate offsets none of
+# the pair's other trades. Not raised when the stated second leg is the
+# reporting currency and the first leg is not: rule (ii) then takes "the
+# notional amount of the other payment leg", the first leg at spot — the
+# complete value, netted in its pair. Reads the run's base currency, so only the
+# configured (pipeline-entry) gate call raises it. Before P1.406 the trade added
+# nothing to the FX add-on.
+ERROR_CCR_FX_SECOND_LEG_NOTIONAL_MISSING = "CCR037"
+# Equity / commodity trade with no adjusted notional at all (CCR (CRR) Part
+# Art. 279b(1)(c), P1.406): market_price or number_of_units is null AND the
+# notional is 0 or null, so neither limb of the article gives a value and the
+# trade adds nothing to its add-on (the 0.0 placeholder notional of a
+# unit-priced trade whose units are missing is the common shape). ERROR, one
+# row-named entry per trade up to a sample cap; raised instead of CCR035.
+ERROR_CCR_NO_ADJUSTED_NOTIONAL = "CCR038"
 
 # Counterparty credit risk / CVA codes reserved for the 2026-11 review's ccp_cva
 # cluster (CCR030-CCR034). The other CCR codes (CCR001 / CCR010 / CCR011 /

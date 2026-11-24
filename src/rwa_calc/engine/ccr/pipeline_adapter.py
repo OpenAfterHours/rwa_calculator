@@ -199,13 +199,16 @@ def ccr_rows_to_exposures(
             and is written to the synthetic exposure row's ``value_date``.
         base_currency: Reporting currency for FX adjusted notional per
             Art. 279b(1)(b); typically ``CalculationConfig.base_currency``.
-            Used only when ``fx_rates`` is supplied and the trade book contains
-            ``asset_class == "fx"`` rows. Defaults to ``"GBP"``.
+            Defaults to ``"GBP"``.
         fx_rates: Optional FX-rates LazyFrame conforming to ``FX_RATES_SCHEMA``
-            (``currency_from``, ``currency_to``, ``rate``). When None the FX
-            adjusted-notional branch is skipped — FX trades will have null
-            ``adjusted_notional`` and therefore no PFE contribution, matching
-            the pre-P8.9 behaviour for firms with no derivatives FX book.
+            (``currency_from``, ``currency_to``, ``rate``). When None only the
+            reporting currency converts: an FX leg in any other currency enters
+            the Art. 279b(1)(b) adjusted notional unconverted, which then takes
+            the larger leg, and the trade is its own hedging set
+            (``compute_adjusted_notional_fx``, ``assign_hedging_set``; reported
+            CCR026).
+            Before P1.406 a None table skipped the FX branch and every FX trade
+            contributed no PFE.
         counterparties: Optional counterparty LazyFrame carrying
             ``counterparty_reference`` and ``counterparty_type`` (COUNTERPARTY_SCHEMA).
             Joined onto the netting-set frame to select the per-row supervisory
@@ -297,9 +300,14 @@ def ccr_rows_to_exposures(
     )
     trades_enriched = compute_adjusted_notional_ir(trades_enriched, reporting_date)
     # FX adjusted notional per Art. 279b(1)(b) — overlays the FX branch on top
-    # of the IR output via coalesce so non-FX rows pass through unchanged.
-    if fx_rates is not None:
-        trades_enriched = compute_adjusted_notional_fx(trades_enriched, base_currency, fx_rates)
+    # of the IR output via coalesce so non-FX rows pass through unchanged. Runs
+    # with or without an fx_rates table: with none only the reporting currency
+    # converts, and a leg with no rate is priced by the branch's fallback rather
+    # than skipped; the branch flags such a trade, and one missing a second-leg
+    # notional the rule needs (or with no second leg), ``fx_own_hedging_set`` so
+    # ``assign_hedging_set`` keeps it out of the pair's netting (P1.406;
+    # reported CCR026 / CCR036 / CCR037).
+    trades_enriched = compute_adjusted_notional_fx(trades_enriched, base_currency, fx_rates)
     # Credit adjusted notional per Art. 279b(1)(a) — shares the IR supervisory-
     # duration kernel and overlays via coalesce; no gate needed (no-op for
     # non-credit rows).

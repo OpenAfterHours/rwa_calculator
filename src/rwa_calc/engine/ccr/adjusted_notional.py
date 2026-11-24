@@ -9,22 +9,39 @@ Key responsibilities:
   duration factor ``SD(S, E) = (exp(-0.05*S) - exp(-0.05*E)) / 0.05`` where
   ``S`` is the years-to-start floored at 10 business days (= 10/250 = 0.04y)
   and ``E`` is the years-to-maturity. Per CRR Art. 279b(1)(a).
-- FX (``compute_adjusted_notional_fx``): both legs converted to the reporting
-  currency (``CalculationConfig.base_currency``) at the prevailing spot rate;
-  when one leg already equals the reporting currency, the non-reporting leg's
-  converted notional is taken (Art. 279b(1)(b)(i)); when both legs differ from
-  the reporting currency, the larger of the two converted notionals is taken
-  (Art. 279b(1)(b)(ii)). FX rates source: ``FX_RATES_SCHEMA`` rows joined on
-  ``currency_to == base_currency``. Missing rate joins produce a null
-  ``adjusted_notional`` for that row; the orchestrator surfaces a
-  ``CalculationError`` at the pipeline-adapter boundary.
+- FX (``compute_adjusted_notional_fx``): with two legs, the non-reporting
+  leg's notional when the other leg is in the reporting currency
+  (``CalculationConfig.base_currency``) (Art. 279b(1)(b)(ii)), else the larger
+  of the two legs' notionals (Art. 279b(1)(b)(iii)) — each converted at spot
+  (Art. 279b(3)) from ``FX_RATES_SCHEMA`` rows with
+  ``currency_to == base_currency``. A trade with no second-leg notional takes
+  its first leg's notional: the contract notional of a transaction of one
+  payment leg (Art. 279b(1)(b)(i)) when no second leg is stated (reported
+  CCR036); with the stated second leg in the reporting currency, rule (ii)'s
+  own value — "the notional amount of the other payment leg", the first leg at
+  spot — so the missing notional is never needed; otherwise an estimate of the
+  second leg's notional (reported CCR037). A leg with no rate (or no table at
+  all) enters unconverted and the larger of the legs is taken (reported CCR026
+  by ``engine/ccr/reporting_currency.py`` unless the run sets
+  ``apply_fx_conversion=False``, which reports no currency), so a missing input
+  never leaves the trade's adjusted notional null. Each trade whose value is an estimate, or
+  that states no pair, is flagged ``fx_own_hedging_set`` and kept out of every
+  pair's hedging-set netting (P1.406).
 - Credit (``compute_adjusted_notional_credit``): same supervisory-duration
   kernel as IR — Art. 279b(1)(a) covers both asset classes. Gated on
   ``asset_class == "credit"`` and coalesce-safe with the IR / FX branches.
+- Equity / commodity (``compute_adjusted_notional_equity`` /
+  ``_commodity``): market price x number of units, or — for a trade with no
+  price x units, read as contractually expressed as a notional amount — the
+  absolute notional (Art. 279b(1)(c); reported CCR035 by the input gate, or
+  CCR038 when that notional is 0 / null and the trade is priced at zero). Unlike
+  Art. 279b(1)(a) and the other-risks notional (``|notional| x max(1, SD)``,
+  ``engine/ccr/risk_categories.py``) the limb carries no supervisory duration.
 
 References:
 - CRR Art. 279b(1)(a): Adjusted notional amount (IR and credit derivatives)
-- CRR Art. 279b(1)(b)(i)/(ii): Adjusted notional amount (FX)
+- CRR Art. 279b(1)(b)(i)/(ii)/(iii), 279b(3): Adjusted notional amount (FX)
+- CRR Art. 279b(1)(c): Adjusted notional amount (equity and commodity)
 - BCBS CRE52.40: 250-business-day year convention for the start-date floor
 """
 
@@ -36,6 +53,8 @@ from datetime import date
 import polars as pl
 from watchfire import cites
 
+from rwa_calc.data.column_spec import ensure_columns
+from rwa_calc.data.schemas import TRADE_SCHEMA
 from rwa_calc.rulebook.compile import scalar_value
 from rwa_calc.rulebook.resolve import resolve
 
@@ -48,6 +67,21 @@ logger = logging.getLogger(__name__)
 _PACK = resolve("crr", date(2026, 1, 1))
 _SUPERVISORY_DURATION_RATE = scalar_value(_PACK.scalar_param("sa_ccr_supervisory_duration_rate"))
 _START_FLOOR_YEARS = scalar_value(_PACK.scalar_param("sa_ccr_start_floor_years"))
+
+#: Trade-grain Boolean written by :func:`compute_adjusted_notional_fx`: True for an
+#: FX trade that must not net in a currency pair's hedging set — a leg entered
+#: unconverted (no spot rate to the reporting currency), or no second-leg notional
+#: (a stated second leg whose notional the rule needs but is unknown, or no second
+#: leg, so no pair). A stated second leg in the reporting currency with no
+#: notional is not flagged: Art. 279b(1)(b)(ii) needs only the first leg.
+#: ``assign_hedging_set`` gives such a trade its own hedging set, so it offsets
+#: nothing (P1.406).
+FX_OWN_HEDGING_SET = "fx_own_hedging_set"
+
+#: The optional FX second-leg columns the FX branch reads: injected as typed nulls
+#: when a frame omits them (an in-memory ``run_with_data`` book with no FX trades),
+#: since the branch runs on every call.
+_FX_LEG2_COLUMNS = {name: TRADE_SCHEMA[name] for name in ("notional_leg2", "currency_leg2")}
 
 
 # Watchfire's bundled CRR index does not yet contain Art. 279b; collapse the
@@ -111,18 +145,54 @@ def compute_adjusted_notional_ir(
 def compute_adjusted_notional_fx(
     trades: pl.LazyFrame,
     base_currency: str,
-    fx_rates: pl.LazyFrame,
+    fx_rates: pl.LazyFrame | None,
 ) -> pl.LazyFrame:
-    """SA-CCR adjusted notional for FX trades per CRR Art. 279b(1)(b).
+    """SA-CCR adjusted notional for FX trades per CRR Art. 279b(1)(b) and (3).
 
-    For ``asset_class == "fx"``:
+    For ``asset_class == "fx"``, with every leg converted to the base
+    (reporting) currency at spot (Art. 279b(3)):
 
-    - If at least one leg is in the reporting (base) currency
-      (Art. 279b(1)(b)(i)): adjusted_notional = the *other* leg's notional
-      converted to the base currency at spot.
-    - If both legs are in non-base currencies (Art. 279b(1)(b)(ii)):
-      adjusted_notional = max(|notional_leg1|, |notional_leg2|) after each
-      leg is converted to the base currency at spot.
+    - Two legs, one in the base currency (Art. 279b(1)(b)(ii)): the *other*
+      leg's notional.
+    - Two legs, both in non-base currencies (Art. 279b(1)(b)(iii)): the larger
+      of the two legs' notionals.
+    - No second-leg notional (``notional_leg2`` null): the first leg's
+      notional ``|notional|`` at spot. With ``currency_leg2`` null too the trade
+      is read as a transaction of one payment leg, whose adjusted notional is
+      the contract notional (Art. 279b(1)(b)(i); reported CCR036 WARNING by the
+      input gate, since the engine cannot see whether the contract really has
+      one leg). With ``currency_leg2`` stated and equal to the reporting
+      currency (the first leg not), rule (ii) takes "the notional amount of the
+      other payment leg" — the first leg, converted at spot — so the value is
+      the rule's, the missing notional is never needed and the trade nets in
+      its pair like a complete one (nothing reported). With any other stated
+      ``currency_leg2`` the rule needs the second leg's notional, which is
+      unknown, so the first leg's notional — the value the contract exchanges
+      for it — is an estimate (reported CCR037 ERROR).
+
+    A leg whose currency is null or has no rate to the base currency enters
+    **unconverted** (the CCR026 pass-through every other CCR amount takes), and
+    the adjusted notional is then the larger of the two legs' notionals, each
+    converted where it has a rate. With no spot rate the leg's reporting-currency
+    value is unknown: its unconverted notional and the other leg's notional (the
+    value the contract exchanges for it) are the two estimates the trade
+    carries, and taking the larger means a missing rate can never price this
+    trade's adjusted notional below either estimate (P1.406).
+
+    Each such bound is the trade's alone: netted against a pair's other trades,
+    an estimate can lower the hedging set's add-on, and a trade that states no
+    second currency has no pair to share (Art. 277a(1)(b): "only where their
+    primary risk driver ... is based on the same currency pair"). So every FX
+    trade except one carrying its rule value — a complete two-leg trade with a
+    spot rate for each leg, or a first leg with a rate against a stated
+    reporting-currency second leg (ii) — is flagged ``fx_own_hedging_set`` and
+    ``engine/ccr/hedging_sets.py::assign_hedging_set`` makes it its own hedging
+    set; isolation can only raise the add-on (sum |d_i| >= |sum d_i|). Before
+    P1.406 a leg with no rate, or a missing second leg with the first leg in
+    the reporting currency, was null: the trade added nothing to Art. 278(1)'s
+    FX add-on (with both legs foreign only the other leg counted). Only a first
+    leg with no rate was reported (CCR026 read ``currency`` alone); a second
+    leg with no rate, or a missing second leg, was not.
 
     Direction lives on ``is_long`` / ``delta``; the adjusted-notional value
     itself is taken in absolute terms per the regulatory comparison rule.
@@ -130,40 +200,38 @@ def compute_adjusted_notional_fx(
     FX rates are sourced from ``FX_RATES_SCHEMA`` rows where
     ``currency_to == base_currency``; an identity row
     ``{currency_from: base_currency, rate: 1.0}`` is added so a leg already
-    in the base currency converts trivially. Rows where a required rate is
-    missing produce a null ``adjusted_notional`` — the orchestrator is
-    responsible for surfacing the CCR data-quality error.
+    in the base currency converts trivially. ``fx_rates`` None (the run has no
+    table) leaves only that identity row.
 
     Args:
         trades: LazyFrame at trade grain with columns ``asset_class``,
-            ``notional``, ``currency``, ``notional_leg2``, ``currency_leg2``.
+            ``notional``, ``currency`` and optionally ``notional_leg2`` /
+            ``currency_leg2`` (absent reads as null: no second leg).
         base_currency: ISO-4217 reporting currency (e.g. ``"GBP"``) — typically
             ``CalculationConfig.base_currency``.
         fx_rates: LazyFrame conforming to ``FX_RATES_SCHEMA`` with columns
-            ``currency_from``, ``currency_to``, ``rate``.
+            ``currency_from``, ``currency_to``, ``rate``, or None.
 
     Returns:
         The input LazyFrame with a new ``adjusted_notional: Float64`` column
-        populated for ``asset_class == "fx"`` rows only; null elsewhere.
+        populated for ``asset_class == "fx"`` rows only (null elsewhere), and
+        ``fx_own_hedging_set: Boolean`` — True for an FX trade with a present
+        leg that has no rate, or with no second-leg notional unless its stated
+        second leg is the reporting currency (rule (ii) needs only the first
+        leg), False on every other row.
 
     References:
-        - CRR Art. 279b(1)(b)(i): one-leg-is-base case.
-        - CRR Art. 279b(1)(b)(ii): both-legs-foreign max-of-converted case.
+        - CRR Art. 279b(1)(b)(i): one payment leg.
+        - CRR Art. 279b(1)(b)(ii): one leg in the reporting currency.
+        - CRR Art. 279b(1)(b)(iii): both legs foreign, largest converted leg.
+        - CRR Art. 279b(3): conversion at the prevailing spot rate.
+        - CRR Art. 277a(1)(b): FX hedging set = the same currency pair.
     """
-    # Build the leg-currency -> base-currency lookup with an identity row so
-    # legs already in the base currency convert at 1.0.
-    fx_to_base = fx_rates.filter(pl.col("currency_to") == pl.lit(base_currency)).select(
-        pl.col("currency_from"),
-        pl.col("rate").alias("rate_to_base"),
-    )
-    identity = pl.LazyFrame(
-        {"currency_from": [base_currency], "rate_to_base": [1.0]},
-        schema={"currency_from": pl.String, "rate_to_base": pl.Float64},
-    )
-    rate_lookup = pl.concat([fx_to_base, identity], how="vertical_relaxed")
+    rate_lookup = _fx_rate_lookup(base_currency, fx_rates)
+    trades = ensure_columns(trades, _FX_LEG2_COLUMNS)
 
-    # Join twice — once for each leg currency. Use left-joins so missing rates
-    # propagate as nulls (the orchestrator emits the CCR error downstream).
+    # Join twice — once for each leg currency. Left joins: a missing rate stays
+    # null on ``_rate_leg*`` and is resolved explicitly below.
     enriched = trades.join(
         rate_lookup.rename({"rate_to_base": "_rate_leg1"}),
         left_on="currency",
@@ -176,33 +244,53 @@ def compute_adjusted_notional_fx(
         how="left",
     )
 
-    # Converted absolute notionals per leg.
-    abs_leg1 = pl.col("notional").abs() * pl.col("_rate_leg1")
-    abs_leg2 = pl.col("notional_leg2").abs() * pl.col("_rate_leg2")
+    # Absolute notional per leg in the base currency; a leg with no rate is
+    # taken unconverted (rate 1.0).
+    abs_leg1 = pl.col("notional").abs() * pl.coalesce(pl.col("_rate_leg1"), pl.lit(1.0))
+    abs_leg2 = pl.col("notional_leg2").abs() * pl.coalesce(pl.col("_rate_leg2"), pl.lit(1.0))
 
-    one_leg_is_base = (pl.col("currency") == pl.lit(base_currency)) | (
-        pl.col("currency_leg2") == pl.lit(base_currency)
+    no_leg2_notional = pl.col("notional_leg2").is_null()
+    # A present leg with no rate (a null currency included) enters unconverted.
+    leg_unconverted = pl.col("_rate_leg1").is_null() | (
+        ~no_leg2_notional & pl.col("_rate_leg2").is_null()
     )
+    # Art. 279b(1)(b)(ii) with the stated second leg in the reporting currency:
+    # "the notional amount of the other payment leg" is the first leg's, so a
+    # missing notional_leg2 is never needed and abs_leg1 is the rule value (a
+    # first leg with no rate is still caught by leg_unconverted).
+    leg1_is_base = pl.col("currency").eq_missing(pl.lit(base_currency))
+    leg2_is_base = pl.col("currency_leg2").eq_missing(pl.lit(base_currency))
+    leg2_notional_not_needed = leg2_is_base & ~leg1_is_base
 
-    # Art. 279b(1)(b)(i): when one leg is the base currency, take the *other*
-    # leg converted (which equals its absolute notional × spot). When leg1 is
-    # the base, take abs_leg2; when leg2 is the base, take abs_leg1.
-    one_leg_value = (
-        pl.when(pl.col("currency") == pl.lit(base_currency)).then(abs_leg2).otherwise(abs_leg1)
+    fx_adjusted = (
+        # No second-leg notional -> the first leg's at spot: Art. 279b(1)(b)(i)'s
+        # contract notional when no second leg is stated (CCR036); (ii)'s value
+        # when the stated second leg is the reporting currency; else an estimate
+        # (CCR037).
+        pl.when(no_leg2_notional)
+        .then(abs_leg1)
+        # Art. 279b(1)(b)(ii): one leg in the reporting currency -> the other leg.
+        .when(~leg_unconverted & (pl.col("currency") == pl.lit(base_currency)))
+        .then(abs_leg2)
+        .when(~leg_unconverted & (pl.col("currency_leg2") == pl.lit(base_currency)))
+        .then(abs_leg1)
+        # Art. 279b(1)(b)(iii): both legs foreign -> the larger converted leg;
+        # also every two-leg trade with a leg that has no rate (see docstring).
+        .otherwise(pl.max_horizontal(abs_leg1, abs_leg2))
     )
-
-    # Art. 279b(1)(b)(ii): both legs foreign — take max of converted notionals.
-    both_foreign_value = pl.max_horizontal(abs_leg1, abs_leg2)
-
-    fx_adjusted = pl.when(one_leg_is_base).then(one_leg_value).otherwise(both_foreign_value)
 
     # Gate on asset_class == "fx"; preserve any existing adjusted_notional from
     # the IR branch via coalesce — callers may have run the IR branch first.
+    is_fx = pl.col("asset_class") == "fx"
     out = enriched.with_columns(
-        pl.when(pl.col("asset_class") == "fx")
+        pl.when(is_fx)
         .then(fx_adjusted)
         .otherwise(pl.lit(None, dtype=pl.Float64))
-        .alias("_fx_adjusted_notional")
+        .alias("_fx_adjusted_notional"),
+        pl.when(is_fx)
+        .then(leg_unconverted | (no_leg2_notional & ~leg2_notional_not_needed))
+        .otherwise(pl.lit(False))
+        .alias(FX_OWN_HEDGING_SET),
     )
 
     # If the input already has an adjusted_notional column (e.g. from the IR
@@ -289,13 +377,27 @@ def compute_adjusted_notional_equity(trades: pl.LazyFrame) -> pl.LazyFrame:
 
     For ``asset_class == "equity"``:
 
-        d = abs(market_price * number_of_units)
+        d = abs(market_price * number_of_units)     when both are supplied
+        d = abs(notional)                           otherwise
+
+    Art. 279b(1)(c): "where a transaction mapped to the equity risk category or
+    commodity risk category is contractually expressed as a notional amount,
+    institutions shall use the notional amount of the transaction". A trade
+    with a null ``market_price`` or ``number_of_units`` is read as expressed as
+    a notional amount (reported CCR035 by the input gate,
+    ``contracts/ccr_input_checks.py``; CCR038 ERROR when that notional is 0 or
+    null, so ``d`` is 0 / null and the trade adds nothing); before P1.406 the
+    null product left the trade out of the equity add-on with no error. Market
+    price x units stays first, so a trade carrying both limbs prices exactly as
+    before. The notional is the rule's value, so the trade nets in its hedging
+    set like any other: where it offsets another trade, pricing it lowers the
+    add-on. It is the face value at any residual maturity — no supervisory
+    duration, unlike Art. 279b(1)(a) and the other-risks ``|notional| x
+    max(1, SD)`` (pinned at five years, where SD is about 4.38, by
+    ``tests/acceptance/ccr/test_p1_406_incomplete_notional_inputs.py``).
 
     Direction lives on ``is_long`` / ``supervisory_delta``; the adjusted-notional
-    value itself is taken in absolute terms per the regulatory rule. Null
-    ``market_price`` or null ``number_of_units`` propagate as null
-    ``adjusted_notional`` — the orchestrator surfaces the CCR data-quality
-    error at the pipeline-adapter boundary.
+    value itself is taken in absolute terms per the regulatory rule.
 
     When the input frame already carries an ``adjusted_notional`` column from a
     prior IR / FX branch, this function coalesces — non-null upstream values
@@ -304,7 +406,7 @@ def compute_adjusted_notional_equity(trades: pl.LazyFrame) -> pl.LazyFrame:
 
     Args:
         trades: LazyFrame at trade grain with columns ``asset_class``,
-            ``market_price`` and ``number_of_units``.
+            ``notional``, ``market_price`` and ``number_of_units``.
 
     Returns:
         The input LazyFrame with an ``adjusted_notional: Float64`` column
@@ -312,9 +414,12 @@ def compute_adjusted_notional_equity(trades: pl.LazyFrame) -> pl.LazyFrame:
         values from upstream branches are preserved.
 
     References:
-        - CRR Art. 279b(1)(c): equity adjusted notional d = market_price × units.
+        - CRR Art. 279b(1)(c): equity adjusted notional d = market_price × units,
+          or the notional of a transaction expressed as a notional amount.
     """
-    equity_adjusted = (pl.col("market_price") * pl.col("number_of_units")).abs()
+    equity_adjusted = pl.coalesce(
+        (pl.col("market_price") * pl.col("number_of_units")).abs(), pl.col("notional").abs()
+    )
 
     out = trades.with_columns(
         pl.when(pl.col("asset_class") == "equity")
@@ -341,10 +446,20 @@ def compute_adjusted_notional_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
 
     For ``asset_class == "commodity"``:
 
-        d = market_price × number_of_units
+        d = market_price × number_of_units          when both are supplied
+        d = |notional|                              otherwise
 
-    The product is in the trade currency; no FX conversion is required because
-    ``market_price`` is already denominated in the same currency as the trade.
+    A trade with a null ``market_price`` or ``number_of_units`` is read as
+    contractually expressed as a notional amount, whose notional Art. 279b(1)(c)
+    uses instead (reported CCR035 by the input gate; CCR038 ERROR when that
+    notional is 0 or null, so ``d`` is 0 / null and the trade adds nothing);
+    before P1.406 the null product left the trade out of the commodity add-on
+    with no error. Market price x units stays first, so a trade carrying both
+    limbs prices exactly as before. The notional is the face value at any
+    residual maturity: no supervisory duration (see the equity branch).
+
+    ``market_price`` and ``notional`` reach this function already rebased to the
+    reporting currency (Art. 279b(3), ``engine/ccr/reporting_currency.py``).
     Direction lives on ``is_long`` / ``delta`` — the adjusted-notional value
     itself is the unsigned product per Art. 279b(1)(c).
 
@@ -354,7 +469,7 @@ def compute_adjusted_notional_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
 
     Args:
         trades: LazyFrame at trade grain with columns ``asset_class``,
-            ``market_price`` and ``number_of_units``.
+            ``notional``, ``market_price`` and ``number_of_units``.
 
     Returns:
         The input LazyFrame with a (possibly overlaid) ``adjusted_notional:
@@ -365,7 +480,9 @@ def compute_adjusted_notional_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
         - CRR Art. 279b(1)(c)
         - BCBS CRE52.46-48
     """
-    co_adjusted = pl.col("market_price") * pl.col("number_of_units")
+    co_adjusted = pl.coalesce(
+        pl.col("market_price") * pl.col("number_of_units"), pl.col("notional").abs()
+    )
 
     out = trades.with_columns(
         pl.when(pl.col("asset_class") == "commodity")
@@ -384,3 +501,26 @@ def compute_adjusted_notional_commodity(trades: pl.LazyFrame) -> pl.LazyFrame:
         out = out.rename({"_co_adjusted_notional": "adjusted_notional"})
 
     return out.drop("_co_adjusted_notional", strict=False)
+
+
+def _fx_rate_lookup(base_currency: str, fx_rates: pl.LazyFrame | None) -> pl.LazyFrame:
+    """Spot rates to ``base_currency`` keyed ``currency_from``, plus the identity row.
+
+    Args:
+        base_currency: The reporting currency.
+        fx_rates: The run's ``FX_RATES_SCHEMA`` frame, or None (identity only).
+
+    Returns:
+        LazyFrame ``(currency_from, rate_to_base)``.
+    """
+    identity = pl.LazyFrame(
+        {"currency_from": [base_currency], "rate_to_base": [1.0]},
+        schema={"currency_from": pl.String, "rate_to_base": pl.Float64},
+    )
+    if fx_rates is None:
+        return identity
+    fx_to_base = fx_rates.filter(pl.col("currency_to") == pl.lit(base_currency)).select(
+        pl.col("currency_from"),
+        pl.col("rate").alias("rate_to_base"),
+    )
+    return pl.concat([fx_to_base, identity], how="vertical_relaxed")

@@ -46,6 +46,23 @@ and reported **CCR026** (ERROR) per record; the row keeps its trade currency in
 for the lending book. Before CC-05 a JPY 10bn swap entered the GBP totals at
 about 419m GBP (200x) and an SFT's E* stayed in the trade currency.
 
+An FX-category trade's legs are converted by the Art. 279b(1)(b) branch itself,
+which runs whether or not the run has an `fx_rates` table. A leg with no rate
+enters that branch unconverted and the larger of the two legs is taken (see
+[adjusted-notional.md](adjusted-notional.md#a-leg-with-no-spot-rate)); its first
+leg is reported CCR026 through the trade's `currency`, its second leg through a
+CCR026 naming `currency_leg2` (FX trades with a second leg only, so a non-FX
+trade's null `currency_leg2` is never reported). Before P1.406 such a leg left
+the trade out of the FX add-on (or, with both legs foreign, priced it on the
+other leg alone), and a second leg's missing rate was not reported at all. The
+trade priced this way is its own hedging set (next section but one). With
+`apply_fx_conversion=False` the branch still runs and still prices and isolates
+such a trade — the conservative reading — but, as above, no CCR026 is raised:
+measured through `PipelineOrchestrator`, a GBP 80m / USD 100m forward in a run
+with no `fx_rates` table gives EAD 5,600,000 (`d` = 100m, the USD leg
+unconverted) in both regimes, with CCR026 when conversion is on and none when
+it is off.
+
 ## Input — two-leg trade schema
 
 FX forwards / FX swaps / cross-currency basis swaps carry two currency legs.
@@ -55,10 +72,18 @@ FX forwards / FX swaps / cross-currency basis swaps carry two currency legs.
 | ----------------- | --------- | --------------- | ------------------------------------ |
 | `notional`        | `Float64` | yes             | Leg 1 notional in `currency`         |
 | `currency`        | `String`  | yes             | Leg 1 ISO-4217 currency              |
-| `notional_leg2`   | `Float64` | yes             | Leg 2 notional in `currency_leg2`    |
-| `currency_leg2`   | `String`  | yes             | Leg 2 ISO-4217 currency              |
+| `notional_leg2`   | `Float64` | two-leg trades  | Leg 2 notional in `currency_leg2`    |
+| `currency_leg2`   | `String`  | two-leg trades  | Leg 2 ISO-4217 currency              |
 
 For non-FX trades (`asset_class != "fx"`), the two `*_leg2` columns are null.
+An FX trade with a null `notional_leg2` takes its first leg's notional at spot:
+with `currency_leg2` null too it is read as a transaction of one payment leg
+(Art. 279b(1)(b)(i), warned `CCR036`) and is its own hedging set; with
+`currency_leg2` stated as the reporting currency that is rule (ii)'s complete
+value ("the notional amount of the other payment leg"), so the trade nets in its
+pair and nothing is reported; with any other `currency_leg2` the rule needs the
+missing notional, the value is an estimate (`CCR037` ERROR) and the trade is its
+own hedging set.
 Sign convention: `notional` and `notional_leg2` are absolute amounts;
 direction lives on `is_long` and flows through `supervisory_delta`.
 
@@ -76,7 +101,18 @@ hedging_set_id = "FX-{netting_set_id}-{min(currency, currency_leg2)}/{max(...)}"
 The `min/max` ordering makes the key order-independent so EUR/USD and USD/EUR
 trades collapse into a single hedging set within the same netting set. FX has
 **no maturity sub-buckets** (unlike IR) — every FX trade in a given pair
-shares one hedging set regardless of tenor.
+shares one hedging set regardless of tenor, except a trade that is not
+complete.
+
+A trade with a leg that has no spot rate, or with no second-leg notional where
+the rule needs one or no second leg at all (`fx_own_hedging_set`, written by the
+adjusted-notional branch; a missing notional on a reporting-currency second leg
+is not needed and not flagged), is its own
+hedging set, `FX-{netting_set_id}-{pair}-trade-{trade_id}`: its adjusted
+notional is an estimate, or it states no second currency and so no pair, and
+netted against the pair's correctly priced trades it could offset them by more
+than its true value (P1.406; worked cases in
+[adjusted-notional.md](adjusted-notional.md#hedging-set-of-an-fx-trade-that-is-not-complete)).
 
 Engine: `src/rwa_calc/engine/ccr/hedging_sets.py::assign_hedging_set`.
 
@@ -85,10 +121,17 @@ Engine: `src/rwa_calc/engine/ccr/hedging_sets.py::assign_hedging_set`.
 See [adjusted-notional.md](adjusted-notional.md#fx--art-279b1b) for the formula.
 In short:
 
+- If the trade has no second-leg notional, take its first leg's notional
+  converted at spot: rule (i)'s contract notional when no second leg is stated
+  (`CCR036` WARNING, its own hedging set); rule (ii)'s value when the stated
+  `currency_leg2` is the reporting currency (netted in its pair, no finding);
+  otherwise an estimate (`CCR037` ERROR, its own hedging set).
 - If one leg is the reporting currency, take the **other** leg converted to
-  the reporting currency at spot.
+  the reporting currency at spot (Art. 279b(1)(b)(ii)).
 - If both legs are non-reporting currencies, take the **larger** of the two
-  converted notionals.
+  converted notionals (Art. 279b(1)(b)(iii)).
+- If a leg has no spot rate, it enters unconverted and the **larger** leg is
+  taken (reported CCR026).
 
 ## Asset-class add-on — Art. 277a(2) + BCBS CRE52.55
 
@@ -127,7 +170,7 @@ Input fixture (`tests/fixtures/ccr/golden_ccr_a2.py`):
 Hand-calc:
 
 ```
-adjusted_notional  = |100m USD| × 0.80                         = 80,000,000 GBP   (Art. 279b(1)(b)(i))
+adjusted_notional  = |100m USD| × 0.80                         = 80,000,000 GBP   (Art. 279b(1)(b)(ii))
 business_days_to_maturity (2026-01-15 → 2027-01-15)            ≈ 261 BD           (Mon-Fri)
 MF                 = sqrt(min(261, 250) / 250)                  = 1.0             (Art. 279c(1), ≥ 250 BD)
 effective_notional = 1.0 × 80,000,000 × 1.0                    = 80,000,000
@@ -151,9 +194,10 @@ Pinned by `tests/expected_outputs/ccr/CCR-A2.json` and the six assertions in
   support FX options once leg2 columns are populated. No dedicated FX-option
   acceptance scenario yet — flagged for a future batch.
 - **Cross-rate triangulation**: the engine requires direct quotes
-  (`foreign → base`); non-major-pair FX trades (e.g. NOK/SEK with base GBP)
-  will fail the join. Firms supply every required pair, matching the
-  precedent from the EUR/GBP auto-sync at `engine/fx_rate_sync.py`.
+  (`foreign → base`); a non-major-pair FX trade (e.g. NOK/SEK with base GBP)
+  with no direct quotes is priced on its larger unconverted leg and reported
+  CCR026. Firms supply every required pair, matching the precedent from the
+  EUR/GBP auto-sync at `engine/fx_rate_sync.py`.
 - **Specific WWR + FX**: the WWR break-out (`engine/ccr/wwr.py`) treats FX
   trades identically to IR — a `is_specific_wwr=True` FX trade lands in its
   own single-trade synthetic netting set with `wwr_lgd_override = 1.0`.
@@ -165,7 +209,7 @@ Pinned by `tests/expected_outputs/ccr/CCR-A2.json` and the six assertions in
 - CRR Art. 277(3)(a) — FX hedging set = currency pair.
 - CRR Art. 277a(2) — hedging-set add-on = SF × |D_HS|.
 - CRR Art. 278(1)–(3) — PFE multiplier and PFE composition.
-- CRR Art. 279b(1)(b) — FX adjusted notional.
+- CRR Art. 279b(1)(b), 279b(3) — FX adjusted notional and its conversion at spot.
 - CRR Art. 279c(1) — unmargined maturity factor.
 - CRR Art. 280 Table 1 — SF_FX = 0.04.
 - BCBS CRE52.34, CRE52.55 — FX hedging-set partition and add-on aggregation.

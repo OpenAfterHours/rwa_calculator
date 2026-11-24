@@ -1636,9 +1636,16 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     # and assigns ``wwr_lgd_override = 1.0`` to that synthetic NS.
     "is_specific_wwr": ColumnSpec(pl.Boolean, default=False, required=False),
     # CRR Art. 279b(1)(b): FX-derivative second-leg notional and ISO-4217
-    # currency. Required when ``asset_class == "fx"`` — the FX adjusted-notional
+    # currency, expected on every two-leg FX trade. The FX adjusted-notional
     # branch converts both legs to ``CalculationConfig.base_currency`` at spot
-    # and applies the one-leg-is-base / max(both-foreign) rule. Null for non-FX
+    # and applies the one-leg-is-base (ii) / max(both-foreign) (iii) rule. A
+    # null ``notional_leg2`` prices the trade on ``notional`` (at spot): read as
+    # one payment leg (i) when ``currency_leg2`` is null too (its own hedging
+    # set; reported CCR036 WARNING); (ii)'s complete value when the stated
+    # ``currency_leg2`` is the reporting currency (netted in its pair, nothing
+    # reported); otherwise an estimate, its own hedging set (CCR037 ERROR).
+    # A leg with no rate enters unconverted, the larger leg is taken and the
+    # trade is its own hedging set (reported CCR026; P1.406). Null for non-FX
     # trades (interest_rate uses the single ``notional`` / ``currency`` pair).
     "notional_leg2": ColumnSpec(pl.Float64, required=False),
     "currency_leg2": ColumnSpec(pl.String, required=False),
@@ -1650,7 +1657,10 @@ TRADE_SCHEMA: dict[str, ColumnSpec] = {
     #
     # CRR Art. 279b(1)(c) / CRE52.45: equity & commodity adjusted notional is
     # ``d = market_price × number_of_units`` (current spot price times share or
-    # unit count) rather than the IR / FX notional convention.
+    # unit count) rather than the IR / FX notional convention. A trade with
+    # either left null is read as contractually expressed as a notional amount
+    # and priced on ``|notional|`` (the article's second limb; reported CCR035),
+    # or — with a 0 / null notional too — priced at zero (reported CCR038 ERROR).
     "market_price": ColumnSpec(pl.Float64, required=False),
     "number_of_units": ColumnSpec(pl.Float64, required=False),
     # CRR Art. 277(2)(c)-(d) / CRE52.60: credit & equity hedging sets are

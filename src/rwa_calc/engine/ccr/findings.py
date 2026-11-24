@@ -9,7 +9,8 @@ Key responsibilities:
 - Assemble, from the same engine/ccr expressions that price the netting sets,
   the lazy plans of the inputs priced with a visible treatment: CCR collateral
   left out of VM / NICA (CCR024), conflicting CSA terms (CCR025) and amounts
-  with no spot rate to the reporting currency (CCR026).
+  — including an FX trade's second payment leg — with no spot rate to the
+  reporting currency (CCR026).
 - Hand each plan to its decoder in ``contracts/ccr_collateral_checks.py``; the
   collect happens there, once per stage (``collect_findings``).
 
@@ -26,12 +27,14 @@ from typing import TYPE_CHECKING
 from rwa_calc.contracts.ccr_collateral_checks import (
     FindingsPlan,
     ccr_collateral_errors,
+    fx_leg_currency_errors,
     margin_term_conflict_errors,
     reporting_currency_errors,
 )
 from rwa_calc.engine.ccr.collateral import ccr_collateral_findings
 from rwa_calc.engine.ccr.margin_terms import margin_term_conflicts
 from rwa_calc.engine.ccr.reporting_currency import (
+    fx_leg_currency_findings,
     reporting_currency_findings,
     reporting_currency_rates,
 )
@@ -55,6 +58,10 @@ def derivative_findings(
 ) -> list[FindingsPlan]:
     """The CCR024 / CCR025 / CCR026 plans of the derivatives book.
 
+    CCR026 has two plans: every trade's and collateral item's ``currency``, and
+    the second payment leg (``currency_leg2``) of an FX trade, which the
+    Art. 279b(1)(b) branch converts itself (P1.406).
+
     Args:
         stated: The derivatives bundle as input (before the enforceability gate).
         gated: The bundle after the enforceability / WWR gates — the netting
@@ -68,6 +75,7 @@ def derivative_findings(
         ``(plan, decoder)`` pairs for ``collect_findings``.
     """
     collateral = gated.ccr_collateral.ccr_collateral
+    rates = reporting_rates(fx_rates, run_config)
     return [
         (
             margin_term_conflicts(
@@ -91,10 +99,11 @@ def derivative_findings(
                     "ccr.trades|trade_id": gated.trades.trades,
                     "ccr.ccr_collateral|ccr_collateral_reference": collateral,
                 },
-                reporting_rates(fx_rates, run_config),
+                rates,
             ),
             reporting_currency_errors,
         ),
+        (fx_leg_currency_findings(gated.trades.trades, rates), fx_leg_currency_errors),
     ]
 
 

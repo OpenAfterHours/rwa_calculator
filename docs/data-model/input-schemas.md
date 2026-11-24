@@ -1150,7 +1150,20 @@ test now uses `max(number_of_trades, trades in the input)`.
 
 **`ccr.trades`**: `notional`, `market_price` and `mtm_value` are in the trade
 `currency` and rebased to the reporting currency (Art. 279b(3)); a currency with
-no `fx_rates` row is left unconverted and reported `CCR026`.
+no `fx_rates` row is left unconverted and reported `CCR026`. An FX trade's legs
+(`notional` / `currency`, `notional_leg2` / `currency_leg2`) are converted by
+the Art. 279b(1)(b) adjusted notional itself. Give both legs: a null
+`notional_leg2` prices the trade on its first leg's notional at spot — read as
+one payment leg in its own hedging set when `currency_leg2` is null too
+(`CCR036` warning); rule (ii)'s complete value, netted in its pair, when
+`currency_leg2` is the reporting currency; otherwise an estimate in its own
+hedging set (`CCR037` error). A leg
+with no rate enters unconverted with the larger leg taken and the trade kept in
+its own hedging set (`CCR026` names `currency_leg2` for the second leg). An `equity` or `commodity`
+trade's adjusted notional is `market_price × number_of_units`; leave either null
+and the trade is priced on `|notional|` as a notional-expressed contract
+(Art. 279b(1)(c); `CCR035` warning) — or, with a 0 / null `notional` too, at
+zero (`CCR038` error).
 
 ### `transaction_type` discriminator
 

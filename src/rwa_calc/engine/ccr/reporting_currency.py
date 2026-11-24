@@ -16,6 +16,10 @@ Key responsibilities:
 - A row whose currency has no rate keeps its amounts unconverted — the
   FXConverter's own treatment of a missing rate — and is reported CCR026 from
   :func:`reporting_currency_findings`, which reads the same lookup.
+- An FX trade's second payment leg (``currency_leg2``), which the Art. 279b(1)(b)
+  branch converts itself, is reported CCR026 from :func:`fx_leg_currency_findings`
+  when it has no rate: the branch then takes the leg unconverted and the larger
+  of the two legs (``engine/ccr/adjusted_notional.py``; P1.406).
 - Stamp a synthetic netting-set row's ``currency`` as the reporting currency
   once its amounts are in it (``original_currency`` keeps the denomination).
 
@@ -39,6 +43,10 @@ import logging
 from collections.abc import Iterable
 
 import polars as pl
+
+from rwa_calc.data.column_spec import ensure_columns
+from rwa_calc.data.schemas import TRADE_SCHEMA
+from rwa_calc.engine.ccr.risk_categories import map_trade_risk_categories
 
 logger = logging.getLogger(__name__)
 
@@ -165,8 +173,8 @@ def reporting_currency_findings(
 ) -> pl.LazyFrame | None:
     """Rows whose amounts :func:`rebase_to_reporting_currency` leaves unconverted.
 
-    One row per (table, record) whose ``currency`` is null or has no rate to
-    the reporting currency, carrying ``table``, ``record_id``,
+    One row per (table, record) whose ``currency`` is null or has no (non-null)
+    rate to the reporting currency, carrying ``table``, ``record_id``,
     ``netting_set_id`` and ``currency`` — decoded into CCR026 by
     ``contracts/ccr_collateral_checks.py``.
 
@@ -181,7 +189,7 @@ def reporting_currency_findings(
     """
     if rates is None:
         return None
-    convertible = rates.select(pl.col("currency_from"), pl.lit(True).alias("_convertible"))
+    convertible = _convertible(rates)
     plans = []
     for key, frame in frames.items():
         if frame is None:
@@ -201,3 +209,60 @@ def reporting_currency_findings(
     if not plans:
         return None
     return pl.concat(plans, how="vertical").sort("table", "record_id", nulls_last=True)
+
+
+def fx_leg_currency_findings(
+    trades: pl.LazyFrame | None,
+    rates: pl.LazyFrame | None,
+) -> pl.LazyFrame | None:
+    """FX trades whose second payment leg has no spot rate to the reporting currency.
+
+    The Art. 279b(1)(b) branch (``compute_adjusted_notional_fx``) converts both
+    legs itself; a ``currency_leg2`` that is null or has no rate enters it
+    unconverted and the larger of the two legs is taken. One row per such trade
+    — an ``asset_class`` that engine/ccr maps to ``"fx"`` (the same
+    ``map_trade_risk_categories`` folding) with a second-leg notional
+    (``notional_leg2`` not null: a trade without one is priced on its first leg,
+    and reported CCR036 / CCR037 by the input gate,
+    ``contracts/ccr_input_checks.py::ccr_fx_second_leg_findings``, where that
+    leg's notional is needed) — carrying ``table``, ``record_id``,
+    ``netting_set_id`` and the leg's ``currency``; decoded into CCR026 by
+    ``contracts/ccr_collateral_checks.py::fx_leg_currency_errors``. The first
+    leg is the trade's own ``currency`` and is reported by
+    :func:`reporting_currency_findings`.
+
+    Args:
+        trades: The derivative trades the adapter prices, or None.
+        rates: :func:`reporting_currency_rates` output, or None (conversion
+            disabled for the run: nothing is reported, as for CCR026).
+
+    Returns:
+        The findings plan, or None when there is nothing to check.
+    """
+    if trades is None or rates is None:
+        return None
+    legs = ensure_columns(
+        trades,
+        {name: TRADE_SCHEMA[name] for name in ("asset_class", "notional_leg2", "currency_leg2")},
+    )
+    return (
+        map_trade_risk_categories(legs)
+        .filter((pl.col("asset_class") == "fx") & pl.col("notional_leg2").is_not_null())
+        .select(
+            pl.lit("ccr.trades").alias("table"),
+            pl.col("trade_id").cast(pl.String).alias("record_id"),
+            pl.col("netting_set_id").cast(pl.String),
+            pl.col("currency_leg2").cast(pl.String).alias("currency"),
+        )
+        .join(_convertible(rates), left_on="currency", right_on="currency_from", how="left")
+        .filter(pl.col("_convertible").is_null())
+        .drop("_convertible")
+        .sort("record_id", nulls_last=True)
+    )
+
+
+def _convertible(rates: pl.LazyFrame) -> pl.LazyFrame:
+    """The currencies :func:`rebase_to_reporting_currency` converts: a non-null rate."""
+    return rates.filter(pl.col(_RATE).is_not_null()).select(
+        pl.col("currency_from"), pl.lit(True).alias("_convertible")
+    )

@@ -134,6 +134,18 @@ The gate is its own CI job, `Filing Mapping Ratchet`. It is not part of
 runs the measurement. Bank a deliberate move with `--update-baseline` and say
 why in the baseline's `_note`.
 
+`--check` names every total and every breakdown cell that moved the good way as
+an `[IMPROVED]` line and still passes. Confirm that each line is a real gain
+before you bank it. `placed_cells` counts a placed zero like any other cell, so
+a rise can be a zero where none belongs. The Bank's Filing Manual (rule 2.19)
+says uninteresting zeros should not be reported. Banking such a rise makes the
+defect a floor, and the fix that removes the zeros then fails the ratchet. A
+real gain that is not banked leaves slack: while the ceiling stays above the
+measurement, a later regression can climb back up to it without failing
+anything. Only an Error-rule fix is forced to be re-banked. The supervisory
+register fails when a banked gateway break stops breaking, and
+`tests/contracts/test_gateway_break_registers_agree.py` holds the two files equal.
+
 ## The gateway leg of the supervisory register
 
 The supervisory register (`tests/acceptance/reporting/test_supervisory_validations.py`,

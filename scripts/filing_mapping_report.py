@@ -68,8 +68,21 @@ Usage:
 Bank a deliberate move with ``--update-baseline`` — re-measure it, never type
 the numbers — and say why in the baseline's ``_note`` and the commit message.
 
+``--check`` also names every total and every breakdown cell that moved the GOOD
+way, as an ``[IMPROVED]`` line, and still passes: the ratchet forbids moving the
+wrong way, not the right way. It prints ``[OK] no metric moved`` only when
+nothing moved in either direction.
+
+An ``[IMPROVED]`` line is a lead, not a verdict. Confirm each one is a real gain
+before banking it. ``placed_cells`` counts a placed zero like any other cell, so
+a rise can be a zero where none belongs (the Bank's Filing Manual, rule 2.19:
+uninteresting zeros should not be reported). Banking that rise makes the defect
+a floor, and its fix then fails the ratchet. A real gain left unbanked is slack,
+which a later regression can use up without failing anything.
+
 Exit codes:
-    0 = measured (and, with --check, nothing moved the wrong way)
+    0 = measured (and, with --check, nothing moved the wrong way; improvements
+        are reported as [IMPROVED] and do not fail)
     1 = a ratcheted number moved the wrong way, or the matrix changed
 
 References:
@@ -145,6 +158,14 @@ BASELINE_COMMENT = (
     "type the numbers."
 )
 UNEXPLAINED_NOTE = "unexplained — say why this baseline was re-banked"
+#: Printed after the [IMPROVED] lines when nothing moved the wrong way. Not "bank
+#: it": placed_cells counts zeros, so a rise can be a zero where none belongs.
+REBANK_IMPROVEMENT = (
+    "\n  Confirm each improvement above is a real gain before banking it. A newly placed\n"
+    "  cell can be a zero where none belongs (Filing Manual rule 2.19), and banking it\n"
+    "  would make that defect a floor. Bank only real gains, and say why in _note:\n"
+    "    uv run python scripts/filing_mapping_report.py --update-baseline"
+)
 
 #: Unplaced breakdown rows printed. The whole breakdown always goes to the baseline.
 PRINTED_ROWS = 30
@@ -174,13 +195,20 @@ def main() -> int:
         print(f"\nWrote {BASELINE_PATH.relative_to(_REPO_ROOT).as_posix()}")
         return 0
     if args.check:
-        problems = check_against_baseline(measured, load_baseline())
+        baseline = load_baseline()
+        problems = check_against_baseline(measured, baseline)
+        improvements = improvements_over_baseline(measured, baseline)
         print("\nFiling-mapping ratchet")
+        for improvement in improvements:
+            print(f"  [IMPROVED] {improvement}")
         if problems:
             for problem in problems:
                 print(f"  [FAIL] {problem}")
             return 1
-        print("  [OK] no metric moved")
+        if improvements:
+            print(REBANK_IMPROVEMENT)
+        else:
+            print("  [OK] no metric moved")
     return 0
 
 
@@ -388,6 +416,45 @@ def check_against_baseline(measured: dict[str, Any], baseline: dict[str, Any]) -
     return problems
 
 
+def improvements_over_baseline(measured: dict[str, Any], baseline: dict[str, Any]) -> list[str]:
+    """Every total and breakdown cell that moved the good way against ``baseline``.
+
+    Kept apart from ``check_against_baseline`` on purpose: that function also
+    judges a working-tree baseline against ``HEAD``, where an improvement is a
+    legitimate tightening, not a problem. Reported, never failed — the ratchet
+    forbids moving the wrong way. Good by the metric is not proof of a gain: a
+    placed zero counts in ``placed_cells`` like any other cell. So each line is
+    something to confirm before banking it, not an instruction to re-bank.
+
+    A breakdown cell fixed to zero is a key MISSING from the measurement (a zero
+    is never written), so each breakdown is read over the union of both sides'
+    keys. Nothing is claimed where ``check_against_baseline`` finds the two not
+    comparable: a delta across two matrices is not a delta in either direction.
+    """
+    if measured["provenance"] != baseline.get("provenance"):
+        return []
+    if any(name not in baseline for name in (*RATCHET_MIN, *RATCHET_MAX)):
+        return []
+
+    improvements = [
+        f"{name} rose: {baseline[name]} -> {measured[name]}"
+        for name in RATCHET_MIN
+        if measured[name] > baseline[name]
+    ]
+    improvements += [
+        f"{name} fell: {baseline[name]} -> {measured[name]}"
+        for name in RATCHET_MAX
+        if measured[name] < baseline[name]
+    ]
+    for breakdown in BREAKDOWNS.values():
+        banked, now = baseline.get(breakdown, {}), measured[breakdown]
+        for key in sorted(banked.keys() | now.keys()):
+            before, after = banked.get(key, 0), now.get(key, 0)
+            if after < before:
+                improvements.append(_fallen_cell(breakdown, key, before, after))
+    return improvements
+
+
 # =============================================================================
 # Reporting
 # =============================================================================
@@ -420,6 +487,16 @@ def print_report(measured: dict[str, Any], seconds: float) -> None:
         ):
             print(f"  {count:>6}  {rule}")
     print(f"\nMeasured {measured['provenance']['runs']} runs in {seconds:.1f}s")
+
+
+def _fallen_cell(breakdown: str, key: str, before: int, after: int) -> str:
+    """One breakdown cell that fell, named as ``check_against_baseline`` names a risen one."""
+    if breakdown == "error_rules_by_rule":
+        return f"Error-severity rule {key} is broken on fewer portfolios: {before} -> {after}"
+    first, second = key.split("|", 1)
+    if breakdown == "structure_by_table":
+        return f"structure findings {first} in {second} fell: {before} -> {after}"
+    return f"unplaced figures in {first} ({second}) fell: {before} -> {after}"
 
 
 if __name__ == "__main__":

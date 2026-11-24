@@ -22,7 +22,9 @@ to the dev loop is a test somebody switches off. So:
   a baseline that does not parse or does not foot, a number with no direction, a
   reason the adapter no longer emits, numbers measured over a matrix that no
   longer exists, a baseline weakened in the working tree, a re-bank nobody
-  explained, the comparison itself going soft, and the CI job being deleted.
+  explained, the comparison itself going soft, an improvement reported as
+  "no metric moved" (so nobody checks it, and a real gain's slack is never
+  banked), and the CI job being deleted.
 - One ``slow`` test that shells out to the real ``--check``. Its real home is
   the ``filing-mapping`` CI job, which invokes the script directly.
 
@@ -524,6 +526,239 @@ def test_a_moved_matrix_is_reported_as_incomparable_not_as_a_regression(
     # Assert
     assert len(problems) == 1
     assert "not comparable" in problems[0] and "do not drop a portfolio" in problems[0]
+
+
+# =============================================================================
+# The check reports what moved the good way
+# =============================================================================
+
+#: Every total and every breakdown cell of ``_improved`` that moved the good way,
+#: as ``--check`` must name it. One per total and one per breakdown, so an
+#: implementation that reports only the totals, or skips one breakdown, is red.
+IMPROVED_LINES = (
+    "placed_cells rose: 100 -> 104",
+    "unplaced_figures fell: 10 -> 6",
+    "unplaced figures in c08_01 (row_not_in_taxonomy) fell: 4 -> 0",
+    "structure_findings fell: 3 -> 2",
+    "structure findings STR006 in OF08.03.01.01 fell: 1 -> 0",
+    "error_rule_breaks fell: 5 -> 3",
+    "Error-severity rule boe_b0904 is broken on fewer portfolios: 2 -> 0",
+)
+
+
+def _improved(banked: dict[str, Any]) -> dict[str, Any]:
+    """``banked`` better on every total, with one cell of each breakdown fixed to zero.
+
+    A fixed cell is a MISSING key on the measured side — a zero is never
+    written — so this is the shape the most important improvement takes.
+    """
+    measured = copy.deepcopy(banked)
+    measured["placed_cells"] = 104
+    measured["unplaced_figures"] = 6
+    measured[BREAKDOWN_KEY] = {"c07_00|cell_not_reportable": 6}
+    measured["structure_findings"] = 2
+    measured[STRUCTURE_KEY] = {"STR007|OF02.00.01.01": 2}
+    measured["error_rule_breaks"] = 3
+    measured[RULES_KEY] = {"boe_b0713": 3}
+    return measured
+
+
+def _run_check(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    measured: dict[str, Any],
+    baseline: dict[str, Any],
+) -> tuple[int, str]:
+    """Run the script's real ``--check`` branch on a given measurement — no pipeline run."""
+    monkeypatch.setattr(MAPPING, "measure", lambda: measured)
+    monkeypatch.setattr(MAPPING, "load_baseline", lambda: baseline)
+    monkeypatch.setattr(sys, "argv", [SCRIPT_REL, "--check"])
+    code = MAPPING.main()
+    return code, capsys.readouterr().out
+
+
+def test_check_reports_every_improvement_instead_of_saying_nothing_moved(
+    banked: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An improvement is named for someone to check — never reported as "no metric moved".
+
+    A real gain left unbanked is slack a later regression can use unseen, so
+    ``--check`` names every good move and how to bank it. It does not say "bank
+    it": ``placed_cells`` counts zeros, so a rise can be a zero where none
+    belongs, and the hint must say to confirm each line first. It still passes:
+    the ratchet forbids moving the wrong way, not moving the right way.
+
+    Arrange: a measurement better than the baseline on every total.
+    Act:     run ``--check``.
+    Assert:  exit 0; every total and fixed cell is an [IMPROVED] line; the hint
+             asks for each to be confirmed and gives the re-bank command; "no
+             metric moved" is not printed.
+    """
+    # Arrange
+    measured = _improved(banked)
+
+    # Act
+    code, out = _run_check(monkeypatch, capsys, measured, banked)
+
+    # Assert
+    assert code == 0, out
+    assert "no metric moved" not in out, out
+    missing = [line for line in IMPROVED_LINES if f"[IMPROVED] {line}" not in out]
+    assert not missing, f"--check did not report: {missing}\n{out}"
+    assert out.count("[IMPROVED]") == len(IMPROVED_LINES), out
+    assert "real gain before banking" in out, out
+    assert "--update-baseline" in out, out
+
+
+def test_check_says_nothing_moved_only_when_nothing_moved(
+    banked: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The quiet case stays quiet: no improvement and no re-bank hint to act on."""
+    # Arrange
+    measured = copy.deepcopy(banked)
+
+    # Act
+    code, out = _run_check(monkeypatch, capsys, measured, banked)
+
+    # Assert
+    assert code == 0, out
+    assert "[OK] no metric moved" in out, out
+    assert "[IMPROVED]" not in out and "--update-baseline" not in out, out
+
+
+def test_an_improvement_beside_a_regression_fails_and_offers_no_re_bank(
+    banked: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Both moves are named, the regression fails, and re-banking is not suggested.
+
+    Re-banking here would bank the regression along with the fix.
+    """
+    # Arrange — c07_00 improves by four, c08_01 worsens by two.
+    measured = copy.deepcopy(banked)
+    measured["unplaced_figures"] = 8
+    measured[BREAKDOWN_KEY] = {"c07_00|cell_not_reportable": 2, "c08_01|row_not_in_taxonomy": 6}
+
+    # Act
+    code, out = _run_check(monkeypatch, capsys, measured, banked)
+
+    # Assert
+    assert code == 1, out
+    assert "[FAIL] unplaced figures in c08_01 (row_not_in_taxonomy) rose: 4 -> 6" in out, out
+    assert "[IMPROVED] unplaced figures in c07_00 (cell_not_reportable) fell: 6 -> 2" in out, out
+    assert "[IMPROVED] unplaced_figures fell: 10 -> 8" in out, out
+    # Only the two good moves: the regression is never ALSO reported as an improvement.
+    assert out.count("[IMPROVED]") == 2, out
+    assert "--update-baseline" not in out, out
+
+
+def test_improvements_are_kept_apart_from_problems(banked: dict[str, Any]) -> None:
+    """The improvement helper names each good move; the problem list stays empty.
+
+    ``check_against_baseline`` also judges a working-tree baseline against
+    ``HEAD``, so an improvement read as a problem would make every tightening
+    re-bank read as "weakened".
+
+    Arrange: the improved measurement.
+    Act:     compute both lists.
+    Assert:  every expected line, nothing else, and no problem.
+    """
+    # Arrange
+    measured = _improved(banked)
+
+    # Act
+    improvements = MAPPING.improvements_over_baseline(measured, banked)
+    problems = MAPPING.check_against_baseline(measured, banked)
+
+    # Assert
+    assert sorted(improvements) == sorted(IMPROVED_LINES)
+    assert problems == []
+
+
+def test_no_improvement_is_claimed_for_an_unchanged_measurement(banked: dict[str, Any]) -> None:
+    assert MAPPING.improvements_over_baseline(copy.deepcopy(banked), banked) == []
+
+
+def test_no_improvement_is_claimed_for_a_regression(banked: dict[str, Any]) -> None:
+    """A move the wrong way is never an improvement, on any total or any breakdown.
+
+    Every total and one cell of each breakdown get worse, so a comparison that
+    reports any movement (``!=``) rather than movement the good way is red.
+
+    Arrange: the baseline worse on every total, one cell of each breakdown risen.
+    Act:     compute the improvements.
+    Assert:  none.
+    """
+    # Arrange
+    measured = copy.deepcopy(banked)
+    measured["placed_cells"] = 99
+    measured["unplaced_figures"] = 11
+    measured[BREAKDOWN_KEY] = {"c07_00|cell_not_reportable": 7, "c08_01|row_not_in_taxonomy": 4}
+    measured["structure_findings"] = 4
+    measured[STRUCTURE_KEY] = {"STR007|OF02.00.01.01": 3, "STR006|OF08.03.01.01": 1}
+    measured["error_rule_breaks"] = 6
+    measured[RULES_KEY] = {"boe_b0713": 4, "boe_b0904": 2}
+
+    # Act
+    improvements = MAPPING.improvements_over_baseline(measured, banked)
+
+    # Assert
+    assert improvements == []
+
+
+def test_no_improvement_is_claimed_across_a_moved_matrix(
+    banked: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A delta across two estates is not a delta, in either direction."""
+    # Arrange — a different matrix AND numbers that would otherwise read as better.
+    measured = _improved(banked)
+    measured["provenance"] = {"runs": 2, "portfolios": [*banked["provenance"]["portfolios"], {}]}
+
+    # Act
+    improvements = MAPPING.improvements_over_baseline(measured, banked)
+    code, out = _run_check(monkeypatch, capsys, measured, banked)
+
+    # Assert
+    assert improvements == []
+    assert code == 1 and "not comparable" in out, out
+    assert "[IMPROVED]" not in out, out
+
+
+def test_check_on_a_baseline_that_does_not_bank_a_total_fails_in_words_not_a_crash(
+    banked: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``--check`` still reads a total missing from the baseline as red, in words.
+
+    The improvement helper runs before ``main`` returns on the problem list, so
+    it must not read the missing total itself: ``baseline[name]`` would turn the
+    worded [FAIL] that ``check_against_baseline`` writes into a ``KeyError``.
+
+    Arrange: a baseline with ``structure_findings`` deleted.
+    Act:     compute the improvements, and run ``--check``.
+    Assert:  no improvement claimed; exit 1 with the worded failure; nothing raised.
+    """
+    # Arrange
+    measured = copy.deepcopy(banked)
+    del banked["structure_findings"]
+
+    # Act
+    improvements = MAPPING.improvements_over_baseline(measured, banked)
+    code, out = _run_check(monkeypatch, capsys, measured, banked)
+
+    # Assert
+    assert improvements == []
+    assert code == 1, out
+    assert "[FAIL] the baseline does not bank structure_findings" in out, out
+    assert "[IMPROVED]" not in out, out
 
 
 # =============================================================================

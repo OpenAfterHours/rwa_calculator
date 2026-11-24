@@ -291,8 +291,14 @@ uv run python scripts/filing_mapping_report.py --check      # gate against the b
 uv run python scripts/filing_mapping_report.py --update-baseline
 ```
 
-`--check` fails if `placed_cells` fell, if `unplaced_figures` rose, or if any
-(template, reason) cell of the breakdown rose. The baseline is
+`--check` fails if `placed_cells` fell, if `unplaced_figures`,
+`structure_findings` or `error_rule_breaks` rose, or if any cell of their
+breakdowns rose. A move the good way is printed as an `[IMPROVED]` line, one per
+total and per breakdown cell (a cell fixed to zero shows as `N -> 0`), followed
+by the `--update-baseline` command; it does not fail the check. Confirm each
+line is a real gain before banking it: a newly placed cell can be a zero where
+none belongs. `[OK] no metric moved` means nothing moved in either direction.
+The baseline is
 `scripts/filing_mapping_baseline.json`. See
 [Workspace & Packages](workspace.md#the-filing-mapping-ratchet) for the counts
 and what each reason means.

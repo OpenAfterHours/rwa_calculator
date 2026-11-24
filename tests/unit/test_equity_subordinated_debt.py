@@ -292,7 +292,6 @@ class TestSubordinatedDebtMixedBatch:
                 "is_speculative": [False, False, True, False],
                 "is_exchange_traded": [False, False, False, False],
                 "is_government_supported": [False, False, False, True],
-                "is_diversified_portfolio": [False, False, False, False],
                 "ciu_approach": [None, None, None, None],
                 "ciu_mandate_rw": [None, None, None, None],
                 "ciu_third_party_calc": [None, None, None, None],

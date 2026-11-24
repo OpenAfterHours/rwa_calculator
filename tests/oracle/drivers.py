@@ -230,7 +230,6 @@ _INPUT_ALIASES = {
     "is_managed_as_retail": "cp_is_managed_as_retail",
     "is_natural_person": "cp_is_natural_person",
     "is_social_housing": "cp_is_social_housing",
-    "is_diversified": "is_diversified_portfolio",
     "is_equivalent_jurisdiction": "cp_is_equivalent_jurisdiction",
 }
 
@@ -583,7 +582,6 @@ def run_slotting(*, framework: str, ead: float, **overrides: Any) -> dict[str, A
 _EQUITY_DEFAULTS: dict[str, Any] = {
     "exposure_reference": "SINGLE",
     "equity_type": "listed",
-    "is_diversified_portfolio": False,
     "is_speculative": False,
     "is_exchange_traded": False,
     "is_government_supported": False,

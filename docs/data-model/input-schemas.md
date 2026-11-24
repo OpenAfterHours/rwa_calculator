@@ -1229,7 +1229,7 @@ for a standalone future codemod. See the
 | `government_supported` | 100% CRR / 250% B31 | Government-supported programme |
 | `unlisted` | 250% | Unlisted equities |
 | `private_equity` | 250% | Private equity investments |
-| `private_equity_diversified` | 190% | Diversified private equity portfolio |
+| `private_equity_diversified` | 190% | Private equity in a sufficiently diversified portfolio (firm attestation). The only encoding of the CRR Art. 155(2) 190% simple RW and the Art. 165(2) 65% PD/LGD LGD; there is no separate diversification flag |
 | `speculative` | 400% | Higher-risk (unlisted + business < 5yr) |
 | `ciu` | Look-through | Collective investment undertakings |
 | `other` | 250% | Other equity exposures |

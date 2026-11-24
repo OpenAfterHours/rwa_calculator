@@ -2737,8 +2737,7 @@
       "regulation": "CRR Art. 155(2): simple risk-weight approach -- private equity in a sufficiently diversified portfolio -> 190% RW",
       "inputs": {
         "ead": 1000000.0,
-        "equity_type": "private_equity",
-        "is_diversified": true,
+        "equity_type": "private_equity_diversified",
         "permission": "IRB"
       },
       "expected": {

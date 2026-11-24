@@ -94,20 +94,6 @@ def equity_calculator() -> EquityCalculator:
 class TestP1247IRBSimpleEquityExpectedLoss:
     """Art. 158(7) EL amount must be emitted on the Art. 155(2) simple path."""
 
-    def test_diversified_pe_el_08_percent(
-        self, equity_calculator: EquityCalculator, irb_config: CalculationConfig
-    ) -> None:
-        """Diversified PE (190% RW) carries the 0.8% Art. 158(7) EL rate."""
-        result = calculate_single_equity_exposure(
-            equity_calculator,
-            ead=EAD,
-            equity_type="private_equity",
-            is_diversified=True,
-            config=irb_config,
-        )
-        assert result["risk_weight"] == pytest.approx(1.90)
-        assert result["expected_loss"] == pytest.approx(EL_RATE_DIVERSIFIED_PE * float(EAD))
-
     def test_private_equity_diversified_type_el_08_percent(
         self, equity_calculator: EquityCalculator, irb_config: CalculationConfig
     ) -> None:
@@ -169,7 +155,6 @@ class TestP1247IRBSimpleEquityExpectedLoss:
             equity_calculator,
             ead=EAD,
             equity_type="private_equity",
-            is_diversified=False,
             config=irb_config,
         )
         assert result["risk_weight"] == pytest.approx(3.70)
@@ -203,13 +188,13 @@ class TestP1247IRBSimpleEquityExpectedLoss:
         assert result["expected_loss"] == pytest.approx(0.0)
 
     @pytest.mark.parametrize(
-        ("equity_type", "is_diversified", "is_exchange_traded", "expected_rw", "expected_el_rate"),
+        ("equity_type", "is_exchange_traded", "expected_rw", "expected_el_rate"),
         [
-            ("private_equity", True, False, 1.90, 0.008),
-            ("exchange_traded", False, True, 2.90, 0.008),
-            ("listed", False, False, 2.90, 0.008),
-            ("other", False, False, 3.70, 0.024),
-            ("unlisted", False, False, 3.70, 0.024),
+            ("private_equity_diversified", False, 1.90, 0.008),
+            ("exchange_traded", True, 2.90, 0.008),
+            ("listed", False, 2.90, 0.008),
+            ("other", False, 3.70, 0.024),
+            ("unlisted", False, 3.70, 0.024),
         ],
     )
     def test_el_pairs_with_rw_bucket(
@@ -217,7 +202,6 @@ class TestP1247IRBSimpleEquityExpectedLoss:
         equity_calculator: EquityCalculator,
         irb_config: CalculationConfig,
         equity_type: str,
-        is_diversified: bool,
         is_exchange_traded: bool,
         expected_rw: float,
         expected_el_rate: float,
@@ -227,7 +211,6 @@ class TestP1247IRBSimpleEquityExpectedLoss:
             equity_calculator,
             ead=EAD,
             equity_type=equity_type,
-            is_diversified=is_diversified,
             is_exchange_traded=is_exchange_traded,
             config=irb_config,
         )

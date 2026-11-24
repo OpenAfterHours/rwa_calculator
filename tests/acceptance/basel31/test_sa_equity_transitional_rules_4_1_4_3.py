@@ -165,7 +165,6 @@ _FRAME_SCHEMA: dict[str, pl.DataType] = {
     "is_speculative": pl.Boolean(),
     "is_exchange_traded": pl.Boolean(),
     "is_government_supported": pl.Boolean(),
-    "is_diversified_portfolio": pl.Boolean(),
     "is_significant_investment": pl.Boolean(),
     "business_age_years": pl.Float64(),
     "ciu_approach": pl.String(),
@@ -179,7 +178,6 @@ _FLAG_DEFAULTS: dict[str, Any] = {
     "is_speculative": False,
     "is_exchange_traded": False,
     "is_government_supported": False,
-    "is_diversified_portfolio": False,
     "is_significant_investment": False,
 }
 

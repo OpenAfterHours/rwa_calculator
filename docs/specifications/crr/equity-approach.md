@@ -169,6 +169,14 @@ assigned; a hedged significant investment is not separated from that step.
 | Exchange-traded equity | **290%** | Art. 155(2), RW bullet 2 |
 | All other equity exposures | **370%** | Art. 155(2), RW bullet 3 |
 
+"Private equity exposures in sufficiently diversified portfolios" is one test, used by
+Art. 155(2) (190%), Art. 155(3) and Art. 165(2) (65% LGD). The engine holds one predicate for
+it (`_crr_diversified_private_equity_expr`), read by both the simple-RW and the PD/LGD paths,
+and its only input encoding is `equity_type = "private_equity_diversified"` — the firm's
+attestation; the engine does not assess diversification. There is no separate flag: an
+`is_diversified_portfolio` column is not in `EQUITY_EXPOSURE_SCHEMA` and is dropped at load
+(P1.206 removed the dead IRB-Simple check that read it on hand-built frames only).
+
 Short cash positions and derivatives held in the non-trading book may offset long positions
 in the same individual stock provided the hedge is explicit and covers at least one year.
 Other short positions are treated as long with the relevant RW applied to their absolute
@@ -421,7 +429,7 @@ for detailed requirements and acceptance test scenarios.
 | Scenario ID | Description | Equity Type | Key Flags | EAD | Expected RW | Expected RWA |
 |-------------|-------------|-------------|-----------|-----|-------------|--------------|
 | CRR-J10 | Exchange-traded equity IRB Simple | `exchange_traded` | `is_exchange_traded=True` | £200,000 | 290% | £580,000 |
-| CRR-J11 | Diversified PE equity IRB Simple | `private_equity` | `is_diversified=True` | £100,000 | 190% | £190,000 |
+| CRR-J11 | Diversified PE equity IRB Simple | `private_equity_diversified` | — | £100,000 | 190% | £190,000 |
 | CRR-J12 | Other (unlisted) equity IRB Simple | `unlisted` | — | £100,000 | 370% | £370,000 |
 | CRR-J13 | Central bank equity IRB Simple (sovereign treatment) | `central_bank` | — | £500,000 | 0% | £0 |
 | CRR-J14 | Government-supported equity IRB Simple | `government_supported` | `is_government_supported=True` | £300,000 | 190% | £570,000 |

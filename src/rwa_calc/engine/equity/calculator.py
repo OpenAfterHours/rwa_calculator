@@ -11,7 +11,9 @@ Pipeline position:
 
 Key responsibilities:
 - Determine equity risk weights based on equity type and framework
-- Handle diversified portfolio treatment for private equity
+- Handle diversified portfolio treatment for private equity: one predicate
+  (``equity_type == "private_equity_diversified"``) for the Art. 155(2) 190%
+  weight and the Art. 165(2) 65% PD/LGD LGD
 - Assign the Standardised Transitional Approach weights (PS1/26 Credit Risk:
   General Provisions rules 4.1-4.3) to a firm without IRB permission on
   31 December 2026, for reporting dates in 2027-2029, and mark those legs with
@@ -128,7 +130,6 @@ _CIU_INTERNAL_MULTIPLIER = 1.0
 # calculator. `ead_final` is derived (not defaulted) so is handled separately.
 _EQUITY_INPUT_CONTRACT: dict[str, ColumnSpec] = {
     "equity_type": ColumnSpec(pl.String, default="other", required=False),
-    "is_diversified_portfolio": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_speculative": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_exchange_traded": ColumnSpec(pl.Boolean, default=False, required=False),
     "is_government_supported": ColumnSpec(pl.Boolean, default=False, required=False),
@@ -735,7 +736,9 @@ class EquityCalculator:
 
         Risk weights (Art. 155(2)) and paired expected-loss rates (Art. 158(7)):
         - Central bank: 0% RW, 0.0% EL
-        - Private equity (diversified portfolio): 190% RW, 0.8% EL
+        - Private equity in sufficiently diversified portfolios
+          (``_crr_diversified_private_equity_expr``, shared with the PD/LGD
+          Art. 165(2) 65% LGD): 190% RW, 0.8% EL
         - Exchange-traded / listed: 290% RW, 0.8% EL
         - All other equity: 370% RW, 2.4% EL
 
@@ -765,9 +768,7 @@ class EquityCalculator:
         eq_type = pl.col("equity_type").str.to_lowercase()
         is_central_bank = eq_type == "central_bank"
         is_significant_investment = _crr_significant_investment_expr()
-        is_diversified_pe = (eq_type == "private_equity_diversified") | (
-            (eq_type == "private_equity") & (pl.col("is_diversified_portfolio") == True)  # noqa: E712
-        )
+        is_diversified_pe = _crr_diversified_private_equity_expr()
         is_exchange_traded = pl.col("is_exchange_traded") == True  # noqa: E712
         is_listed = eq_type == "listed"
         is_exchange_traded_type = eq_type == "exchange_traded"
@@ -908,8 +909,10 @@ class EquityCalculator:
             exchange-traded long-term / non-exchange regular cash flow -> 0.09%,
             exchange-traded (incl. short positions) -> 0.40%,
             all other equity -> 1.25%.
-        - LGD (Art. 165(2)): 65% for sufficiently-diversified private equity
-            (equity_type == "private_equity_diversified"), else 90%.
+        - LGD (Art. 165(2)): 65% for private equity in sufficiently diversified
+            portfolios, else 90%. The row test is
+            ``_crr_diversified_private_equity_expr``, shared with the Art. 155(2)
+            190% bucket of the IRB-Simple path.
         - M (Art. 165(3)): fixed at 5 years.
         - Scaling (Art. 153): 1.06 for CRR.
 
@@ -947,9 +950,10 @@ class EquityCalculator:
             .otherwise(pl.lit(pd_floor_other))
         )
 
-        # Art. 165(2): supervisory LGD — 65% diversified PE, else 90%.
+        # Art. 165(2): supervisory LGD — 65% diversified PE, else 90%. The same
+        # predicate as the Art. 155(2) 190% bucket on the IRB-Simple path.
         lgd = (
-            pl.when(eq_type == "private_equity_diversified")
+            pl.when(_crr_diversified_private_equity_expr())
             .then(pl.lit(lgd_diversified))
             .otherwise(pl.lit(lgd_other))
         )
@@ -1174,7 +1178,6 @@ class EquityCalculator:
             "is_speculative",
             "is_exchange_traded",
             "is_government_supported",
-            "is_diversified_portfolio",
             "ead_final",
             "risk_weight",
             "rwa",
@@ -1356,6 +1359,34 @@ def _crr_significant_investment_expr() -> pl.Expr:
         pl.col("is_significant_investment").eq_missing(True)
         & equity_type.ne_missing(EquityType.CIU.value)
         & equity_type.ne_missing(EquityType.CENTRAL_BANK.value)
+    )
+
+
+@cites("CRR Art. 155(2)")
+@cites("CRR Art. 165(2)")
+def _crr_diversified_private_equity_expr() -> pl.Expr:
+    """Rows that are "private equity exposures in sufficiently diversified portfolios".
+
+    CRR Art. 155(2) gives these 190% under the simple risk-weight approach;
+    Art. 155(3) and Art. 165(2) let them take an LGD of 65% under the PD/LGD
+    approach ("Private equity exposures in sufficiently diversified portfolios
+    may be assigned an LGD of 65 %. All other such exposures shall be assigned
+    an LGD of 90 %."). All three paragraphs use the same test, so both IRB
+    equity paths read this one predicate and cannot classify a row differently.
+
+    The predicate's only input encoding is ``equity_type ==
+    "private_equity_diversified"`` -- the firm's assertion that the holding meets
+    the test (the engine does not assess diversification). There is no separate
+    flag: a boolean ``is_diversified_portfolio`` was read by the IRB-Simple path
+    alone until P1.206, but the loader never declared it, so every production
+    load stripped it at the seal. A null type is not an assertion
+    (``eq_missing``). Basel 3.1 deletes Arts. 155 and 165, and nothing on the
+    Art. 133 path reads this predicate.
+    """
+    return (
+        pl.col("equity_type")
+        .str.to_lowercase()
+        .eq_missing(EquityType.PRIVATE_EQUITY_DIVERSIFIED.value)
     )
 
 

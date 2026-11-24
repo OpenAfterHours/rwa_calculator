@@ -241,8 +241,7 @@ class TestIRBSimpleEquityRiskWeights:
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
-            equity_type="private_equity",
-            is_diversified=True,
+            equity_type="private_equity_diversified",
             config=irb_config,
         )
         assert result["risk_weight"] == pytest.approx(1.90)
@@ -346,7 +345,6 @@ class TestIRBSimpleEquityRiskWeights:
             equity_calculator,
             ead=Decimal("1000000"),
             equity_type="private_equity",
-            is_diversified=False,
             config=irb_config,
         )
         assert result["risk_weight"] == pytest.approx(3.70)
@@ -430,8 +428,7 @@ class TestEquityRWACalculation:
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("1000000"),
-            equity_type="private_equity",
-            is_diversified=True,
+            equity_type="private_equity_diversified",
             config=irb_config,
         )
         assert result["risk_weight"] == pytest.approx(1.90)

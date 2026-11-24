@@ -52,7 +52,10 @@ A holding flagged `is_significant_investment` is **not** weighted under Art. 155
 
 ### Diversified Portfolio Treatment
 
-Private equity holdings in a diversified portfolio receive a reduced risk weight of **190%** (vs 370% for non-diversified). This is flagged via the `is_diversified_portfolio` attribute.
+Private equity holdings in a sufficiently diversified portfolio receive a reduced risk weight of **190%** (vs 370% for non-diversified) under the simple risk weight method, and a **65%** LGD (vs 90%) under the PD/LGD approach (Art. 155(3) / 165(2)). Claim it by setting `equity_type = "private_equity_diversified"`; the engine treats that as your attestation and does not assess diversification itself. Both IRB equity methods read the same test, so a holding cannot be diversified under one and not the other.
+
+!!! warning "There is no separate diversification flag"
+    Earlier versions of this guide said to flag diversified holdings with an `is_diversified_portfolio` column. The equity input schema has never declared that column, so the loader dropped it without an error and a firm with IRB permission had the holding weighted as undiversified private equity (370%, or a 90% LGD under PD/LGD). If your equity file carries that column, move the rows it marks to `equity_type = "private_equity_diversified"`.
 
 ### Short-Position Netting (Art. 155(2))
 

@@ -34,7 +34,6 @@ def apply_b31_equity_weight_sa(equity_type: str, **kwargs: bool | str | float | 
             "is_speculative": [kwargs.get("is_speculative", False)],
             "is_exchange_traded": [kwargs.get("is_exchange_traded", False)],
             "is_government_supported": [kwargs.get("is_government_supported", False)],
-            "is_diversified_portfolio": [False],
             "ciu_approach": [kwargs.get("ciu_approach")],
             "ciu_mandate_rw": [kwargs.get("ciu_mandate_rw")],
             "ciu_third_party_calc": [kwargs.get("ciu_third_party_calc")],

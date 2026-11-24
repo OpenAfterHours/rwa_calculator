@@ -112,7 +112,6 @@ def _build_equity_exposure_lf() -> pl.LazyFrame:
             "ead_final": [EAD],
             "is_speculative": [False],
             "is_government_supported": [False],
-            "is_diversified_portfolio": [False],
             "has_default_definition_info": [True],
         }
     ).lazy()

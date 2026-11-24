@@ -233,8 +233,7 @@ def equity_irb() -> list[dict[str, Any]]:
             ead=M,
             risk_weight=CRR_EQUITY_PRIVATE_DIVERSIFIED_RW,
             inputs={
-                "equity_type": "private_equity",
-                "is_diversified": True,
+                "equity_type": "private_equity_diversified",
                 "permission": "IRB",
             },
         ),

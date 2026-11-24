@@ -68,7 +68,6 @@ def _exchange_traded_leg(config: CalculationConfig) -> dict:
             "ead_final": [_EAD],
             "is_speculative": [False],
             "is_government_supported": [False],
-            "is_diversified_portfolio": [False],
             "has_default_definition_info": [True],
         }
     )

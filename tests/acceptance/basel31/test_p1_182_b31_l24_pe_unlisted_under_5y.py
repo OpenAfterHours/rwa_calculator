@@ -99,7 +99,6 @@ def _build_equity_lf(
             "is_speculative": [False],
             "is_exchange_traded": [False],
             "is_government_supported": [False],
-            "is_diversified_portfolio": [False],
             "ciu_approach": pl.Series([None], dtype=pl.String),
             "ciu_mandate_rw": pl.Series([None], dtype=pl.Float64),
             "ciu_third_party_calc": pl.Series([None], dtype=pl.Boolean),

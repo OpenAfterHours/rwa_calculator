@@ -328,7 +328,7 @@ class TestCRRJ10_ExchangeTradedEquityIRBSimple:
 class TestCRRJ11_DiversifiedPEEquityIRBSimple:
     """
     CRR-J11: Diversified private equity portfolio under IRB Simple.
-    Input: equity_type=private_equity, is_diversified=True, EAD=£100,000
+    Input: equity_type=private_equity_diversified, EAD=£100,000
     Expected: Art. 155(2)(b) 190% → RWA = £190,000
     """
 
@@ -336,8 +336,7 @@ class TestCRRJ11_DiversifiedPEEquityIRBSimple:
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("100000"),
-            equity_type="private_equity",
-            is_diversified=True,
+            equity_type="private_equity_diversified",
             config=crr_irb_config,
         )
         assert result["risk_weight"] == pytest.approx(1.90, abs=1e-4)
@@ -346,8 +345,7 @@ class TestCRRJ11_DiversifiedPEEquityIRBSimple:
         result = calculate_single_equity_exposure(
             equity_calculator,
             ead=Decimal("100000"),
-            equity_type="private_equity",
-            is_diversified=True,
+            equity_type="private_equity_diversified",
             config=crr_irb_config,
         )
         assert result["rwa"] == pytest.approx(190_000.0, rel=1e-4)

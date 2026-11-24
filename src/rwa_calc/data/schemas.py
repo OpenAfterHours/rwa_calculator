@@ -1238,15 +1238,23 @@ GUARANTEE_SCHEMA: dict[str, ColumnSpec] = {
     ),
     # CRR / PS1-26 Art. 213(1)(c)(i): unfunded credit protection eligibility.
     # A guarantee the protection provider can unilaterally CANCEL is ineligible
-    # under both regimes; one whose terms the provider can unilaterally CHANGE
-    # (increasing the effective cost of protection) is additionally ineligible
-    # under Basel 3.1 only (the "or change" words are new in PS1/26, gated by
-    # the ucp_unilateral_change_ineligible pack Feature). Both flags are
+    # under both regimes; one the provider can unilaterally CHANGE "in a way that
+    # would adversely impact the institution" is additionally ineligible under
+    # Basel 3.1 only (the "or change" words are new in PS1/26, gated by the
+    # ucp_unilateral_change_ineligible pack Feature). Both flags are
     # null-PERMISSIVE — a null means "no known defect => eligible", mirroring
     # the Art. 237(2)(a) original_maturity_years fallback above: no default is
     # declared, so apply_boolean_column_defaults leaves nulls untouched.
     "is_unilaterally_cancellable": ColumnSpec(pl.Boolean, required=False),
     "is_unilaterally_changeable": ColumnSpec(pl.Boolean, required=False),
+    # PS1/26 Credit Risk: General Provisions (CRR) Part rule 4.11: the date the
+    # protection was entered into. From 1 January 2027 to 30 June 2028 (both
+    # days included) the "or change" words of Art. 213(1)(c)(i) / 183(1A)(b) are
+    # omitted for protection entered into before 1 January 2027, so a pre-2027
+    # changeable-only row stays eligible in that window. The opposite polarity
+    # to the two flags above, deliberately: rule 4.11 relaxes the screen, so it
+    # needs a stated fact — a null date is NOT grandfathered.
+    "protection_inception_date": ColumnSpec(pl.Date, required=False),
     # Seniority of the guarantor's claim drives F-IRB supervisory LGD selection
     # in PSM (parameter substitution) — Art. 161(1)(a)/(aa)/(b). Allowed
     # values: "senior", "subordinated". Engine treats missing as "senior".

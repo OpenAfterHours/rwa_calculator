@@ -223,6 +223,122 @@ class TestUnilateralProtection:
         assert kept.height == (0 if dropped else 1)
         assert _codes(errors) == ([ERROR_INELIGIBLE_UNFUNDED_PROTECTION] if dropped else [])
 
+    def test_b31_change_limb_message_uses_the_c_i_words(self) -> None:
+        """The CRM012 text quotes (c)(i), not the (c)(ii) cost-increase limb."""
+        _, errors = _screen(_rows({"is_unilaterally_changeable": True}), _B31)
+
+        assert "in a way that would adversely impact the institution" in errors[0].message
+        assert "effective cost" not in errors[0].message
+
+
+# =============================================================================
+# PS1/26 rule 4.11: pre-2027 protection keeps the CRR (c)(i) to 30 June 2028
+# =============================================================================
+
+
+def _b31_on(reporting_date: date) -> CalculationConfig:
+    return CalculationConfig.basel_3_1(reporting_date=reporting_date)
+
+
+def _dated(
+    inception: date | None, *, cancellable: bool = False, changeable: bool = True
+) -> pl.LazyFrame:
+    """One raw row with an explicit (possibly null) Date inception."""
+    return _rows(
+        {
+            "is_unilaterally_cancellable": cancellable,
+            "is_unilaterally_changeable": changeable,
+            "protection_inception_date": inception,
+        }
+    ).with_columns(pl.col("protection_inception_date").cast(pl.Date))
+
+
+class TestRule411Transitional:
+    """Rule 4.11: "or change" is omitted for protection "entered into prior to
+    1 January 2027", "During the period beginning with 1 January 2027 and ending
+    with 30 June 2028". Only the change limb is omitted; the cancel limb stays."""
+
+    @pytest.mark.parametrize(
+        ("reporting_date", "inception", "kept_rows"),
+        [
+            (date(2026, 12, 31), date(2026, 6, 1), 0),  # before the window
+            (date(2027, 1, 1), date(2026, 6, 1), 1),  # "beginning with" (inclusive)
+            (date(2027, 6, 30), date(2026, 6, 1), 1),
+            (date(2028, 6, 30), date(2026, 6, 1), 1),  # "ending with" (inclusive)
+            (date(2028, 7, 1), date(2026, 6, 1), 0),  # after the window
+            (date(2027, 6, 30), date(2026, 12, 31), 1),  # last day "prior to"
+            (date(2027, 6, 30), date(2027, 1, 1), 0),  # the cut-off is strict
+            (date(2027, 6, 30), date(2027, 2, 1), 0),
+            (date(2027, 6, 30), None, 0),  # a missing date is not grandfathered
+        ],
+        ids=[
+            "before-window",
+            "window-first-day",
+            "inside",
+            "window-last-day",
+            "after-window",
+            "inception-eve",
+            "inception-on-cutoff",
+            "inception-2027",
+            "inception-null-in-window",
+        ],
+    )
+    def test_changeable_only_row_is_kept_only_inside_the_window_when_pre_2027(
+        self, reporting_date: date, inception: date | None, kept_rows: int
+    ) -> None:
+        kept, errors = _screen(_dated(inception), _b31_on(reporting_date))
+
+        assert kept.height == kept_rows
+        assert _codes(errors) == ([] if kept_rows else [ERROR_INELIGIBLE_UNFUNDED_PROTECTION])
+
+    def test_cancel_limb_survives_for_pre_2027_protection_in_the_window(self) -> None:
+        kept, errors = _screen(
+            _dated(date(2026, 6, 1), cancellable=True, changeable=True), _b31_on(date(2027, 6, 30))
+        )
+
+        assert kept.height == 0
+        assert _codes(errors) == [ERROR_INELIGIBLE_UNFUNDED_PROTECTION]
+        assert "4.11" not in errors[0].message
+
+    def test_absent_inception_column_is_not_grandfathered(self) -> None:
+        """An input with no inception column at all states no pre-2027 date."""
+        guarantees = _rows({"is_unilaterally_changeable": True})
+        assert "protection_inception_date" not in guarantees.collect_schema().names()
+
+        kept, errors = _screen(guarantees, _b31_on(date(2027, 6, 30)))
+
+        assert kept.height == 0
+        assert _codes(errors) == [ERROR_INELIGIBLE_UNFUNDED_PROTECTION]
+
+    @pytest.mark.parametrize(
+        ("inception", "reason"),
+        [(None, "is null"), (date(2027, 2, 1), "is not before 2027-01-01")],
+        ids=["null", "2027"],
+    )
+    def test_in_window_drop_says_why_rule_4_11_does_not_apply(
+        self, inception: date | None, reason: str
+    ) -> None:
+        _, errors = _screen(_dated(inception), _b31_on(date(2027, 6, 30)))
+
+        assert "4.11" in errors[0].message
+        assert f"protection_inception_date {reason}" in errors[0].message
+
+    def test_out_of_window_drop_does_not_mention_rule_4_11(self) -> None:
+        _, errors = _screen(_dated(date(2026, 6, 1)), _b31_on(date(2028, 7, 1)))
+
+        assert "4.11" not in errors[0].message
+
+    def test_crr_keeps_changeable_only_protection_whatever_the_inception(self) -> None:
+        kept, errors = _screen(_dated(date(2027, 2, 1)), _CRR)
+
+        assert kept.height == 1
+        assert errors == []
+
+    def test_inception_column_is_preserved_on_kept_rows(self) -> None:
+        kept, _ = _screen(_dated(date(2026, 6, 1)), _b31_on(date(2027, 6, 30)))
+
+        assert kept.get_column("protection_inception_date").to_list() == [date(2026, 6, 1)]
+
 
 # =============================================================================
 # GT-01: one guarantee_reference is one contract (CRM028)

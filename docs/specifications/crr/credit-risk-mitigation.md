@@ -1460,7 +1460,7 @@ The choice of LGD for the covered portion depends on the approach used for the g
 
 Art. 213(1)(c)(i) makes credit protection ineligible where the protection provider can
 unilaterally **cancel** it — and, under Basel 3.1's new wording, unilaterally **change**
-its terms so as to increase the effective cost of protection. The calculator enforces this
+it "in a way that would adversely impact the institution". The calculator enforces this
 base limb for guarantees and credit derivatives.
 
 The gate runs in [`engine/crm/protection_screen.py::screen_unfunded_protection`](https://github.com/OpenAfterHours/rwa_calculator/blob/master/src/rwa_calc/engine/crm/protection_screen.py) inside `_prepare_guarantees`, on the raw per-protection rows **before** multi-level expansion (so exactly one warning is raised per ineligible protection):
@@ -1477,15 +1477,10 @@ The gate runs in [`engine/crm/protection_screen.py::screen_unfunded_protection`]
     module (`_prepare_guarantees`). Only an explicit `True` drops the protection.
 
 !!! warning "Partially Implemented"
-    Two adjacent Art. 213 elements are **not** yet enforced:
-
-    - **Art. 213(1)(c)(ii) cost-increase limb** — a clause that increases the effective
-      cost of protection as the protected exposure's credit quality deteriorates is not
-      detected (a recorded deferral from the base gate).
-    - **Rule 4.11 date-gated transitional** — described in the section below.
-
-    Tracked as IMPLEMENTATION_PLAN.md item P1.143 (transitional; the cost-increase limb is
-    a recorded deferral folded into that item).
+    The **Art. 213(1)(c)(ii) cost-increase limb** — a clause that increases the effective
+    cost of protection as the protected exposure's credit quality deteriorates — is not
+    detected (a recorded deferral from the base gate, folded into IMPLEMENTATION_PLAN.md
+    item P1.143). The Rule 4.11 transitional is implemented; see the section below.
 
 ## Unfunded Credit Protection Transitional (Rule 4.11)
 
@@ -1497,17 +1492,16 @@ Rule 4.11 provides a **narrow contractual carve-out** for pre-existing unfunded 
 
 Rule 4.11 applies to **unfunded credit protection only** (guarantees and credit derivatives). Funded credit protection (collateral) transitions immediately to Basel 3.1 rules on 1 January 2027. The transitional is exposure-specific — each protection arrangement is assessed individually.
 
-!!! warning "Not Yet Implemented"
-    The Rule 4.11 date-gated transitional is not implemented. The base Art. 213(1)(c)(i)
-    gate (above) applies the "or change" limb to **all** Basel 3.1 contracts, with no
-    grandfathering of pre-2027 inceptions. Honouring Rule 4.11 requires:
-
-    - A `protection_inception_date` field on guarantee/credit derivative inputs
-    - Date-gated logic that disapplies **only** the `is_unilaterally_changeable` limb for
-      contracts entered into before 1 Jan 2027, during 1 Jan 2027 – 30 Jun 2028 (the
-      unilaterally-cancellable limb stays live throughout)
-
-    See IMPLEMENTATION_PLAN.md item P1.143.
+The calculator reads the optional `protection_inception_date` (Date) on each guarantee row.
+On a Basel 3.1 reporting date from 1 January 2027 to 30 June 2028 (both days included), a
+row whose inception date is strictly before 1 January 2027 is not dropped for
+`is_unilaterally_changeable`; the `is_unilaterally_cancellable` limb stays in force
+throughout. A null inception date is **not** grandfathered — the opposite polarity to the
+null-permissive flags, because rule 4.11 relaxes the screen. CRR runs are unaffected: CRR
+Art. 213(1)(c)(i) has no "or change" words to omit. The window and cut-off are cited
+Basel 3.1 pack entries; see the
+[Basel 3.1 CRM spec](../basel31/credit-risk-mitigation.md#unfunded-credit-protection-transitional-rule-411)
+for the outcome table.
 
 ## Key Scenarios
 

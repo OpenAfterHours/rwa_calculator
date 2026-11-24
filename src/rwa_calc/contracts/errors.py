@@ -298,7 +298,9 @@ ERROR_COLLATERAL_LINK_UNKNOWN_BENEFICIARY = "CRM010"
 ERROR_COLLATERAL_LINK_DUPLICATE = "CRM011"
 # Ineligible unfunded credit protection (CRR/PS1-26 Art. 213(1)(c)(i)): a
 # guarantee the provider can unilaterally cancel (both regimes) or unilaterally
-# change (Basel 3.1 only) is dropped and the exposure flows unguaranteed.
+# change (Basel 3.1 only; omitted by PS1/26 rule 4.11 for protection entered into
+# before 1 Jan 2027, on reporting dates 1 Jan 2027 - 30 Jun 2028) is dropped and
+# the exposure flows unguaranteed.
 ERROR_INELIGIBLE_UNFUNDED_PROTECTION = "CRM012"
 # Ineligible guarantor (CRR/PS1-26 Art. 201(1)/(2), with CRR Art. 194(5) /
 # PS1/26 Art. 194(6)(c)): a corporate guarantor without an ECAI credit

@@ -293,7 +293,7 @@ keeps the obligor's risk weight and a warning names the guarantee:
 
 | Input | Rule | Warning |
 |---|---|---|
-| `is_unilaterally_cancellable` (both regimes) or `is_unilaterally_changeable` (Basel 3.1) is True | Art. 213(1)(c)(i) | `CRM012` |
+| `is_unilaterally_cancellable` (both regimes) or `is_unilaterally_changeable` (Basel 3.1) is True. On reporting dates 1 Jan 2027 – 30 Jun 2028 the changeable limb does not apply to protection whose `protection_inception_date` is before 1 Jan 2027 (PS1/26 rule 4.11) | Art. 213(1)(c)(i) | `CRM012` |
 | `guarantee_type` is a letter of comfort or a keepwell | Art. 215(1)(b): "an explicitly documented obligation assumed by the guarantor" | `CRM029` |
 | `attachment_amount` above zero, or any `detachment_amount` — the protection covers a band of the loss | Art. 234 (tranched transfer → securitisation framework) and Art. 235(2) (substitution only for equal seniority) | `CRM027` |
 

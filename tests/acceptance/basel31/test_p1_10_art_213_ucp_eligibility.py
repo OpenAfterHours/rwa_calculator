@@ -94,7 +94,11 @@ _FIXTURES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "p1_10"
 
 # Same reporting date as the CRR sibling — the fixture's flag semantics don't
 # depend on regime-effective-date arithmetic here, only which pack Feature is
-# switched on (ucp_unilateral_change_ineligible: CRR off / B31 on).
+# switched on (ucp_unilateral_change_ineligible: CRR off / B31 on). PS1/26 rule
+# 4.11 does not reach GUAR_P110_B twice over: 2026-06-01 is before its window
+# (1 Jan 2027 - 30 Jun 2028) and the fixture carries no protection_inception_date
+# (null = not grandfathered). The window itself is pinned by
+# test_p1_143_rule_4_11_ucp_transitional.py.
 _REPORTING_DATE = date(2026, 6, 1)
 
 # CRM012 does not exist as a named constant yet — see the CRR sibling for the

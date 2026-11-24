@@ -170,8 +170,9 @@ ENTRIES: dict[str, RuleEntry] = {
     ),
     # Art. 213(1)(c)(i) unfunded-credit-protection eligibility: PS1/26 adds an
     # "or change" limb to the CRR unilateral-cancellation test — a guarantee the
-    # provider can unilaterally change to increase the effective cost of
-    # protection is ineligible under Basel 3.1. Enabled here; the CRR pack sets
+    # provider can "unilaterally cancel or change ... in a way that would
+    # adversely impact the institution" is ineligible under Basel 3.1 (Art.
+    # 183(1A)(b) carries the same words for IRB). Enabled here; the CRR pack sets
     # it False (cancel arm only). Gates the change branch in
     # engine/crm/protection_screen.py::screen_unfunded_protection.
     "ucp_unilateral_change_ineligible": Feature(
@@ -181,7 +182,38 @@ ENTRIES: dict[str, RuleEntry] = {
             "PS1/26",
             "213",
             "(1)(c)(i) UCP ineligible if the provider can unilaterally cancel OR "
-            "change (increase the effective cost of) the protection",
+            "change the protection in a way that would adversely impact the institution",
+        ),
+    ),
+    # PS1/26 Credit Risk: General Provisions (CRR) Part rule 4.11 — Unfunded
+    # Credit Protection Transitional: "During the period beginning with 1 January
+    # 2027 and ending with 30 June 2028, point (b) of paragraph 1A of ... Article
+    # 183 and point (c)(i) of paragraph 1 of ... Article 213 shall apply to
+    # unfunded credit protection entered into prior to 1 January 2027 with the
+    # words 'or change' wherever they appear omitted." Both window days are
+    # included; the inception cut-off is strict ("prior to"). Read only where
+    # ucp_unilateral_change_ineligible is on — CRR has no "or change" words to
+    # omit, so the CRR pack declares none of the three. Consumed by
+    # engine/crm/protection_screen.py::screen_unfunded_protection.
+    "ucp_change_limb_transitional_start": DateParam(
+        name="ucp_change_limb_transitional_start",
+        value=date(2027, 1, 1),
+        citation=Citation(
+            "PS1/26", "4.11", "UCP 'or change' omitted from 1 Jan 2027 (first day, inclusive)"
+        ),
+    ),
+    "ucp_change_limb_transitional_end": DateParam(
+        name="ucp_change_limb_transitional_end",
+        value=date(2028, 6, 30),
+        citation=Citation(
+            "PS1/26", "4.11", "UCP 'or change' omitted to 30 Jun 2028 (last day, inclusive)"
+        ),
+    ),
+    "ucp_change_limb_grandfather_inception_cutoff": DateParam(
+        name="ucp_change_limb_grandfather_inception_cutoff",
+        value=date(2027, 1, 1),
+        citation=Citation(
+            "PS1/26", "4.11", "only UCP entered into prior to 1 Jan 2027 (strictly before)"
         ),
     ),
     # Basel 3.1 splits F-IRB senior unsecured supervisory LGD into FSE 45%

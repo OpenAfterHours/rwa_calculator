@@ -119,6 +119,45 @@ This ensures that conservative overlays do not inadvertently reduce expected los
     EL monotonicity is enforced in the A-IRB calculator after PMA application.
     Source: `src/rwa_calc/engine/irb/`
 
+!!! note "The Art. 159 comparison uses the EL after the 6A increase"
+    Art. 159(1) defines 'A' and 'C' as the EL "calculated in accordance with
+    Article 158(5), (6), (6A) and (10)", so the expected loss netted against Pool B
+    is the **post-6A** amount, in both the non-defaulted and the defaulted pool.
+    The engine keeps the two figures apart:
+
+    - `expected_loss` stays **pre-6A**. OF 08.01 col 0280 reports it ("EXPECTED
+      LOSS AMOUNT PRE POST-MODEL ADJUSTMENTS", Annex II).
+    - `el_after_adjustment` is the **post-6A** EL (col 0282), rebased onto the
+      post-CRM EL for guaranteed legs.
+    - `engine/irb/adjustments.py::art_159_expected_loss` is the Art. 159 EL. It
+      reads `el_after_adjustment` where a leg carries one. Otherwise it falls
+      back to `expected_loss`: a slotting leg carries no PMA EL carrier, so the
+      column is NULL on its rows after the IRB/slotting concat and ABSENT on a
+      slotting-only run.
+
+    Both Art. 159 sites read that EL:
+
+    - the per-row `el_shortfall` / `el_excess` audit carriers
+      (`compute_el_shortfall_excess`);
+    - the portfolio netting in `engine/aggregator/_el_summary.py`. This produces
+      the CET1 deduction, the T2 credit and, through them, OF-ADJ.
+
+    `ELPortfolioSummary.total_expected_loss` reports that same 'A' + 'C'. For
+    securitised legs the post-6A EL is scaled to the retained share together with
+    `expected_loss` and Pool B (`EL_SUMMARY_MONEY_COLS`), because Art. 159(2)(b)
+    excludes securitised EL.
+
+    Under CRR there is no 6A. Both writers of `el_after_adjustment` (the PMA stage
+    and the guarantee rebase) are gated on the `post_model_adjustments` pack
+    Feature, so where it is off the carrier equals `expected_loss`, even for a
+    directly-built config carrying a non-zero `pma_el_scalar`. (P1.209)
+
+    **Capital effect.** A non-zero `pma_el_scalar` raises the CET1 deduction
+    and/or lowers the T2 credit. OF-ADJ = 12.5 × (IRB T2 − IRB CET1 − GCRA +
+    SA T2) therefore falls, which lowers floored TREA wherever the output floor
+    binds. Slotting EL receives no 6A PMA at all. Whether it should is a
+    separate, open question.
+
 ---
 
 ## EL Shortfall / Excess Comparison (Art. 159)
@@ -166,9 +205,9 @@ The Art. 159 comparison uses four labelled amounts (A, B, C, D):
 
 | Label | Definition | Source |
 |-------|-----------|--------|
-| **A** | EL amounts for **non-defaulted** exposures | PD x LGD x EAD (Art. 158) |
+| **A** | EL amounts for **non-defaulted** exposures | PD x LGD x EAD (Art. 158), increased by any Art. 158(6A) PMA |
 | **B** | Provisions for **non-defaulted** exposures | General CRAs + specific CRAs + AVA (Art. 34) + other own funds reductions |
-| **C** | EL amounts for **defaulted** exposures | BEEL for A-IRB (Art. 158(5)); PD x LGD for F-IRB |
+| **C** | EL amounts for **defaulted** exposures | BEEL for A-IRB (Art. 158(5)); PD x LGD for F-IRB; increased by any Art. 158(6A) PMA |
 | **D** | Specific CRAs for **defaulted** exposures | Specific credit risk adjustments |
 
 !!! info "GCRA vs SCRA classification"

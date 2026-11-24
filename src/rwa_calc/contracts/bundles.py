@@ -785,7 +785,9 @@ class ELPortfolioSummary:
     - CRR Art. 34, Art. 105: Additional value adjustments
 
     Attributes:
-        total_expected_loss: Sum of expected loss across all IRB exposures
+        total_expected_loss: Art. 159(1) 'A' + 'C' — sum of expected loss across all
+            IRB and slotting exposures, after any PS1/26 Art. 158(6A) post-model
+            increase (``el_after_adjustment`` where carried)
         total_provisions_allocated: Sum of provisions allocated to IRB exposures
         total_ava_amount: Sum of AVAs (Art. 34) allocated to IRB exposures
         total_other_own_funds_reductions: Sum of other own funds reductions

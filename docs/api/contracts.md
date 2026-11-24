@@ -153,7 +153,7 @@ This summary captures the full EL-to-capital flow in one place.
 ```python
 @dataclass(frozen=True)
 class ELPortfolioSummary:
-    total_expected_loss: float         # Sum of EL across all IRB exposures
+    total_expected_loss: float         # Art. 159 'A' + 'C': IRB + slotting EL after any PS1/26 Art. 158(6A) PMA
     total_provisions_allocated: float  # Sum of provisions allocated to IRB exposures
     total_el_shortfall: float          # Sum of max(0, EL - provisions) per exposure
     total_el_excess: float             # Sum of max(0, provisions - EL) per exposure

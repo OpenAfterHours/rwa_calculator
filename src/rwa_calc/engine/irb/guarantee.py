@@ -265,14 +265,20 @@ def apply_guarantee_substitution(
         # NOTE THE ASYMMETRY WITH THE RWA REBASE ABOVE, which SCALES the carriers
         # ``apply_post_model_adjustments`` wrote and is therefore inert wherever
         # that stage wrote zeros. This one RECOMPUTES from the config election,
-        # so it does not inherit that stage's ``post_model_adjustments`` pack-
-        # feature gate. Safe today only because the gate is off exactly where the
-        # election is zero: ``CalculationConfig.crr()`` takes no PMA argument and
-        # always builds ``PostModelAdjustmentConfig.crr()``. A CRR config carrying
-        # a non-zero ``pma_el_scalar`` (reachable only by direct construction)
-        # would resurrect here a PMA the adjustments stage suppressed.
+        # so it must re-apply that stage's ``post_model_adjustments`` pack-feature
+        # gate itself. ``el_after_adjustment`` is the Art. 159 EL
+        # (``adjustments.art_159_expected_loss``), so a CRR config carrying a
+        # non-zero ``pma_el_scalar`` (reachable by direct construction —
+        # ``CalculationConfig.crr()`` takes no PMA argument) would otherwise
+        # resurrect here a PMA the adjustments stage suppressed, and move CRR
+        # CET1 and T2. With the Feature off the scalar is zero: the carriers are
+        # still rebased onto the post-CRM EL, with no PS1/26 Art. 158(6A) add-on.
         el_substituted = substituted & ~pl.col("_is_dd_applied")
-        el_pma_scalar = float(config.post_model_adjustments.pma_el_scalar)
+        el_pma_scalar = (
+            float(config.post_model_adjustments.pma_el_scalar)
+            if resolved_pack.feature("post_model_adjustments")
+            else 0.0
+        )
         post_crm_el_pma = pl.max_horizontal(pl.lit(0.0), pl.col("expected_loss") * el_pma_scalar)
         rebased_el_disclosure = {
             "el_pre_adjustment": pl.col("expected_loss"),

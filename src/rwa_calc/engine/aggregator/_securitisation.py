@@ -68,6 +68,17 @@ MONEY_COLS: tuple[str, ...] = (
     "reporting_rwa",
 )
 
+# The money columns the Art. 159 EL summary needs scaled: MONEY_COLS plus
+# ``el_after_adjustment``, the post-PS1/26 Art. 158(6A) EL that
+# ``compute_el_portfolio_summary`` nets against Pool B
+# (``engine.irb.adjustments.art_159_expected_loss``). Applied ONLY to the branch
+# frames handed to that summary (Art. 159(2)(b) keeps securitised EL out of the
+# comparison), never to the combined results frame: there OF 08.01 cols
+# 0280/0281/0282 read ``el_pre_adjustment`` / ``post_model_adjustment_el`` /
+# ``el_after_adjustment`` together, and scaling one of the three alone would
+# break ``c0282 = c0280 + c0281`` (boe_b0743) on a securitised leg.
+EL_SUMMARY_MONEY_COLS: tuple[str, ...] = (*MONEY_COLS, "el_after_adjustment")
+
 
 def apply_residual_multiplier(
     lf: pl.LazyFrame,

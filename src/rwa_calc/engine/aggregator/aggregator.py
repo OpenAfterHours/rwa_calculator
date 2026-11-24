@@ -59,6 +59,7 @@ from rwa_calc.engine.aggregator._floor import apply_floor_with_impact, compute_o
 from rwa_calc.engine.aggregator._lgd_floor_check import check_retail_re_portfolio_lgd_floors
 from rwa_calc.engine.aggregator._schemas import FLOOR_ELIGIBLE_APPROACHES
 from rwa_calc.engine.aggregator._securitisation import (
+    EL_SUMMARY_MONEY_COLS,
     apply_residual_multiplier,
     generate_securitisation_audit,
     generate_securitisation_summary,
@@ -375,10 +376,12 @@ class OutputAggregator:
         # Securitisation: feed the residual-multiplied views so EL / PoolB /
         # T2 cap arithmetic reflects only the on-balance-sheet portion. The
         # IRB EL formula scales linearly with EAD, so this is equivalent to
-        # multiplying the final EL summary by the residual fraction.
+        # multiplying the final EL summary by the residual fraction. The EL the
+        # summary nets is the post-PS1/26 Art. 158(6A) ``el_after_adjustment``
+        # where carried, hence the wider EL_SUMMARY_MONEY_COLS (P1.209).
         el_summary = compute_el_portfolio_summary(
-            apply_residual_multiplier(irb_results),
-            apply_residual_multiplier(slotting_results),
+            apply_residual_multiplier(irb_results, EL_SUMMARY_MONEY_COLS),
+            apply_residual_multiplier(slotting_results, EL_SUMMARY_MONEY_COLS),
         )
 
         # CRR Art. 164(4)/(5) portfolio-level A-IRB retail-RE LGD-floor backstop.
@@ -616,8 +619,8 @@ def _facility_share_trea(
     kept = ~pl.col("exposure_reference").is_in(excluded)
     trial_combined = apply_residual_multiplier(combined.filter(kept))
     trial_el_summary = compute_el_portfolio_summary(
-        apply_residual_multiplier(irb_results.filter(kept)),
-        apply_residual_multiplier(slotting_results.filter(kept)),
+        apply_residual_multiplier(irb_results.filter(kept), EL_SUMMARY_MONEY_COLS),
+        apply_residual_multiplier(slotting_results.filter(kept), EL_SUMMARY_MONEY_COLS),
     )
     irb_t2, irb_cet1 = _capital_tier_inputs(trial_el_summary, config.output_floor)
     sa_t2 = config.output_floor.sa_t2_credit

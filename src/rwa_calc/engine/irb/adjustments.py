@@ -7,12 +7,14 @@ Pipeline position:
 Key responsibilities:
 - Defaulted exposure treatment (CRR Art. 153(1)(ii) / 154(1)(i), Basel CRE31.3)
 - Post-model adjustments for known model deficiencies (Basel 3.1 PRA PS1/26)
-- EL shortfall/excess comparison against provisions (CRR Art. 158-159)
+- EL shortfall/excess comparison against provisions (CRR Art. 158-159), on the
+  EL after any PS1/26 Art. 158(6A) post-model increase (``art_159_expected_loss``)
 
 References:
 - CRR Art. 153(1)(ii), 154(1)(i): Defaulted exposure treatment
 - PRA PS1/26 Art. 153(5A), 154(4A), 158(6A): Post-model adjustments
 - CRR Art. 158-159: EL shortfall treatment
+- PRA PS1/26 Art. 159(1): 'A' and 'C' include the Art. 158(6A) EL increase
 - CRR Art. 62(d): Excess provisions as T2 capital (capped)
 """
 
@@ -33,6 +35,8 @@ from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.rulebook import RulepackV0
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from rwa_calc.contracts.config import CalculationConfig
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
@@ -354,6 +358,8 @@ def apply_post_model_adjustments(
 # =============================================================================
 
 
+@cites("CRR Art. 159")
+@cites("PS1/26, paragraph 159")
 def compute_el_shortfall_excess(
     lf: pl.LazyFrame,
     errors: list[CalculationError] | None = None,
@@ -361,10 +367,18 @@ def compute_el_shortfall_excess(
     """
     Compute EL shortfall and excess for IRB exposures.
 
-    Compares expected loss against Art. 159(1) Pool B to determine
-    whether the bank has a shortfall (EL > Pool B) or excess
+    Compares the Art. 159 expected loss against Art. 159(1) Pool B to
+    determine whether the bank has a shortfall (EL > Pool B) or excess
     (Pool B > EL). Shortfall reduces CET1/T2; excess may be
     added to T2 capital (subject to 0.6% IRB RWA cap).
+
+    The EL compared is ``art_159_expected_loss``: under Basel 3.1 the amount
+    AFTER the PS1/26 Art. 158(6A) post-model increase, because Art. 159(1)
+    defines 'A' and 'C' as the EL "calculated in accordance with Article
+    158(5), (6), (6A) and (10)". ``expected_loss`` itself stays pre-6A (OF 08.01
+    col 0280 reports it). These per-row columns are audit carriers; the capital
+    figures come from the portfolio netting in
+    ``engine/aggregator/_el_summary.py``, which reads the same EL (P1.209).
 
     Pool B per Art. 159(1) includes:
         (a) General credit risk adjustments (GCRA)
@@ -381,14 +395,15 @@ def compute_el_shortfall_excess(
     as zero, so shortfall equals the full EL and excess is zero.
 
     Produces:
-        el_shortfall: max(0, expected_loss - pool_b)
-        el_excess:    max(0, pool_b - expected_loss)
+        el_shortfall: max(0, art_159_el - pool_b)
+        el_excess:    max(0, pool_b - art_159_el)
 
     References:
         CRR Art. 158-159: EL shortfall treatment
         CRR Art. 159(1): Pool B composition (provisions + AVA + other)
         CRR Art. 34, Art. 105: Additional value adjustments
         CRR Art. 62(d): Excess provisions as T2 capital (capped)
+        PS1/26 Art. 158(6A), 159(1): 'A' and 'C' include the post-model EL increase
         CRE35.1-3: Basel 3.1 expected loss calculation
     """
     schema = lf.collect_schema()
@@ -416,7 +431,7 @@ def compute_el_shortfall_excess(
             ]
         )
 
-    el = pl.col("expected_loss").fill_null(0.0)
+    el = art_159_expected_loss(cols).fill_null(0.0)
 
     prov = pl.col("provision_allocated").fill_null(0.0)
     # Art. 159(1)(c): Additional value adjustments (AVAs per Art. 34)
@@ -433,3 +448,48 @@ def compute_el_shortfall_excess(
             pl.max_horizontal(pl.lit(0.0), pool_b - el).alias("el_excess"),
         ]
     )
+
+
+@cites("PS1/26, paragraph 158")
+@cites("PS1/26, paragraph 159")
+def art_159_expected_loss(cols: Collection[str]) -> pl.Expr:
+    """
+    The expected loss amount that enters the Art. 159 comparison with Pool B.
+
+    PS1/26 Art. 159(1) defines 'A' (non-defaulted) and 'C' (defaulted) as the
+    sum of EL "calculated in accordance with Article 158(5), (6), (6A) and
+    (10)", and Art. 158(6A) requires the institution to "increase the total
+    expected loss amounts calculated under paragraphs 5 and 6 to reflect any
+    post model adjustments in respect of expected loss amounts calculated under
+    point (c) of Article 146(3)". The post-6A amount is ``el_after_adjustment``
+    (``apply_post_model_adjustments``, rebased post-CRM by
+    ``guarantee.apply_guarantee_substitution``).
+
+    Carrier ladder, per leg:
+    - ``el_after_adjustment`` where the column is present and non-null
+      (formula-IRB legs);
+    - else ``expected_loss`` — a slotting leg carries no PMA EL carrier, so the
+      column is NULL on its rows after a diagonal concat with IRB results and
+      ABSENT on a slotting-only frame.
+
+    Regime: no regime branch here. Both producers of ``el_after_adjustment``
+    are gated on the ``post_model_adjustments`` pack Feature, so wherever it is
+    off (CRR, whose Art. 159 nets Art. 158(5), (6) and (10) EL only) the
+    carrier equals ``expected_loss`` and this reads the unadjusted EL.
+
+    ``expected_loss`` itself is deliberately left pre-6A: OF 08.01 col 0280 is
+    the EL "pre post-model adjustments" (PS1/26 Annex II), col 0282 the EL after.
+
+    Args:
+        cols: Column names of the frame the expression will be evaluated on.
+
+    Returns:
+        Expression for the per-leg Art. 159 expected loss (nulls preserved).
+
+    References:
+        PS1/26 Art. 146(3)(c), 158(6A), 159(1)
+        CRR Art. 159
+    """
+    if "el_after_adjustment" in cols:
+        return pl.coalesce("el_after_adjustment", "expected_loss")
+    return pl.col("expected_loss")

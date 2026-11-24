@@ -566,7 +566,7 @@ Portfolio-level expected loss summary with T2 credit cap (CRR Art. 62(d)).
 ```python
 @dataclass(frozen=True)
 class ELPortfolioSummary:
-    total_expected_loss: float        # Sum of EL across IRB exposures
+    total_expected_loss: float        # Art. 159 'A' + 'C': IRB + slotting EL after any PS1/26 Art. 158(6A) PMA
     total_provisions_allocated: float # Sum of provisions allocated to IRB
     total_el_shortfall: float         # Sum of max(0, EL − provisions) per exposure
     total_el_excess: float            # Sum of max(0, provisions − EL) per exposure

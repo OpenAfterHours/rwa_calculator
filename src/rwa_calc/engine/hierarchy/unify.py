@@ -44,6 +44,7 @@ from rwa_calc.engine.hierarchy.enrich import (
     attach_counterparty_rating,
     propagate_facility_qrre_columns,
 )
+from rwa_calc.engine.hierarchy.facility_fx import build_facility_fx
 from rwa_calc.engine.hierarchy.facility_undrawn import calculate_facility_undrawn
 from rwa_calc.engine.hierarchy.facility_warnings import collect_facility_undrawn_warnings
 from rwa_calc.engine.hierarchy.graph import (
@@ -171,7 +172,11 @@ def unify_exposures(
     exposures = _join_facility_metadata(
         exposures, facility_mappings, facility_root_lookup, facility_edges
     )
-    exposures = propagate_facility_qrre_columns(exposures, facilities)
+    # The QRRE umbrella cap's drawings are put in each root facility's currency
+    # at the same rates headroom netting reads (P1.355).
+    exposures = propagate_facility_qrre_columns(
+        exposures, facilities, fx=build_facility_fx(fx_rates, config)
+    )
     exposures = attach_counterparty_rating(exposures, counterparty_lookup)
 
     return exposures, errors

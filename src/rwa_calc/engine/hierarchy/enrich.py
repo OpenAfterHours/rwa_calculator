@@ -9,7 +9,9 @@ Pipeline position:
 
 Key responsibilities:
 - Coalesce QRRE-relevant facility-level columns onto every exposure row
-  (Site B of the ``_FACILITY_QRRE_COUPLED_COLUMNS`` coupling).
+  (Site B of the ``_FACILITY_QRRE_COUPLED_COLUMNS`` coupling), and attach each
+  row's root (umbrella) facility limit, and what the row draws against it in
+  the root's currency, for the QRRE aggregate cap.
 - Attach counterparty rating fields (cqs / pd / internal_pd / model_id).
 - Apply the per-exposure short-term ECAI rating override.
 - Add property-collateral coverage, LTV metadata, and lending-group totals
@@ -23,6 +25,8 @@ References:
 - CRR Art. 123(c): retail threshold exclusion (residential property)
 - CRR Art. 126: income-producing CRE risk-weight gate
 - CRR Art. 4(1)(39): group of connected clients (lending group totals)
+- CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c): the root facility limit that
+  caps the QRRE per-individual aggregate under a multi-option facility
 - PRA PS1/26 Art. 120(2B) Table 4A / Art. 122(3) Table 6A: short-term tables
 - PRA PS1/26 Art. 121(4): SCRA short-term trade-finance LC window (the
   trade-LC flag is inherited from the loan's parent facility only)
@@ -45,6 +49,7 @@ from rwa_calc.contracts.errors import (
 )
 from rwa_calc.domain.enums import ExposureClass
 from rwa_calc.engine.entity_class_maps import entity_types_by_sa_class
+from rwa_calc.engine.hierarchy.facility_fx import build_facility_fx, with_facility_currency_factor
 from rwa_calc.engine.hierarchy.re_ltv import derive_missing_ltv
 from rwa_calc.engine.kernels.allocation import (
     NO_DEFAULT,
@@ -59,6 +64,7 @@ from rwa_calc.engine.utils import has_required_columns, partition_by_nullable
 if TYPE_CHECKING:
     from rwa_calc.contracts.bundles import CounterpartyLookup
     from rwa_calc.contracts.errors import CalculationError
+    from rwa_calc.engine.hierarchy.facility_fx import FacilityFx
     from rwa_calc.rulebook.resolve import ResolvedRulepack
 
 logger = logging.getLogger(__name__)
@@ -67,6 +73,8 @@ logger = logging.getLogger(__name__)
 def propagate_facility_qrre_columns(
     exposures: pl.LazyFrame,
     facilities: pl.LazyFrame | None,
+    *,
+    fx: FacilityFx | None = None,
 ) -> pl.LazyFrame:
     """Coalesce QRRE-relevant facility-level columns onto every exposure row.
 
@@ -80,6 +88,21 @@ def propagate_facility_qrre_columns(
     present, ``is_short_term_trade_lc`` is also inherited from the parent
     facility (and only from it — PS1/26 Art. 121(4) / CRR Art. 162(3)(b) are
     transaction-level conditions; review TR-01).
+
+    Also attaches the two inputs of the umbrella cap on the Art. 154(4)(c) /
+    Art. 147(5A)(c) QRRE per-individual aggregate (P1.355), both keyed on the
+    row's ROOT facility (``root_facility_reference``):
+
+    - ``root_facility_limit`` — the root's ``limit``. ``facility_limit`` cannot
+      serve: a drawn leg under a multi-option facility carries its immediate
+      sub-facility's limit, and a fully drawn umbrella emits no root-keyed leg.
+    - ``root_facility_utilisation`` — what the row draws against that limit, in
+      the root's currency (see ``_join_root_facility_limit``).
+
+    Runs inside ``unify``, before ``engine/fx`` rebases the frame, so every
+    amount is still in its own currency. ``fx`` is the run's
+    :func:`facility_fx.build_facility_fx`; without it amounts are compared as
+    stated, as when the run's conversion is off.
     """
     # Site B of the two-site QRRE coupling pinned by
     # `_FACILITY_QRRE_COUPLED_COLUMNS` (engine/hierarchy/__init__.py). Site A
@@ -100,7 +123,9 @@ def propagate_facility_qrre_columns(
     # (or check fresh if we skipped the branch entirely).
     exposures = _apply_qrre_defaults(exposures, qrre_schema)
 
-    return exposures
+    return _join_root_facility_limit(
+        exposures, facilities, fx if fx is not None else build_facility_fx(None, None)
+    )
 
 
 @cites("CRR Art. 135")
@@ -809,6 +834,92 @@ def _join_facility_qrre_columns(
     # Drop temporary join columns
     exposures = exposures.drop([alias for _src_col, alias, _exp_col, _fill in fac_specs])
     return exposures, exp_schema
+
+
+@cites("CRR Art. 154(4)")
+@cites("PS1/26, paragraph 147")
+def _join_root_facility_limit(
+    exposures: pl.LazyFrame,
+    facilities: pl.LazyFrame | None,
+    fx: FacilityFx,
+) -> pl.LazyFrame:
+    """Attach ``root_facility_limit`` and ``root_facility_utilisation``.
+
+    Both are keyed on ``root_facility_reference`` (set by
+    ``unify._join_facility_metadata`` for every leg — the multi-level root, the
+    parent itself for a single-level facility, null for a row with no facility),
+    so a loan drawn under a sub-facility and the root's own waterfall / residual
+    legs carry the SAME umbrella terms.
+
+    - ``root_facility_limit``: the root's limit as supplied, in the root's
+      currency, never fabricated — null when the root has no limit, and a typed
+      null with no facilities frame. The facilities table may repeat a
+      reference (DQ004; the run continues), so the join reads ONE row per
+      reference (``_root_facility_terms``) and can never copy a leg.
+    - ``root_facility_utilisation``: what the row draws against the root's
+      limit, in the ROOT's currency — the amounts headroom netting reads
+      (``facility_undrawn.facility_utilisation_rows``): a loan's drawn balance
+      and a contingent's amount, which the unified frame holds in
+      ``drawn_amount`` when on-balance-sheet and ``nominal_amount`` when off.
+      Each is floored at zero, so a credit balance never understates the
+      drawings. A headroom row (undrawn, waterfall, residual, facility share)
+      draws nothing. Null where the run holds no rate to put a non-zero drawing
+      in the root's currency: unmeasurable, never zero.
+    """
+    if facilities is None:
+        return exposures.with_columns(
+            pl.lit(None, dtype=pl.Float64).alias("root_facility_limit"),
+            pl.lit(None, dtype=pl.Float64).alias("root_facility_utilisation"),
+        )
+    with_root = with_facility_currency_factor(
+        exposures.join(
+            _root_facility_terms(facilities),
+            left_on="root_facility_reference",
+            right_on="_root_fac_ref",
+            how="left",
+            maintain_order="left",
+        ),
+        fx,
+        amount_currency="currency",
+        facility_currency="_root_currency",
+        factor="_root_fx_factor",
+    )
+    drawing = (
+        pl.when(pl.col("exposure_type").is_in(["loan", "contingent"]))
+        .then(
+            pl.max_horizontal(pl.col("drawn_amount"), pl.lit(0.0))
+            + pl.max_horizontal(pl.col("nominal_amount"), pl.lit(0.0))
+        )
+        .otherwise(pl.lit(0.0))
+    )
+    return with_root.with_columns(
+        pl.when(drawing == 0.0)
+        .then(pl.lit(0.0))
+        .otherwise(drawing * pl.col("_root_fx_factor"))
+        .alias("root_facility_utilisation")
+    ).drop("_root_currency", "_root_fx_factor")
+
+
+def _root_facility_terms(facilities: pl.LazyFrame) -> pl.LazyFrame:
+    """One ``(_root_fac_ref, root_facility_limit, _root_currency)`` row per facility.
+
+    Where the facilities table repeats a reference and the copies disagree, the
+    limit is the one that caps LEAST: null (no cap) if any copy's limit is null
+    or the copies disagree on currency, else the largest limit. Identical copies
+    give their common limit.
+    """
+    limit = pl.col("limit")
+    return (
+        facilities.group_by("facility_reference")
+        .agg(
+            pl.when((limit.null_count() > 0) | (pl.col("currency").n_unique() > 1))
+            .then(pl.lit(None, dtype=pl.Float64))
+            .otherwise(limit.max())
+            .alias("root_facility_limit"),
+            pl.col("currency").first().alias("_root_currency"),
+        )
+        .rename({"facility_reference": "_root_fac_ref"})
+    )
 
 
 def _join_property_collateral_multi_level(

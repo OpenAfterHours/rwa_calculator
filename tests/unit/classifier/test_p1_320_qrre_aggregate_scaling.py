@@ -117,8 +117,10 @@ _MERSENNE = 4_294_967_291
 #: minority of legs with no parent facility, and a thin null-obligor slice.
 _LEGS_PER_OBLIGOR = 4
 _FACILITIES_PER_OBLIGOR = 3
+_ROOTS_PER_OBLIGOR = 2
 _NULL_PARENT_FACILITY_PCT = 15
 _NULL_COUNTERPARTY_PCT = 1
+_UNMEASURABLE_DRAWING_PCT = 2
 _REVOLVING_PCT = 50
 _SECURED_PCT = 20
 
@@ -155,6 +157,11 @@ def _build_frame(n_rows: int) -> pl.LazyFrame:
     mixed = ((row_index.cast(pl.UInt64) + _SEED) * _KNUTH) % _MERSENNE
     obligor_id = mixed % n_obligors
     facility_id = obligor_id * _FACILITIES_PER_OBLIGOR + (mixed // 7) % _FACILITIES_PER_OBLIGOR
+    # P1.355 umbrellas: an obligor's first two facilities share one root, the
+    # third is its own root, so the umbrella window groups facilities without
+    # degenerating into the per-facility one. A tenth of roots carry no limit.
+    root_id = obligor_id * _ROOTS_PER_OBLIGOR + ((mixed // 7) % _FACILITIES_PER_OBLIGOR) // 2
+    has_no_parent = (mixed // 19) % 100 < _NULL_PARENT_FACILITY_PCT
 
     columns: dict[str, pl.Expr] = {
         "exposure_reference": pl.format("EXP{}", row_index),
@@ -173,9 +180,23 @@ def _build_frame(n_rows: int) -> pl.LazyFrame:
         # Limits spread across the QRRE ceiling so the aggregate DISCRIMINATES
         # rather than admitting or demoting the whole book.
         "facility_limit": (mixed % 190_000).cast(pl.Float64) + 1_000.0,
-        "parent_facility_reference": pl.when((mixed // 19) % 100 < _NULL_PARENT_FACILITY_PCT)
+        "parent_facility_reference": pl.when(has_no_parent)
         .then(None)
         .otherwise(pl.format("FAC{}", facility_id)),
+        "root_facility_reference": pl.when(has_no_parent)
+        .then(None)
+        .otherwise(pl.format("ROOT{}", root_id)),
+        "root_facility_limit": pl.when(has_no_parent | (root_id % 10 == 0))
+        .then(None)
+        .otherwise(((root_id * _KNUTH) % 190_000).cast(pl.Float64) + 1_000.0),
+        # What each leg draws against its root, in the root's currency
+        # (P1.355): balances that, summed per root, sit below most root limits
+        # and above some, so the overdrawn guard takes both branches; a sliver
+        # is unmeasurable (null: no FX rate), so the measured-drawings window
+        # takes both branches too.
+        "root_facility_utilisation": pl.when((mixed // 23) % 100 < _UNMEASURABLE_DRAWING_PCT)
+        .then(None)
+        .otherwise((mixed % 40_000).cast(pl.Float64)),
         "is_mortgage": pl.lit(False),
         "is_adc": pl.lit(False),
         "is_hvcre": pl.lit(False),
@@ -284,6 +305,12 @@ class TestTheMeasuredPathIsLive:
         assert facilities > obligors, (
             "obligors hold at most one facility each, so the inner "
             "(obligor, facility) window degenerates to the outer obligor window"
+        )
+        roots = frame["root_facility_reference"].drop_nulls().n_unique()
+        assert obligors < roots < facilities, (
+            "the P1.355 umbrella window degenerates: every root holds one "
+            f"facility, or every obligor one root ({roots} roots, "
+            f"{facilities} facilities, {obligors} obligors)"
         )
         assert 0 < null_obligors < frame.height // 2, (
             "the null-counterparty slice is empty or dominant; "

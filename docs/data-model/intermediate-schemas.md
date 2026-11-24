@@ -102,6 +102,8 @@ Derived convenience columns:
 | `exposure_has_parent` | `Boolean` | Whether exposure is child of a facility |
 | `parent_facility_reference` | `String` | Parent facility reference |
 | `root_facility_reference` | `String` | Top-level facility in hierarchy |
+| `root_facility_limit` | `Float64` | The root facility's `limit`, as supplied, on every leg under it (a drawn leg's own `facility_limit` is its immediate sub-facility's). Caps the QRRE per-individual aggregate at the multi-option umbrella (CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c)); null when the row has no facility or the root has no limit — no cap. Read from one row per facility reference: duplicated references resolve to the value that caps least |
+| `root_facility_utilisation` | `Float64` | What the leg draws against its root facility's limit, in the root's currency: a loan's drawn balance or a contingent's amount (on- or off-balance-sheet), floored at zero; 0 on a headroom row. The classifier applies the umbrella cap only where an individual's drawings under the root sum to no more than its limit; null when the run holds no FX rate for the drawing — no cap |
 | `facility_hierarchy_depth` | `Int8` | Levels from root facility (0 = top) |
 
 ### Lending group columns

@@ -435,6 +435,93 @@ Individual counterparties qualify for retail treatment when:
       limit, its cancellable leg would be QRRE, so adopting that reading reddens the
       test by design.
 
+#### How the per-individual aggregate nominal is built (CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c))
+
+The nominal basis is the committed `facility_limit`, summed only over rows that pass
+the QRRE gates below (`qrre_obligor_aggregate_limit_expr`). The hierarchy emits one
+row per *leg* of a facility, and a leg carries the limit of the facility it is keyed
+on: a drawn loan or contingent under a multi-option facility (MOF) is keyed on its
+immediate sub-facility and carries the sub-limit, while every MOF waterfall and
+`_RESIDUAL` row is keyed on the root and carries the root's limit. The aggregate is
+built in three steps, each read back as a plain column so that no window sits inside
+another (`arch_check` check 21):
+
+1. **One limit per facility** (P1.320): per (individual, `parent_facility_reference`)
+   the facility's limit is counted once, however many legs it has.
+2. **Never more than the umbrella** (P1.355): per (individual,
+   `root_facility_reference`) the step-1 limits are summed and capped at the root's
+   own limit, `root_facility_limit` (joined onto every leg by the hierarchy stage):
+   `min(root limit, sum of the limits counted under it)`. An individual cannot draw
+   more under an umbrella than the umbrella allows, so a sub-limit is no longer
+   charged on top of the umbrella that contains it, and the sub-limits of a fully
+   drawn umbrella (which emits no root-keyed row at all) are no longer summed past it.
+   The cap is never the largest single sub-limit, which would drop every other
+   sub-limit and under-count — nothing validates that the sub-limits sum to no more
+   than the root.
+3. **Per individual**: the step-2 values are summed per counterparty.
+
+Today's conservative result is kept, deliberately, where the umbrella cannot be
+relied on (owner decision, P1.355):
+
+| Case | Treatment | Why |
+|---|---|---|
+| The root facility has no `limit` | no cap; the root's own headroom rows carry the null limit as unbounded | a "sum of the sub-limits" rule would admit the individual on missing data |
+| A limit counted under the root is null | the group stays unbounded | capping missing data at the umbrella would admit it |
+| The individual has drawn more under the root than its limit (a zero limit included) | no cap; the step-1 sum is kept | the limit bounds nothing, and capping would count the individual below their own drawn balance |
+| A drawing under the root cannot be put in the root's currency (the run holds no FX rate for it) | no cap; the step-1 sum is kept | the drawings cannot be shown to be within the limit |
+| A sibling sub-line fails a QRRE gate | the root's waterfall rows still charge the root's full limit to the QRRE sub-portfolio | a waterfall row is one sub's slice of the root's headroom but carries the whole root limit |
+
+Only the root is applied as a cap: an intermediate umbrella in a hierarchy deeper
+than two levels is not, which can only over-count.
+
+The cap is keyed on the **individual and** the root, never on the root alone.
+Where sub-lines under one umbrella belong to different individuals, each
+individual's figure under it is capped at the root's limit separately: the rule
+caps the exposure to "a single individual". This is where the cap differs from
+headroom netting, which nets per root across every obligor under it — copying
+that grain would pool the owners' sub-limits into one capped figure, credit it to
+one owner and nothing to the others, and wrongly admit them to QRRE.
+`TestTwoIndividualsUnderOneUmbrella`
+(`tests/unit/classifier/test_p1_355_qrre_umbrella_cap.py`) and the registered
+`qrre-mof` reporting portfolio both go red on that pooling.
+
+**What counts as drawn, and in which currency.** The hierarchy stage puts two
+columns on every leg, both read from the root facility (one row per facility
+reference, so a facilities table that repeats a reference — DQ004 — copies no
+leg; where the copies disagree the joined limit is the one that caps least: null
+if any copy's limit is null or the copies disagree on currency, else the
+largest):
+
+- `root_facility_limit` — the root's `limit`, as supplied, in its own currency;
+- `root_facility_utilisation` — what the leg draws against it: a loan's drawn
+  balance and a contingent's amount, which the unified frame holds in
+  `drawn_amount` for an on-balance-sheet contingent and in `nominal_amount` for an
+  off-balance-sheet one. Each is floored at zero — a credit balance under a
+  `netting_agreement_reference` included, which headroom netting does count
+  (Art. 195 / 219): a deposit netted elsewhere must not make the umbrella look
+  less drawn than its debit balances — a headroom row draws nothing,
+  and the amount is put in the **root facility's currency** at the run's FX rates
+  — the amounts and the conversion headroom netting uses
+  (`facility_undrawn.facility_utilisation_rows`; amounts as stated when the run's
+  FX conversion is off) — and is null where the run holds no rate.
+
+The overdrawn test therefore compares like with like, whatever the currency of
+each drawing and of the run. The cap itself compares limits as supplied — the
+root's limit with the step-1 limits, each in its own facility's currency — which
+is exact when the facilities under one umbrella share a currency.
+`facility_limit` is never FX-converted, so step 1 and the comparison with the
+ceiling read every limit as stated; that is pre-existing and outside this cap.
+
+Capping can only lower an individual's figure, so rows only
+ever move from **RETAIL_OTHER** to **RETAIL_QRRE**; the capital effect of that move
+goes either way (see the crossover below) and is measured in
+`tests/acceptance/test_p1_355_qrre_umbrella_cap_pipeline.py`. The reporting
+consequence — the movers leave the other-retail sheet of C 08.01 / OF 08.01 for the
+QRRE sheet, while a QRRE and an other-retail obligor survive on theirs — is held by
+the `qrre-mof` portfolio (`tests/fixtures/reporting_qrre_mof_portfolio.py`),
+registered in the supervisory validation register under both regimes and asserted
+in `tests/acceptance/reporting/test_qrre_mof_portfolio.py`.
+
 #### QRRE assignment gates (CRR Art. 154(4)(a)-(b) / PS1/26 Art. 147(5A)(a)-(b))
 
 A revolving regulatory-retail exposure is admitted to the **RETAIL_QRRE** sub-class

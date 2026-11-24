@@ -3762,6 +3762,12 @@ RESOLVED_HIERARCHY_SCHEMA = {
     "exposure_has_parent": pl.Boolean,
     "parent_facility_reference": pl.String,
     "root_facility_reference": pl.String,
+    # The root facility's limit on every leg under it — the QRRE umbrella cap
+    # (CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c)); null = no cap.
+    "root_facility_limit": pl.Float64,
+    # What the leg draws against that limit, in the root's currency; null =
+    # unmeasurable (no FX rate) — no cap.
+    "root_facility_utilisation": pl.Float64,
     "facility_hierarchy_depth": pl.Int8,
     # Parent + every ancestor facility (incl. self) — drives the CRM cascade of
     # facility-level collateral down nested facility hierarchies.

@@ -52,37 +52,33 @@ ADDENDUM "Final leg inventory" — (iii) is cut, see note):
                                  DEFERRED, addendum R8, but the fixture still
                                  carries the control for that future item).
 
-    (v)   MOF key pin           FAC_MOF 70,000 root; FAC_MOF_SUB 25,000 sub;
-          (leg-multiplication    LN_MOF 10,000 drawn under the sub.
-          grain ONLY -- see       Emits: LN_MOF (limit=25,000, its OWN sub's
-          addendum R5)            limit), FAC_MOF_UNDRAWN_FAC_MOF_SUB (waterfall
+    (v)   MOF umbrella cap      FAC_MOF 70,000 root; FAC_MOF_SUB 25,000 sub;
+          (P1.355 mover)         LN_MOF 10,000 drawn under the sub.
+                                  Emits: LN_MOF (limit=25,000, its OWN sub's
+                                  limit), FAC_MOF_UNDRAWN_FAC_MOF_SUB (waterfall
                                   row, limit=70,000 = ROOT's limit), and
                                   FAC_MOF_UNDRAWN_RESIDUAL (limit=70,000,
                                   since sub headroom 15,000 < parent headroom
                                   60,000 leaves a 45,000 residual candidate
                                   at the ROOT's own LR risk_type).
-                                 today (no dedupe):        165,000 (25k+70k+70k)
-                                 parent_facility_reference: 95,000 (25k + 70k,
-                                     the waterfall + residual rows share ONE
-                                     group keyed on the ROOT's own reference)
-                                 root_facility_reference+max (REJECTED key):
-                                     70,000
-                                 retail_other UNDER EVERY KEY, BOTH REGIMES --
-                                 green before and after. Its non-vacuity is a
-                                 mutation-testing job for test-writer (switch
-                                 the key to root_facility_reference and watch
-                                 it flip), not a moving assertion here.
-                                 CAVEAT (addendum R5): this leg pins the LEG-
-                                 MULTIPLICATION grain only. The root/sub grain
-                                 over-count (a drawn leg keys on its immediate
-                                 SUB, a waterfall/residual leg keys on the
-                                 ROOT, so one economic facility still spans
-                                 two dedupe groups) SURVIVES this fix -- it is
-                                 conservative (over-counting denies QRRE, the
-                                 safe direction) so it does not block this
-                                 item, but it is a DIFFERENT, separately-owed
-                                 defect. Do not read this leg as proving the
-                                 root/sub grain is fixed.
+                                 no dedupe (pre-P1.320):   165,000 (25k+70k+70k)
+                                 per-facility dedupe (P1.320 step 1): 95,000
+                                     (25k + 70k, the waterfall + residual rows
+                                     share ONE group keyed on the ROOT)
+                                 umbrella cap (P1.355 step 2): 70,000 =
+                                     min(root 70,000, 95,000 counted under it)
+                                 retail_other until P1.355, retail_qrre after,
+                                 BOTH REGIMES. P1.320 left this leg green on
+                                 both sides as a pin on the per-facility key and
+                                 on the root/sub over-count it did not fix; the
+                                 owner-signed P1.355 cap closed that over-count
+                                 and re-pointed the assertions
+                                 (``tests/unit/classifier/
+                                 test_p1_320_qrre_leg_multiplication.py::
+                                 TestLegVMofUmbrellaCap``). The cap is NOT
+                                 ``root_facility_reference`` + ``max``: that
+                                 drops every sub-limit but the largest and is
+                                 pinned against by ``tests/fixtures/p1_355``.
 
     (vi)  MIXED candidate /     Addendum R2 -- Attack 8, highest-value new
           non-candidate         leg. Two 50,000 MOF roots (FAC_MIX_ROOT1,
@@ -196,7 +192,7 @@ CP_Q1: str = "P1320_CP_Q1"
 FAC_Q1: str = "P1320_FAC_Q1"
 LN_Q1: str = "P1320_LN_Q1"
 
-#: Leg (v) — MOF key pin (leg-multiplication grain only; see module docstring).
+#: Leg (v) — MOF umbrella cap (a P1.355 mover; see module docstring).
 CP_MOF: str = "P1320_CP_MOF"
 FAC_MOF: str = "P1320_FAC_MOF"
 FAC_MOF_SUB: str = "P1320_FAC_MOF_SUB"

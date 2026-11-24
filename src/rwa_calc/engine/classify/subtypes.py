@@ -57,19 +57,49 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 #: Scratch column holding each leg's deduplicated contribution to its
-#: obligor's Art. 154(4)(c) aggregate. Materialised by
-#: ``qrre_obligor_aggregate_limit_expr`` and dropped by
-#: ``classify_exposure_subtypes`` before it returns, so the classify exit
-#: schema is unchanged. It exists because the per-(obligor, facility)
-#: deduplication may not sit INSIDE the input of the per-obligor sum: Polars
+#: obligor's Art. 154(4)(c) aggregate — one limit per (obligor, facility the
+#: leg is keyed on). Materialised by ``qrre_obligor_aggregate_limit_expr`` and
+#: dropped by ``classify_exposure_subtypes`` before it returns, so the classify
+#: exit schema is unchanged. It exists because the per-(obligor, facility)
+#: deduplication may not sit INSIDE the input of a later window: Polars
 #: evaluates a window's input in the outer group-by context, so a nested
 #: window re-runs once per outer group (arch_check check 21).
 _QRRE_DEDUPED_LIMIT_COLUMN = "_qrre_deduped_limit"
 
+#: Scratch column holding each row's position in the frame, so step 2 can
+#: name the first QRRE-candidate leg of an umbrella with an aggregating window.
+_QRRE_ROW_INDEX_COLUMN = "_qrre_row_index"
+
+#: Scratch struct column holding step 2's per-(obligor, root facility) terms
+#: (P1.355), one field each: ``counted`` (the step-1 limits counted under the
+#: umbrella), ``drawn`` (the obligor's drawings under it), ``unmeasured`` (how
+#: many of those drawings could not be measured) and ``first_leg`` (the row
+#: index of the group's first QRRE-candidate leg, which carries the capped
+#: value). ONE window of aggregations over plain inputs, materialised after
+#: ``_QRRE_DEDUPED_LIMIT_COLUMN`` for the check-21 reason; one struct rather
+#: than four windows because each window wrapped in ``partition_by_nullable``
+#: computes its own grouping (measured: four such windows cost ~1.5x one).
+_QRRE_UMBRELLA_TERMS_COLUMN = "_qrre_umbrella_terms"
+
+#: Scratch column holding each leg's contribution once the deduplicated
+#: limits under one root (umbrella) facility are capped at the root's own
+#: limit — one value per (obligor, root facility), P1.355. Built from the
+#: step-2 terms above and dropped with them.
+_QRRE_UMBRELLA_LIMIT_COLUMN = "_qrre_umbrella_limit"
+
+#: Every scratch column ``qrre_obligor_aggregate_limit_expr`` materialises.
+_QRRE_SCRATCH_COLUMNS: tuple[str, ...] = (
+    _QRRE_DEDUPED_LIMIT_COLUMN,
+    _QRRE_ROW_INDEX_COLUMN,
+    _QRRE_UMBRELLA_TERMS_COLUMN,
+    _QRRE_UMBRELLA_LIMIT_COLUMN,
+)
+
 
 # =========================================================================
-# Exposure subtype classification (2 .with_columns — the QRRE dedup helper
-# column, then 4 output expressions — plus a drop of the helper)
+# Exposure subtype classification (4 .with_columns — three passes of QRRE
+# aggregate helper columns, then the output expressions — plus a drop of the
+# helpers)
 # =========================================================================
 
 
@@ -89,11 +119,12 @@ def classify_exposure_subtypes(
     """
     Merge SME, retail, and QRRE classification into one output .with_columns().
 
-    Preceded by an additional single-expression ``.with_columns`` that materialises
-    the QRRE per-leg deduplicated limit as the scratch column
-    ``_QRRE_DEDUPED_LIMIT_COLUMN``, dropped again before this function returns
-    (see ``qrre_obligor_aggregate_limit_expr`` for why that step cannot be
-    folded into the output expressions). The classify exit schema is unchanged.
+    Preceded by three ``.with_columns`` that materialise the QRRE aggregate's
+    per-leg helper columns (``_QRRE_SCRATCH_COLUMNS``: the per-facility
+    deduplicated limit; the per-umbrella terms; the umbrella-capped limit),
+    dropped again before this function returns (see
+    ``qrre_obligor_aggregate_limit_expr`` for why those steps cannot be folded
+    into the output expressions). The classify exit schema is unchanged.
 
     Works because they operate on non-overlapping initial exposure_class values:
     SME only touches "corporate", retail only touches "retail_other",
@@ -224,11 +255,15 @@ def classify_exposure_subtypes(
     # limit (EUR 100k / GBP 90k), not each facility individually. Aggregate
     # ``facility_limit`` (the committed/nominal basis) per
     # ``counterparty_reference`` before comparing, counting each committed
-    # facility ONCE rather than once per hierarchy leg — see
+    # facility ONCE rather than once per hierarchy leg, and never more under
+    # one multi-option umbrella than the umbrella's own limit — see
     # ``qrre_obligor_aggregate_limit_expr``. The driver columns
     # (``is_revolving`` / ``facility_limit`` / ``parent_facility_reference`` /
-    # ``is_secured`` / ``risk_type`` / ``undrawn_amount``) are hierarchy_exit
-    # contract columns — always present, null-gated by value.
+    # ``root_facility_reference`` / ``is_secured`` / ``risk_type`` /
+    # ``undrawn_amount``) are hierarchy_exit contract columns — always present,
+    # null-gated by value; the umbrella's ``root_facility_limit`` /
+    # ``root_facility_utilisation`` are optional ones (a sealed frame that never
+    # ran the hierarchy producer carries typed nulls: no cap).
     #
     # The QRRE sub-portfolio is the qualifying revolving retail population.
     # Only those rows contribute to the per-individual aggregate; non-QRRE
@@ -315,7 +350,7 @@ def classify_exposure_subtypes(
             # --- HVCRE flag (from specialised lending join, null → False) ---
             pl.col("is_hvcre").fill_null(False).alias("is_hvcre"),
         ]
-    ).drop(_QRRE_DEDUPED_LIMIT_COLUMN)
+    ).drop(_QRRE_SCRATCH_COLUMNS)
 
 
 # =========================================================================
@@ -379,44 +414,97 @@ def qrre_obligor_aggregate_limit_expr(
 ) -> tuple[pl.LazyFrame, pl.Expr]:
     """Return the Art. 147(5A)(c) / Art. 154(4)(c) per-individual aggregate limit.
 
-    Returns ``(exposures, obligor_aggregate_limit)``: the frame with the
-    per-leg deduplicated contribution materialised as
-    ``_QRRE_DEDUPED_LIMIT_COLUMN``, and the expression that sums that column
-    per obligor. The caller drops the helper before returning, so the classify
-    exit schema is unchanged.
-
-    ⚠ The two steps may NOT be folded into one expression, and this is a
-    performance contract, not a style preference. Polars evaluates a window
-    function's INPUT inside the outer group-by context, so putting the
-    per-(obligor, facility) ``cum_sum().over(...)`` / ``max().over(...)``
-    inside the input of the per-obligor ``.sum().over(...)`` re-runs both
-    inner windows once per obligor group: cost becomes a function of row count
-    times group count rather than of row count. That is what commit
-    ``8ec7d302`` shipped — the classify stage went from 0.5 s to 5.6 s at 374k
-    rows across v0.3.27-v0.3.32, with every correctness gate green. Reading the
-    inner result back as a plain column makes the outer window's input a
-    ``pl.col()``, which Polars evaluates once per row. ``arch_check`` check 21
-    and ``tests/unit/classifier/test_p1_320_qrre_aggregate_scaling.py`` hold
-    the shape; the numbers are unchanged.
+    Returns ``(exposures, obligor_aggregate_limit)``: the frame with the per-leg
+    helper columns ``_QRRE_SCRATCH_COLUMNS`` materialised, and the expression
+    that sums the last of them per obligor. The caller drops the helpers before
+    returning, so the classify exit schema is unchanged.
 
     The limb caps the *aggregate* nominal exposure to any single individual
     across the QRRE sub-portfolio, not each facility individually. The nominal
-    basis is the committed ``facility_limit``, and each committed facility
-    contributes it **once**.
+    basis is the committed ``facility_limit``, aggregated in three steps:
 
-    The hierarchy stage emits one row per *leg* of a facility — each drawn
-    loan, each contingent, the synthetic ``_UNDRAWN`` headroom row, each MOF
-    waterfall / ``_RESIDUAL`` sub-row — and every leg inherits the parent's
-    full ``facility_limit``. Summing the legs therefore multiplies the
-    obligor's aggregate by the leg count and demotes qualifying revolving
-    retail out of QRRE. Deduplicating on ``parent_facility_reference`` — the
-    exact functional determinant of ``facility_limit``, since a leg receives
-    its limit either from the facilities left-join on that key or, for
-    ``_UNDRAWN`` rows, from the facility that key coalesces to — counts each
-    supplied limit exactly once and changes nothing else.
+    1. **One limit per facility** (P1.320). The hierarchy stage emits one row per
+       *leg* of a facility — each drawn loan, each contingent, the synthetic
+       ``_UNDRAWN`` headroom row, each MOF waterfall / ``_RESIDUAL`` sub-row —
+       and every leg carries the ``facility_limit`` of the facility it is keyed
+       on (``parent_facility_reference``, the exact functional determinant of
+       that limit). Per (obligor, keyed facility) the first candidate leg
+       carries the group's limit and every later leg zero.
+    2. **Never more than the umbrella** (P1.355). Under a multi-option facility
+       a drawn leg is keyed on its IMMEDIATE sub-facility and carries the
+       sub-limit, while the root's waterfall / residual legs are keyed on the
+       ROOT and carry the root's limit — so step 1 counts a sub-limit beside the
+       umbrella that already contains it, and sums sibling sub-limits past a
+       fully drawn umbrella that emits no root leg at all. An individual cannot
+       draw more under an umbrella than the umbrella allows, so per (obligor,
+       ``root_facility_reference``) the step-1 limits are summed and capped at
+       ``root_facility_limit``: ``min(umbrella limit, sum of the distinct limits
+       counted under it)`` — never the largest single sub-limit, which drops
+       every other sub-limit and under-counts (nothing validates that the
+       sub-limits sum to no more than the root). The first candidate leg of the
+       group carries it, every later leg zero. The key holds the OBLIGOR as well
+       as the root: the limb caps the exposure to "a single individual", so where
+       sub-lines under one umbrella belong to different individuals each is
+       capped separately. Keying on the root alone — headroom netting's grain,
+       which nets per root across every obligor — would pool the owners'
+       sub-limits, credit the capped pool to one owner and zero to the others,
+       and wrongly admit them.
+    3. **Per individual.** The step-2 values are summed per obligor.
 
-    ⚠ The intra-facility ordinal is a ``cum_sum`` of the CANDIDATE MASK, not a
-    row count. This is the difference from the sibling obligor-deduplication in
+    Today's conservative result is KEPT, by construction, in four cases (the
+    first and last are the owner's P1.355 decision; each is pinned by a control
+    in ``tests/unit/classifier/test_p1_355_qrre_umbrella_cap.py``):
+
+    - **The umbrella has no limit.** A null ``root_facility_limit`` applies no
+      cap; with headroom the root's own legs carry the null limit as unbounded,
+      so the obligor stays out of QRRE. A sum-of-sub-limits rule would admit
+      it — not adopted.
+    - **A limit counted under the umbrella is null** (step 1 reads it as
+      unbounded). The group stays unbounded rather than being capped at the
+      umbrella.
+    - **The individual has drawn more under the umbrella than its limit** —
+      their drawings under the root exceed it, a zero limit included — **or a
+      drawing under it cannot be measured.** The drawings are
+      ``root_facility_utilisation``, which the hierarchy stage puts on every
+      leg: a loan's drawn balance and a contingent's amount (on- or
+      off-balance-sheet), floored at zero — the amounts it nets against the
+      root's headroom — in the ROOT facility's currency at the run's FX rates,
+      and null where the run holds no rate. Capping an overdrawn umbrella would
+      count the individual below their own drawn balance, and an unmeasurable
+      drawing cannot be shown to be within the limit, so in both the step-1
+      sum is kept.
+    - **A sibling sub-line fails the QRRE gate.** A waterfall leg is one sub's
+      slice of the root's headroom but stays keyed on the root, so the root's
+      limit is charged to the QRRE sub-portfolio in full (P1.320 leg (vi)).
+
+    Intermediate umbrellas in a hierarchy deeper than two levels are not
+    applied as caps — only the root is — which can only over-count. The
+    overdrawn test is made in the root facility's currency, whatever the
+    currency of each drawing and of the run. The cap itself compares limits as
+    supplied: the root's limit with the step-1 limits, each in its own
+    facility's currency — exact when the facilities under one umbrella share a
+    currency. ``facility_limit`` is never FX-converted, so step 1 and the
+    comparison with the (GBP) ceiling read every limit as stated; that is
+    pre-existing and outside this cap.
+
+    ⚠ The steps may NOT be folded into one expression, and this is a
+    performance contract, not a style preference. Polars evaluates a window
+    function's INPUT inside the outer group-by context, so putting one step's
+    ``.over(...)`` inside the input of the next re-runs it once per outer group:
+    cost becomes a function of row count times group count rather than of row
+    count. That is what commit ``8ec7d302`` shipped — the classify stage went
+    from 0.5 s to 5.6 s at 374k rows across v0.3.27-v0.3.32, with every
+    correctness gate green. Reading each step's result back as a plain column
+    makes the next window's input a ``pl.col()``, which Polars evaluates once
+    per row. ``arch_check`` check 21 and
+    ``tests/unit/classifier/test_p1_320_qrre_aggregate_scaling.py`` hold the
+    shape.
+
+    ⚠ Each step picks its carrying leg from the CANDIDATE MASK, not a row
+    count: step 1 by a ``cum_sum`` of the mask, step 2 by the smallest row
+    index among candidate legs (an aggregating window, cheaper than a second
+    ``cum_sum``; the same leg, the first candidate in row order). This is the
+    difference from the sibling obligor-deduplication in
     ``attributes.py`` (the optional 0.2% granularity test), which divides by
     ``pl.len().over(...)``: candidacy genuinely differs across legs of one
     facility (a MOF root with two committed subs of differing ``risk_type``
@@ -424,19 +512,22 @@ def qrre_obligor_aggregate_limit_expr(
     count would divide a facility's limit by legs that never contributed to it
     — halving the aggregate and wrongly admitting the obligor to QRRE.
 
-    Null-key handling, both guarded by ``partition_by_nullable``:
+    Null-key handling, each guarded by ``partition_by_nullable``:
 
     - Null ``parent_facility_reference`` — no dedupe; the row contributes its
-      own ``facility_limit``, today's behaviour. Polars would otherwise pool
-      every null-parent row of the obligor into one partition and count only
-      the largest, under-stating the aggregate (RWA-reducing).
+      own ``facility_limit``. Polars would otherwise pool every null-parent row
+      of the obligor into one partition and count only the largest,
+      under-stating the aggregate (RWA-reducing).
+    - Null ``root_facility_reference`` — no umbrella; the row passes its step-1
+      value through unchanged. The hierarchy sets a root for every row with a
+      parent, so this is the null-parent row again.
     - Null ``counterparty_reference`` — the row falls back to its own
       ``candidate_limit`` and never sees the pooled null partition, unchanged.
     """
-    # Step 1 — one contribution per (obligor, facility): the first candidate
-    # leg of the group carries the group's limit, every later leg carries
-    # zero. Materialised as its own column so step 2's window input is a
-    # plain column read rather than a nested window (see the ⚠ note above).
+    # Step 1 — one contribution per (obligor, keyed facility): the first
+    # candidate leg of the group carries the group's limit, every later leg
+    # zero. Materialised as its own column so step 2's window input is a plain
+    # column read rather than a nested window (see the ⚠ note above).
     facility_keys = ["counterparty_reference", "parent_facility_reference"]
     deduped_limit = (
         pl.when(is_qrre_candidate)
@@ -451,14 +542,63 @@ def qrre_obligor_aggregate_limit_expr(
         )
         .otherwise(pl.lit(0.0))
     )
-    # Step 2 — the per-obligor aggregate, reading the helper column back.
+    # Step 2a — the per-(obligor, umbrella) terms: one window of aggregations
+    # over plain inputs, materialised (see the ⚠ notes). A null-root row (no
+    # umbrella) gets a null struct; step 2b passes its step-1 value through.
+    umbrella_keys = ["counterparty_reference", "root_facility_reference"]
+    deduped = pl.col(_QRRE_DEDUPED_LIMIT_COLUMN)
+    utilisation = pl.col("root_facility_utilisation")
+    row_index = pl.col(_QRRE_ROW_INDEX_COLUMN)
+    umbrella_terms = partition_by_nullable(
+        pl.struct(
+            deduped.sum().alias("counted"),
+            utilisation.sum().alias("drawn"),
+            utilisation.null_count().alias("unmeasured"),
+            pl.when(is_qrre_candidate).then(row_index).min().alias("first_leg"),
+        ).over(umbrella_keys),
+        "root_facility_reference",
+        pl.lit(None),
+    )
+    # Step 2b — one contribution per (obligor, umbrella), from column reads
+    # only: the step-1 limits under the root, capped at the root's own limit
+    # only where the cap can rely on it — the limit is present (a null compares
+    # null: no cap), every drawing the obligor has under the root was
+    # measurable in the root's currency and together they are within the
+    # limit, and the counted sum is bounded. Otherwise the step-1 sum passes
+    # through: today's count. The first candidate leg of the group carries it.
+    terms = pl.col(_QRRE_UMBRELLA_TERMS_COLUMN).struct
+    counted = terms.field("counted")
+    root_limit = pl.col("root_facility_limit")
+    umbrella_caps = (
+        counted.is_finite()
+        & (terms.field("unmeasured") == 0)
+        & (root_limit >= terms.field("drawn"))
+    )
+    capped_at_umbrella = (
+        pl.when(umbrella_caps).then(pl.min_horizontal(root_limit, counted)).otherwise(counted)
+    )
+    umbrella_limit = (
+        pl.when(is_qrre_candidate)
+        .then(
+            pl.when(pl.col("root_facility_reference").is_null())
+            .then(deduped)
+            .when(terms.field("first_leg") == row_index)
+            .then(capped_at_umbrella)
+            .otherwise(pl.lit(0.0))
+        )
+        .otherwise(pl.lit(0.0))
+    )
+    # Step 3 — the per-obligor aggregate, reading the step-2 column back.
     obligor_aggregate_limit = partition_by_nullable(
-        pl.col(_QRRE_DEDUPED_LIMIT_COLUMN).sum().over("counterparty_reference"),
+        pl.col(_QRRE_UMBRELLA_LIMIT_COLUMN).sum().over("counterparty_reference"),
         "counterparty_reference",
         candidate_limit,
     )
     return (
-        exposures.with_columns(deduped_limit.alias(_QRRE_DEDUPED_LIMIT_COLUMN)),
+        exposures.with_columns(deduped_limit.alias(_QRRE_DEDUPED_LIMIT_COLUMN))
+        .with_row_index(_QRRE_ROW_INDEX_COLUMN)
+        .with_columns(umbrella_terms.alias(_QRRE_UMBRELLA_TERMS_COLUMN))
+        .with_columns(umbrella_limit.alias(_QRRE_UMBRELLA_LIMIT_COLUMN)),
         obligor_aggregate_limit,
     )
 

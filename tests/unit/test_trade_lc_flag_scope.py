@@ -47,6 +47,7 @@ def _facilities() -> pl.LazyFrame:
             "is_qrre_transactor": [False, False],
             "is_secured": [False, False],
             "limit": [1_000_000.0, 1_000_000.0],
+            "currency": ["GBP", "GBP"],
             "facility_termination_date": pl.Series([None, None], dtype=pl.Date),
             "is_short_term_trade_lc": [True, False],
         }
@@ -61,7 +62,14 @@ def _exposures() -> pl.LazyFrame:
     - LOAN_STANDALONE: no parent facility at all.
     - CONT_OWN_FALSE: a contingent under the trade facility carrying its own
       sealed ``False`` — the per-row value must survive the inheritance.
+
+    ``root_facility_reference`` is set as ``unify._join_facility_metadata`` sets
+    it before this step (a single-level facility is its own root; no parent, no
+    root): the step also joins each row's root facility limit on it, and puts
+    what the row draws (``currency`` / ``drawn_amount`` / ``nominal_amount``) in
+    the root's currency (P1.355).
     """
+    parents = ["FAC_TRADE_LC", "FAC_TERM", None, "FAC_TRADE_LC"]
     return pl.LazyFrame(
         {
             "exposure_reference": [
@@ -72,9 +80,13 @@ def _exposures() -> pl.LazyFrame:
             ],
             "exposure_type": ["loan", "loan", "loan", "contingent"],
             "counterparty_reference": [_CP, _CP, _CP, _CP],
-            "parent_facility_reference": ["FAC_TRADE_LC", "FAC_TERM", None, "FAC_TRADE_LC"],
+            "parent_facility_reference": parents,
+            "root_facility_reference": parents,
             "is_short_term_trade_lc": pl.Series([None, None, None, False], dtype=pl.Boolean),
             "maturity_date": [date(2027, 6, 1)] * 4,
+            "currency": ["GBP"] * 4,
+            "drawn_amount": [100_000.0, 100_000.0, 100_000.0, 0.0],
+            "nominal_amount": [0.0, 0.0, 0.0, 50_000.0],
         }
     )
 

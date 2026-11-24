@@ -899,6 +899,32 @@ def _hierarchy_resolved_columns() -> dict[str, EdgeColumn]:
         "exposure_has_parent": EdgeColumn(dtype=pl.Boolean),
         "ancestor_facilities": EdgeColumn(dtype=pl.List(pl.String)),
         "root_facility_reference": EdgeColumn(dtype=pl.String),
+        # The umbrella cap on the QRRE per-individual aggregate (P1.355): the
+        # ``limit`` of the leg's ROOT facility, joined on
+        # ``root_facility_reference`` for every leg (a drawn leg's own
+        # ``facility_limit`` is its immediate sub-facility's). Optional so a
+        # directly-built or synthetic CCR/SFT frame is injected with a typed
+        # null, which applies no cap — today's result, the conservative side.
+        "root_facility_limit": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            citation="CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c)",
+            null_meaning="null = no root facility, or the root carries no limit; "
+            "no umbrella cap is applied to the QRRE aggregate (never fabricated)",
+        ),
+        # What the leg draws against that root limit, in the ROOT facility's
+        # currency (P1.355): a loan's drawn balance or a contingent's amount,
+        # floored at 0; 0 on a headroom row. The classifier caps an individual
+        # at the umbrella only where these sum to no more than the root limit.
+        "root_facility_utilisation": EdgeColumn(
+            dtype=pl.Float64,
+            required=False,
+            citation="CRR Art. 154(4)(c) / PS1/26 Art. 147(5A)(c)",
+            null_meaning="null = the run holds no FX rate to put the drawing in the "
+            "root facility's currency, or the frame never ran the hierarchy "
+            "producer; the drawing is unmeasurable and no umbrella cap is applied "
+            "to that individual's aggregate under the root (never zero-filled)",
+        ),
         "facility_hierarchy_depth": EdgeColumn(dtype=pl.Int8),
         "cqs": EdgeColumn(
             dtype=pl.Int8,

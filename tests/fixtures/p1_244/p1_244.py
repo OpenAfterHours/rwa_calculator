@@ -369,6 +369,13 @@ _SUBTYPES_SCHEMA: dict[str, PolarsDataType] = {
     "undrawn_amount": pl.Float64,
     "facility_limit": pl.Float64,
     "parent_facility_reference": pl.String,
+    # P1.355: the QRRE aggregate's umbrella step groups on the root and caps at
+    # its limit. A single-level facility is its own root.
+    "root_facility_reference": pl.String,
+    "root_facility_limit": pl.Float64,
+    # P1.355: the umbrella cap applies only where the root is not overdrawn,
+    # measured on what each leg draws against it, in the root's currency.
+    "root_facility_utilisation": pl.Float64,
     "is_mortgage": pl.Boolean,
     "is_adc": pl.Boolean,
     "is_hvcre": pl.Boolean,
@@ -407,7 +414,10 @@ def make_subtypes_frame(
     (P1.320 R3): this transform is called directly on a hand-built frame, with
     no bundle seal to backfill it, so it must be present in both the row and
     ``_SUBTYPES_SCHEMA`` or the QRRE per-individual aggregate dedupe raises
-    ``ColumnNotFoundError``.
+    ``ColumnNotFoundError``. ``root_facility_reference`` / ``root_facility_limit``
+    / ``root_facility_utilisation`` (P1.355, the umbrella cap) likewise; the row
+    is a fully-drawn loan under a single-level facility, so it is its own root,
+    draws its whole limit against it, and the cap is its own limit.
     """
     return pl.LazyFrame(
         {
@@ -422,6 +432,9 @@ def make_subtypes_frame(
             "undrawn_amount": [0.0],
             "facility_limit": [FACILITY_LIMIT],
             "parent_facility_reference": [FAC_SUBTYPES],
+            "root_facility_reference": [FAC_SUBTYPES],
+            "root_facility_limit": [FACILITY_LIMIT],
+            "root_facility_utilisation": [FACILITY_LIMIT],
             "is_mortgage": [False],
             "is_adc": [False],
             "is_hvcre": [False],

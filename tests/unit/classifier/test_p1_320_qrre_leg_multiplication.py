@@ -33,12 +33,11 @@ first; each has a job that is not moving:
 - (iv) ``LN_Q1`` — the live-cell control. It keeps the QRRE population non-empty
   PRE-fix, so a reader can distinguish "the fix worked" from "the fix zeroed the
   cell" (LESSONS B5, the two-leg fixture pattern).
-- (v)  the MOF trio — pins the dedupe KEY decision (``parent_facility_reference``
-  over ``root_facility_reference``). It pins the LEG-MULTIPLICATION grain ONLY:
-  the root/sub grain over-count SURVIVES this fix (a drawn leg keys on its
-  immediate sub, a waterfall leg on the root, so one economic facility still
-  spans two dedupe groups) and is filed separately as P1.355. It is conservative
-  — over-counting denies QRRE — so it does not block this item.
+- (v)  the MOF trio — was green on both sides of P1.320, pinning the dedupe KEY
+  (``parent_facility_reference``, not ``root_facility_reference``) and the
+  root/sub over-count that key left standing. P1.355 (owner sign-off) closed
+  that over-count by capping the limits counted under one root at the root's own
+  limit, so leg (v) now asserts RETAIL_QRRE — see ``TestLegVMofUmbrellaCap``.
 - (vi) the MIXED candidate / non-candidate group — the highest-value leg here.
   See ``TestLegVIMixedCandidateGroup``.
 
@@ -304,54 +303,49 @@ class TestLegIVFullyDrawnControlStaysQRRE:
 
 
 # =============================================================================
-# Leg (v) — the dedupe-KEY pin. GREEN BEFORE AND AFTER, deliberately.
+# Leg (v) — the umbrella cap (P1.355). Re-pointed RETAIL_OTHER -> RETAIL_QRRE.
 # =============================================================================
 
 
-class TestLegVMofPinsTheDedupeKey:
+class TestLegVMofUmbrellaCap:
     """A nested (MOF) facility: root ``FAC_MOF`` 70,000, sub ``FAC_MOF_SUB``
     25,000, ``LN_MOF`` 10,000 drawn under the sub.
 
     Three legs are emitted: the drawn loan (keyed on the SUB, limit 25,000), the
     waterfall row for the sub and the residual row (both keyed on the ROOT, both
-    limit 70,000). Under the chosen key ``parent_facility_reference`` the
-    aggregate is 25,000 + 70,000 = 95,000, above both ceilings -> RETAIL_OTHER.
-    Under the REJECTED ``root_facility_reference`` key it would collapse to
-    70,000 and flip to RETAIL_QRRE in both regimes — which is what makes these
-    assertions a pin on the key rather than decoration.
+    limit 70,000). The per-facility dedupe (P1.320) counts 25,000 + 70,000 =
+    95,000; the umbrella cap (P1.355) holds the limits counted under the root to
+    the root's own 70,000, which is within both ceilings -> RETAIL_QRRE.
 
-    GREEN ON BOTH SIDES BY DESIGN (today's un-deduplicated 165,000 is also above
-    both ceilings). It does not fail first and must not be expected to.
-
-    ⚠ It pins the LEG-MULTIPLICATION grain ONLY. The root/sub grain over-count
-    survives this fix — the drawn leg keys on ``FAC_MOF_SUB`` while the waterfall
-    legs key on ``FAC_MOF``, so one economic facility still spans two dedupe
-    groups and 95,000 is charged where the economic aggregate nominal is 70,000.
-    That residual is conservative (over-counting denies QRRE) and is filed as its
-    own item, P1.355. Do not read this leg as evidence that it is fixed.
+    ⚠ RE-POINTED DELIBERATELY by P1.355, from (RETAIL_OTHER, RETAIL_OTHER). Until
+    then these six tests pinned the 95,000 over-count P1.320 left standing — the
+    sub-limit charged on top of the umbrella that already contains it — and
+    their docstring named it as the separately-owed defect. Art. 154(4)(c) /
+    Art. 147(5A)(c) cap the aggregate NOMINAL exposure to the individual, who
+    cannot draw more under the umbrella than its limit; the owner signed off the
+    RWA-direction move (P1.355 decision brief). The dedupe KEY these tests used to
+    pin is unchanged — step 1 still keys on ``parent_facility_reference``; the
+    cap is a second step keyed on ``root_facility_reference``, and it is NOT
+    ``max`` (that trap is pinned by the P1.355 controls).
     """
 
-    def test_crr_drawn_leg_under_the_sub_stays_retail_other(
-        self, crr_classified: pl.DataFrame
-    ) -> None:
-        assert _classes(crr_classified, LN_MOF) == (_RETAIL_OTHER, _RETAIL_OTHER)
+    def test_crr_drawn_leg_under_the_sub_becomes_qrre(self, crr_classified: pl.DataFrame) -> None:
+        assert _classes(crr_classified, LN_MOF) == (_QRRE, _QRRE)
 
-    def test_b31_drawn_leg_under_the_sub_stays_retail_other(
-        self, b31_classified: pl.DataFrame
-    ) -> None:
-        assert _classes(b31_classified, LN_MOF) == (_RETAIL_OTHER, _RETAIL_OTHER)
+    def test_b31_drawn_leg_under_the_sub_becomes_qrre(self, b31_classified: pl.DataFrame) -> None:
+        assert _classes(b31_classified, LN_MOF) == (_QRRE, _QRRE)
 
-    def test_crr_waterfall_leg_stays_retail_other(self, crr_classified: pl.DataFrame) -> None:
-        assert _classes(crr_classified, EXP_MOF_SUB_UNDRAWN) == (_RETAIL_OTHER, _RETAIL_OTHER)
+    def test_crr_waterfall_leg_becomes_qrre(self, crr_classified: pl.DataFrame) -> None:
+        assert _classes(crr_classified, EXP_MOF_SUB_UNDRAWN) == (_QRRE, _QRRE)
 
-    def test_b31_waterfall_leg_stays_retail_other(self, b31_classified: pl.DataFrame) -> None:
-        assert _classes(b31_classified, EXP_MOF_SUB_UNDRAWN) == (_RETAIL_OTHER, _RETAIL_OTHER)
+    def test_b31_waterfall_leg_becomes_qrre(self, b31_classified: pl.DataFrame) -> None:
+        assert _classes(b31_classified, EXP_MOF_SUB_UNDRAWN) == (_QRRE, _QRRE)
 
-    def test_crr_residual_leg_stays_retail_other(self, crr_classified: pl.DataFrame) -> None:
-        assert _classes(crr_classified, EXP_MOF_RESIDUAL) == (_RETAIL_OTHER, _RETAIL_OTHER)
+    def test_crr_residual_leg_becomes_qrre(self, crr_classified: pl.DataFrame) -> None:
+        assert _classes(crr_classified, EXP_MOF_RESIDUAL) == (_QRRE, _QRRE)
 
-    def test_b31_residual_leg_stays_retail_other(self, b31_classified: pl.DataFrame) -> None:
-        assert _classes(b31_classified, EXP_MOF_RESIDUAL) == (_RETAIL_OTHER, _RETAIL_OTHER)
+    def test_b31_residual_leg_becomes_qrre(self, b31_classified: pl.DataFrame) -> None:
+        assert _classes(b31_classified, EXP_MOF_RESIDUAL) == (_QRRE, _QRRE)
 
 
 # =============================================================================
@@ -526,13 +520,15 @@ class TestClassificationNegativeSpace:
         assert (b31_classified["exposure_class"] == _QRRE).sum() > 0
 
     def test_crr_retail_other_population_is_non_empty(self, crr_classified: pl.DataFrame) -> None:
-        """Legs (v) and (vi) guarantee it. A portfolio the fix moves ENTIRELY to
-        QRRE cannot distinguish a correct fix from an over-reaching one."""
+        """Leg (vi) guarantees it (leg (v) moved to QRRE with P1.355). A
+        portfolio the fix moves ENTIRELY to QRRE cannot distinguish a correct
+        fix from an over-reaching one."""
         assert (crr_classified["exposure_class"] == _RETAIL_OTHER).sum() > 0
 
     def test_b31_retail_other_population_is_non_empty(self, b31_classified: pl.DataFrame) -> None:
-        """Legs (v) and (vi) guarantee it. A portfolio the fix moves ENTIRELY to
-        QRRE cannot distinguish a correct fix from an over-reaching one."""
+        """Leg (vi) guarantees it (leg (v) moved to QRRE with P1.355). A
+        portfolio the fix moves ENTIRELY to QRRE cannot distinguish a correct
+        fix from an over-reaching one."""
         assert (b31_classified["exposure_class"] == _RETAIL_OTHER).sum() > 0
 
 
@@ -576,10 +572,14 @@ def _null_parent_frame() -> pl.LazyFrame:
     base = make_subtypes_frame(cp_entity_type="individual", cp_is_natural_person=True)
 
     def _leg(reference: str, limit: float) -> pl.LazyFrame:
+        # A row with no parent facility has no root either (``unify`` sets the
+        # root from the parent), so the P1.355 umbrella columns are null too.
         return base.with_columns(
             pl.lit(reference).alias("exposure_reference"),
             pl.lit(_NULL_PARENT_CP).alias("counterparty_reference"),
             pl.lit(None, dtype=pl.String).alias("parent_facility_reference"),
+            pl.lit(None, dtype=pl.String).alias("root_facility_reference"),
+            pl.lit(None, dtype=pl.Float64).alias("root_facility_limit"),
             pl.lit(limit).alias("facility_limit"),
         )
 

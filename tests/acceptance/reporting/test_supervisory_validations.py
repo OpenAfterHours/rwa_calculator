@@ -287,8 +287,8 @@ Cost, and why every run is load-bearing:
     entry of ``RUNS`` (most portfolios under both regimes, a few under one only),
     one more for each IRB-permissioned entry's prior period, and two for leg (m)'s
     probe (``crr/rich`` and its prior, generated once more). Count ``RUNS``, not
-    this prose — on 2026-11-24 it held forty-four runs, twenty-three of them Basel
-    3.1 and twenty-three with a prior period. The gateway leg adds one canonical
+    this prose — on 2026-11-24 it held forty-six runs, twenty-four of them Basel
+    3.1 and twenty-five with a prior period. The gateway leg adds one canonical
     return and one ``validate_return`` per Basel 3.1 run and no pipeline run: the
     pack is loaded once per process and the COREP bundle is the one the template
     leg already generated.
@@ -488,6 +488,7 @@ from tests.fixtures.reporting_over_collateralised_portfolio import (
 )
 from tests.fixtures.reporting_portfolio import build_reporting_bundle
 from tests.fixtures.reporting_qrre_headroom_portfolio import build_reporting_qrre_headroom_bundle
+from tests.fixtures.reporting_qrre_mof_portfolio import build_reporting_qrre_mof_bundle
 from tests.fixtures.reporting_re_split_portfolio import build_reporting_re_split_bundle
 from tests.fixtures.reporting_row_scope_portfolio import build_reporting_row_scope_bundle
 from tests.fixtures.reporting_rw_ladder_portfolio import (
@@ -1586,6 +1587,36 @@ RUNS: tuple[GateInput, ...] = (
         "BASEL_3_1",
         "qrre-headroom",
         build_reporting_qrre_headroom_bundle,
+        lambda: _irb_config("BASEL_3_1"),
+        lambda: _prior_config("BASEL_3_1"),
+    ),
+    # Qualifying revolving retail under MULTI-OPTION facilities — LESSONS B5,
+    # P1.355 (the P5.54 shape). The estate's only QRRE leg before this book was a
+    # single facility drawn to its limit (``irb-classes``): no headroom leg and no
+    # umbrella, so the per-individual aggregate (CRR Art. 154(4)(c) / PS1/26
+    # Art. 147(5A)(c)) could not move a reported cell — neither P1.320's
+    # leg-multiplication fix nor P1.355's umbrella cap. Here a fully drawn
+    # umbrella's two loans move from the other-retail to the QRRE sheet of
+    # C 08.01 / OF 08.01 under the cap, while a headroom-bearing QRRE obligor and
+    # two other-retail owners of one shared umbrella survive on their sheets (the
+    # two-leg rule; the shared owners also go red under a cap pooled across an
+    # umbrella's owners). ``_irb_config`` is the right config here, not a
+    # softening: the book is retail-only and too thin for the optional 0.2%
+    # granularity test, exactly like ``irb-classes``. IRB permission, so each run
+    # takes a prior frame for C 08.04.
+    GateInput(
+        "crr",
+        "CRR",
+        "qrre-mof",
+        build_reporting_qrre_mof_bundle,
+        lambda: _irb_config("CRR"),
+        lambda: _prior_config("CRR"),
+    ),
+    GateInput(
+        "b31",
+        "BASEL_3_1",
+        "qrre-mof",
+        build_reporting_qrre_mof_bundle,
         lambda: _irb_config("BASEL_3_1"),
         lambda: _prior_config("BASEL_3_1"),
     ),

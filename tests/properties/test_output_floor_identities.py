@@ -66,43 +66,53 @@ FLOOR_EXAMPLES = 4
 @pytest.mark.parametrize("regime", FLOORED_REGIMES)
 @pytest.mark.parametrize("portfolio_name", tuple(CORPUS))
 def test_the_floor_never_reduces_modelled_capital(portfolio_name: str, regime: str):
-    """Post-floor modelled RWEA is at least the un-floored modelled RWEA.
+    """Post-floor TREA is at least the un-floored U-TREA.
 
-    ``max(U-TREA, threshold) >= U-TREA`` by construction. Asserted anyway because
-    the floor is applied by distributing a shortfall pro-rata across legs, and a
-    distribution can lose or misplace an amount without the maximum ever being
-    evaluated wrongly.
+    ``max(U-TREA, threshold) >= U-TREA`` by construction. Asserted anyway, on the
+    LEDGER rather than the summary, because the floor is applied by distributing
+    a shortfall pro-rata across legs, and a distribution can lose or misplace an
+    amount without the maximum ever being evaluated wrongly. Both legs are
+    whole-book (PS1/26 Art. 92(3) / 92(3A), P1.367), so the post-floor side is
+    the whole ledger plus the CVA RWEA that entered the max beside it.
     """
     # Arrange
-    summary = run(CORPUS[portfolio_name], regime).output_floor_summary
+    portfolio = CORPUS[portfolio_name]
+    summary = run(portfolio, regime).output_floor_summary
     if summary is None:
         pytest.skip("no floor-eligible exposure in this portfolio")
+    trea = float(results_df(portfolio, regime)["rwa_final"].fill_null(0.0).sum())
+    trea += summary.cva_rwa
 
     # Assert
-    assert summary.floored_modelled_rwa >= summary.u_trea - MONEY_TOLERANCE, (
-        f"the output floor REDUCED modelled RWEA under {regime}: "
-        f"{summary.u_trea:,.2f} -> {summary.floored_modelled_rwa:,.2f}"
+    assert trea >= summary.u_trea - MONEY_TOLERANCE, (
+        f"the output floor REDUCED TREA under {regime}: {summary.u_trea:,.2f} -> {trea:,.2f}"
     )
 
 
 @pytest.mark.parametrize("regime", FLOORED_REGIMES)
 @pytest.mark.parametrize("portfolio_name", tuple(CORPUS))
 def test_post_floor_rwea_is_at_least_the_published_threshold(portfolio_name: str, regime: str):
-    """Post-floor modelled RWEA is at least ``x x S-TREA + OF-ADJ``.
+    """Post-floor TREA is at least ``x x S-TREA + OF-ADJ``.
 
     The other limb of the Art. 92 para 2A maximum. Stated with OF-ADJ included
     rather than as the bare ``0.725 x S-TREA`` shorthand: OF-ADJ can be negative
     (it subtracts 12.5x the IRB CET1 deduction), so the bare form is not the
     regulation's own inequality and would fail on a book with an EL shortfall.
+    Stated on the whole ledger plus the CVA RWEA, since S-TREA is whole-book
+    (P1.367): before that fix this compared the modelled subset alone to a
+    subset threshold.
     """
     # Arrange
-    summary = run(CORPUS[portfolio_name], regime).output_floor_summary
+    portfolio = CORPUS[portfolio_name]
+    summary = run(portfolio, regime).output_floor_summary
     if summary is None:
         pytest.skip("no floor-eligible exposure in this portfolio")
+    trea = float(results_df(portfolio, regime)["rwa_final"].fill_null(0.0).sum())
+    trea += summary.cva_rwa
 
     # Assert
-    assert summary.floored_modelled_rwa >= summary.floor_threshold - MONEY_TOLERANCE, (
-        f"post-floor modelled RWEA {summary.floored_modelled_rwa:,.2f} is below the Art. 92 "
+    assert trea >= summary.floor_threshold - MONEY_TOLERANCE, (
+        f"post-floor TREA {trea:,.2f} is below the Art. 92 "
         f"para 2A threshold {summary.floor_threshold:,.2f} under {regime}"
     )
 
@@ -217,8 +227,8 @@ def test_the_published_trea_is_not_floored_a_second_time():
     the rows beneath it by boe_b1092 — and the floor is column 0030 of the same
     row. The total is the greater of the two (PS1/26 Art. 92(2A)), so the
     shortfall is counted exactly once when that maximum is the ledger total, and
-    not at all in column 0010. The book is all-modelled, so the engine's
-    modelled-subset floor and the template's are the same number here.
+    not at all in column 0010. Since P1.367 the engine's floor and the template's
+    are the same whole-book max on any book, not only on an all-modelled one.
     """
     # Arrange
     portfolio = tuple(

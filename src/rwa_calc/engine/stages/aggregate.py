@@ -16,15 +16,20 @@ Key responsibilities:
   book AND the ``cva_ba_cva`` pack Feature is enabled (Basel 3.1 only), name
   every derivative counterparty missing from the BA-CVA counterparty input with
   a CCR030 WARNING (CC-16), and — when that input is present — compute the
-  portfolio RWEA_CVA off the SA-CCR synthetic derivative rows already on the
-  aggregated results frame and surface it on ``AggregatedResultBundle.cva_rwa``
-  alongside the descriptive ``cva_method`` (``"BA-CVA"`` for both the reduced
-  and full sub-cases) and ``cva_hedges_recognised`` (``True`` when at least one
-  eligible hedge fed the full-K path, ``False`` for the reduced path). The CVA
-  RWEA is additive to the default-risk total (``Σ rwa_final`` over the results
-  frame) — it is a standalone scalar, not folded into ``rwa_final``. No-op (all
-  three fields stay None) otherwise — same post-aggregation enrichment shape as
-  the ``rwa_ccr_default_fund`` roll-up.
+  portfolio RWEA_CVA off the SA-CCR synthetic derivative rows of the calculator
+  branches and surface it on ``AggregatedResultBundle.cva_rwa`` alongside the
+  descriptive ``cva_method`` (``"BA-CVA"`` for both the reduced and full
+  sub-cases) and ``cva_hedges_recognised`` (``True`` when at least one eligible
+  hedge fed the full-K path, ``False`` for the reduced path). The CVA RWEA is
+  additive to the default-risk total (``Σ rwa_final`` over the results frame) —
+  it is a standalone scalar, not folded into ``rwa_final``. No-op (all three
+  fields stay None) otherwise.
+- BA-CVA is computed BEFORE the aggregator runs and handed to it as
+  ``cva_rwa``, because the CVA own-funds requirement x 12.5 sits inside BOTH legs
+  of the Basel 3.1 output floor's max (PS1/26 Art. 92(3)(d), 92(3A), 92(4)(b) —
+  no CVA approach is on the 3A exclusion list). It reads only the CCR rows'
+  EAD_NS and alpha, which the floor never touches, so computing it off the
+  branch frames rather than the floored results gives the same figure (P1.367).
 
 References:
 - CRR Art. 92(3a) / PRA PS1/26: output floor application at aggregation
@@ -77,15 +82,24 @@ def run(
     """Aggregate the collected branch results into the final bundle."""
     components = ctx.get(COMPONENTS)
     crm_adjusted = ctx.get(CRM_ADJUSTED)
+    sa_results = ctx.get(SA_RESULTS).lazy()
+    irb_results = ctx.get(IRB_RESULTS).lazy()
+    slotting_results = ctx.get(SLOTTING_RESULTS).lazy()
+
+    # BA-CVA first: its RWEA is an input to the output floor (module docstring).
+    branches = pl.concat([sa_results, irb_results, slotting_results], how="diagonal_relaxed")
+    cva, cva_errors = _ba_cva_roll_up(ctx, rulepack, branches)
+    cva_rwea = cva.rwea if cva is not None else None
 
     result = components.output_aggregator.aggregate(
-        sa_results=ctx.get(SA_RESULTS).lazy(),
-        irb_results=ctx.get(IRB_RESULTS).lazy(),
-        slotting_results=ctx.get(SLOTTING_RESULTS).lazy(),
+        sa_results=sa_results,
+        irb_results=irb_results,
+        slotting_results=slotting_results,
         equity_bundle=ctx.get(EQUITY_RESULT),
         config=run_config,
         securitisation_audit=crm_adjusted.securitisation_audit,
         pack=rulepack.pack,
+        cva_rwa=cva_rwea if cva_rwea is not None else 0.0,
     )
 
     # Merge branch-path calculator warnings, codes preserved.
@@ -93,10 +107,9 @@ def run(
     if branch_errors:
         result = replace(result, errors=list(result.errors) + list(branch_errors))
 
-    cva, cva_errors = _ba_cva_roll_up(ctx, rulepack, result.results)
     if cva_errors:
         result = replace(result, errors=list(result.errors) + cva_errors)
-    if cva is not None and cva.rwea is not None:
+    if cva is not None and cva_rwea is not None:
         # ``cva_rwa`` is additive to the default-risk total (Σ rwa_final); it is
         # not folded into ``rwa_final`` (PS1/26 Own Funds 4(b)). It is also
         # broadcast as a constant ``cva_rwa`` column on the (re-sealed) results
@@ -110,13 +123,13 @@ def run(
         # points (the aggregator being the first).
         cva_results = reseal_with(
             result.results,
-            {"cva_rwa": pl.lit(cva.rwea, dtype=pl.Float64)},
+            {"cva_rwa": pl.lit(cva_rwea, dtype=pl.Float64)},
             AGGREGATOR_EXIT_EDGE,
         )
         result = replace(
             result,
             results=cva_results,
-            cva_rwa=cva.rwea,
+            cva_rwa=cva_rwea,
             cva_method="BA-CVA",
             cva_hedges_recognised=cva.hedges_recognised,
         )
@@ -127,7 +140,7 @@ def run(
 def _ba_cva_roll_up(
     ctx: PipelineContext,
     rulepack: RulepackV0,
-    results: pl.LazyFrame,
+    branches: pl.LazyFrame,
 ) -> tuple[BaCvaResult | None, list[CalculationError]]:
     """Compute the portfolio BA-CVA result and its coverage warnings.
 
@@ -140,7 +153,9 @@ def _ba_cva_roll_up(
     nothing. The returned :class:`BaCvaResult` carries both the RWEA and the
     single ``hedges_recognised`` discriminator (``True`` when at least one
     eligible hedge fed the full-K path) so the roll-up never re-derives the
-    full-vs-reduced condition.
+    full-vs-reduced condition. ``branches`` is the concatenated calculator
+    branch output, read before the aggregator: the ``ccr__`` rows carry the same
+    EAD_NS and alpha there as on the aggregated results frame.
 
     References:
         PRA PS1/26 Credit Valuation Adjustment Risk Part 1.2, 4.1, Ch.4.2-4.10;
@@ -155,7 +170,7 @@ def _ba_cva_roll_up(
 
     from rwa_calc.engine.cva import compute_ba_cva_rwa, uncovered_cva_counterparty_errors
 
-    ccr_rows = results.filter(pl.col("exposure_reference").str.starts_with(_CCR_EXPOSURE_PREFIX))
+    ccr_rows = branches.filter(pl.col("exposure_reference").str.starts_with(_CCR_EXPOSURE_PREFIX))
     errors = uncovered_cva_counterparty_errors(ccr_rows, data.cva_counterparties)
     if errors:
         logger.warning(

@@ -19,9 +19,12 @@ Cell semantics (recorded decisions, this slice):
 - The entity gate stays OUTSIDE the executor: framework check, then
   ``OutputFloorConfig.is_floor_applicable()`` (a bare boolean — OF 02.01
   reads NOTHING else off the config and nothing off OutputFloorSummary).
-  Nothing is read off ``OutputFloorSummary`` on purpose: its ``u_trea`` /
-  ``s_trea`` are MODELLED-SUBSET quantities, not the Art. 92 aggregates
-  (recorded engine defect, docs/plans/c07-ccr-derivatives.md §4 D6).
+  Nothing is read off ``OutputFloorSummary`` on purpose. Its ``u_trea`` /
+  ``s_trea`` were MODELLED-SUBSET quantities until P1.367 (the engine defect
+  recorded in docs/plans/c07-ccr-derivatives.md §4 D6); they are now the whole
+  book's Art. 92 aggregates, but they also carry the BA-CVA RWEA, which this
+  credit-risk comparison's rows 0010/0020 must not — so the template still
+  derives its columns from the ledger.
   Then the column-presence guard with the retired error string.
 - **The columns PARTITION the book** (Annex II): column 0010 is
   "portfolios where RWAs are calculated using MODELLED approaches only",

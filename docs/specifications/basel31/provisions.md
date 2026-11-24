@@ -281,9 +281,9 @@ T2_credit_cap = 0.006 × IRB_credit_risk_RWA      # 0.6% of IRB credit-risk RWA
 T2_credit     = min(EL_excess, T2_credit_cap)
 ```
 
-!!! info "B31 cap base — still 0.6% of IRB RWA, not 1.25% of S-TREA"
+!!! info "B31 cap base — still 0.6% of IRB RWA, not the 1.25% GCRA cap"
     PS1/26 leaves the Art. 62(d) cap unchanged at **0.6% of IRB credit-risk
-    RWA**. The 1.25% S-TREA figure that appears elsewhere in the floor
+    RWA**. The 1.25% figure that appears elsewhere in the floor
     machinery is the **GCRA** cap (general credit risk adjustments admitted to
     Tier 2 under Art. 92(2A)) — a different input, with a different base, that
     does **not** apply to the EL-excess T2 credit. PS1/26 App 1 page 13
@@ -367,7 +367,8 @@ net £10m excess; the split branch instead recognises both legs separately.
     text is unchanged. **The Basel 3.1 addition is the OF-ADJ linkage**: the
     capped `IRB T2` value flows into the output floor adjustment formula
     `OF-ADJ = 12.5 × (IRB_T2 − IRB_CET1 − GCRA + SA_T2)` (Art. 92(2A)), where
-    a separate GCRA cap of 1.25% of S-TREA is applied **inside** the engine
+    a separate GCRA cap of 1.25% of the Art. 92(3A) risk-weighted exposure
+    amounts is applied **inside** the engine
     on the GCRA term. The IRB T2 input itself is post-Art. 62(d) cap and is
     supplied by the firm. Under CRR there is no output floor and therefore no
     OF-ADJ — the Art. 62(d) cap stands alone. See

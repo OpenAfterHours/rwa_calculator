@@ -54,7 +54,52 @@ floor_impact = max(0, floor_percentage × RWA_SA - RWA_IRB)
 
 The floor applies at the **portfolio level** (per entity/basis combination — see
 [Entity-Type Applicability](#entity-type-applicability)), not to individual exposures.
-The floor impact is allocated pro-rata to IRB exposures by their share of S-TREA.
+
+### Both legs are whole-book
+
+Art. 92(3) builds U-TREA from points (a)–(f) "in respect of all the business
+activities of an institution", and Art. 92(3A) builds S-TREA as "the sum of points (a)
+to (f) of paragraph 3 … calculated without using … the IRB Approach". So the SA book,
+the equity book and the CVA requirement sit **inside both legs** of the max. They
+cancel out of the comparison only at `x = 1`; at `x < 1` they reduce the floor's bite
+by `(1 − x)` of themselves.
+
+The engine (`engine/aggregator/_floor.py::apply_floor_with_impact`) therefore takes:
+
+| Leg | Modelled rows (IRB, slotting, CCR-via-SA) | Standardised and equity rows | BA-CVA |
+|-----|------------------------------------------|------------------------------|--------|
+| U-TREA | own RWEA (`rwa_pre_floor`) | own RWEA | `cva_rwa` |
+| S-TREA | SA-equivalent (`sa_rwa`) | own RWEA (their SA RWEA *is* their own) | `cva_rwa` |
+
+A row whose approach label is not in the modelled set is standardised by construction
+(the same complement rule OF 02.01 column 0020 uses). The BA-CVA RWEA (Art. 92(3)(d),
+× 12.5 by Art. 92(4)(b); no CVA approach is on the 3A exclusion list) is computed by the
+aggregation stage *before* the floor and passed in; it stays a separate scalar
+(`AggregatedResultBundle.cva_rwa`) and is in neither `rwa_final` nor
+`total_rwa_post_floor`. With it, `total_rwa_post_floor + cva_rwa = max(u_trea,
+floor_threshold)`.
+
+**Scope.** The engine prices the credit-risk book and BA-CVA only. Market, operational
+and settlement risk outside the ledger are not priced, so the max is Art. 92's max over
+those components — the scope of OF 02.00's credit-risk rows plus CVA — not the
+entity's whole TREA.
+
+**Allocation (firm choice).** When the floor binds, the shortfall is allocated pro-rata
+to the floor-eligible (modelled) rows by their `sa_rwa`; standardised and equity rows
+keep their own RWEA. Art. 92 is silent on allocation; this is the recorded choice
+(P1.367 owner sign-off). Before P1.367 the engine summed both legs over the modelled
+rows alone and re-added the SA and equity books outside the max, which overstated TREA
+by up to `(1 − x) × (SA + equity)` wherever its floor bound, and bound on books where
+the article's floor does not.
+
+| `OutputFloorSummary` field | Meaning |
+|---|---|
+| `u_trea`, `s_trea` | The two whole-book legs above, each including `cva_rwa` |
+| `floor_threshold`, `shortfall` | `x × s_trea + of_adj`; `max(0, floor_threshold − u_trea)` |
+| `floored_modelled_rwa` | The modelled rows' own RWEA plus the shortfall they carry |
+| `sa_rwa_total`, `equity_rwa_total` | Own RWEA of the standardised (every non-modelled, non-equity row) and equity rows |
+| `total_rwa_post_floor` | Post-floor credit-risk RWEA, `Σ rwa_final` |
+| `cva_rwa` | The BA-CVA RWEA that entered both legs |
 
 ## PRA Transitional Schedule
 
@@ -118,13 +163,20 @@ OF-ADJ = 12.5 x (IRB_T2 - IRB_CET1 - GCRA + SA_T2)
 |-----------|-------------|----------------|
 | IRB_T2 | IRB excess provisions T2 **credit** (provisions > EL): Art. 62(d) excess, i.e., where provisions exceed EL amounts | Art. 62(d) |
 | IRB_CET1 | IRB EL shortfall CET1 deduction (EL > provisions) per Art. 36(1)(d). Art. 40 is the technical clarifier — see [Art. 40 — no DTA grossing-up](#art-40-no-deferred-tax-grossing-up-of-the-el-shortfall-deduction). | Art. 36(1)(d), Art. 40 |
-| GCRA | General credit risk adjustments included in T2, gross of tax effects. **Capped at 1.25% of S-TREA** (the standardised total risk exposure amount). | Art. 62(c), Art. 92(2A) |
+| GCRA | General credit risk adjustments included in T2, gross of tax effects. **Capped at 1.25% of the risk-weighted exposure amounts calculated under Art. 92(3A)** — the whole book's credit and CCR RWEA at its standardised value, not S-TREA. | Art. 62(c), Art. 92(2A) |
 | SA_T2 | SA general credit risk adjustments recognised as T2 capital under Art. 62(c) | Art. 62(c) |
 
 !!! note "GCRA Cap"
-    The GCRA component is capped at **1.25% of S-TREA** (not 1.25% of IRB RWA). This cap
-    prevents the OF-ADJ from being inflated by large general provisions relative to the
-    standardised risk exposure base.
+    Art. 92(2A) caps GCRA at "1.25% of risk-weighted exposure amounts calculated in
+    accordance with paragraph 3A" (not 1.25% of IRB RWA). The base
+    (`_floor.py::gcra_cap_base`) is every row's standardised RWEA — modelled rows at
+    `sa_rwa`, standardised and equity rows at their own RWEA, CCR and default-fund rows,
+    Art. 379 Table 2 Column 4 free deliveries — **except** the Art. 378 DvP settlement
+    lines, which are own-funds requirements under Art. 92(3)(ca), not risk-weighted
+    exposure amounts. It is not S-TREA, which also holds those lines and the CVA
+    requirement. A non-finite figure counts as zero, so one poisoned row cannot leave
+    GCRA uncapped. Until P1.212 the base was the modelled rows' `sa_rwa` alone, which
+    over-tightened the cap for any mixed book.
 
 The 12.5 multiplier converts own-funds amounts to risk-weighted equivalents (the inverse of the 8%
 minimum capital ratio). Under IRB, EL shortfall adds to capital requirements (via CET1 deduction)
@@ -208,7 +260,7 @@ is evaluated:
 |-------|-----|-----------|---------------|
 | `IRB T2` (excess provisions) | **0.6% of IRB credit-risk RWA** | Own Funds (CRR) Part Art. 62(d) | Upstream of the engine — the firm passes the post-cap amount via `OutputFloorConfig.irb_t2_credit`. |
 | `SA T2` (general credit risk adjustments admitted as Tier 2) | **1.25% of SA credit-risk RWA** | Own Funds (CRR) Part Art. 62(c) | Upstream of the engine — the firm passes the post-cap amount via `OutputFloorConfig.sa_t2_credit`. |
-| `GCRA` (general credit risk adjustments) | **1.25% of S-TREA** | PRA PS1/26 Art. 92(2A) | Inside `compute_of_adj()` (`src/rwa_calc/engine/aggregator/_floor.py`) — callers pass the **uncapped** amount. |
+| `GCRA` (general credit risk adjustments) | **1.25% of paragraph-3A RWEA** | PRA PS1/26 Art. 92(2A) | Inside `compute_of_adj()` against `gcra_cap_base()` (`src/rwa_calc/engine/aggregator/_floor.py`) — callers pass the **uncapped** amount. |
 
 !!! quote "PRA PS1/26 Art. 92(2A) — verbatim definitions of the OF-ADJ T2 inputs (PS1/26 App 1, p. 13)"
     "**IRB T2** = amounts calculated in accordance with point (d) of Own Funds
@@ -227,12 +279,13 @@ OF-ADJ at different points and under different caps:
   with a positive sign (adding to the Tier 2 base on the SA side of the
   reconciliation).
 - **`GCRA`** is the same population of general credit risk adjustments
-  measured **gross of tax effects** and capped at 1.25% of S-TREA — the
-  output-floor reference base. It enters OF-ADJ with a negative sign
+  measured **gross of tax effects** and capped at 1.25% of the paragraph-3A
+  risk-weighted exposure amounts — the output-floor reference base. It enters OF-ADJ with a negative sign
   (subtracting the GCRA element that would otherwise be double-counted on
   the SA side).
 
-The two caps reference different RWA bases (SA credit-risk RWA vs S-TREA),
+The two caps reference different RWA bases (SA credit-risk RWA vs the whole book's
+paragraph-3A RWEA),
 so the input figures `sa_t2_credit` and `gcra_amount` will not in general be
 equal even when they describe the same provisions.
 
@@ -242,9 +295,9 @@ equal even when they describe the same provisions.
 Inputs (post Art. 62 caps applied upstream):
   irb_t2_credit       = £20m   (already capped at 0.6% of IRB RWA per Art. 62(d))
   irb_cet1_deduction  = £15m
-  gcra_amount         = £40m   (uncapped — engine applies 1.25% of S-TREA)
+  gcra_amount         = £40m   (uncapped — engine applies 1.25% of the 3A RWEA)
   sa_t2_credit        = £30m   (already capped at 1.25% of SA RWA per Art. 62(c))
-  s_trea              = £2,400m
+  gcra_cap_base       = £2,400m (paragraph-3A RWEA)
 
 Engine GCRA cap (Art. 92(2A)):
   gcra_cap     = 1.25% × £2,400m = £30m
@@ -283,7 +336,7 @@ for the OF 02.00 / OF 02.01 mapping that consumes these post-cap values.
 
 **Art. 110(1)–(3A), Art. 62(c), Commission Delegated Regulation (EU) No 183/2014**
 
-The OF-ADJ `GCRA` term (capped at 1.25% of S-TREA) and the `SA_T2` term both aggregate
+The OF-ADJ `GCRA` term (capped at 1.25% of paragraph-3A RWEA) and the `SA_T2` term both aggregate
 **general credit risk adjustments only** — specific credit risk adjustments (SCRAs) follow a
 different capital path via exposure-value reduction (SA) or Pool D of Art. 159 (IRB defaulted).
 Incorrectly classifying an SCRA as GCRA (or vice versa) produces a mis-stated OF-ADJ, so the
@@ -324,7 +377,7 @@ underlying exposure is measured under SA or IRB:
 
 | Category | SA exposures | IRB exposures |
 |----------|-------------|---------------|
-| **GCRA** | T2 credit per Art. 62(c) — populates `SA_T2` in OF-ADJ. (The separate `GCRA` term in OF-ADJ is the portion of GCRA that is carried as T2 gross of the 1.25% S-TREA cap.) | Enters Pool B of Art. 159 per Art. 110(2); if `A + C > B + D` → CET1 deduction (Art. 36(1)(d)); if `B + D > A + C` → T2 credit capped at 0.6% of IRB credit-risk RWA (Art. 62(d)). |
+| **GCRA** | T2 credit per Art. 62(c) — populates `SA_T2` in OF-ADJ. (The separate `GCRA` term in OF-ADJ is the portion of GCRA that is carried as T2 gross of the 1.25% paragraph-3A RWEA cap.) | Enters Pool B of Art. 159 per Art. 110(2); if `A + C > B + D` → CET1 deduction (Art. 36(1)(d)); if `B + D > A + C` → T2 credit capped at 0.6% of IRB credit-risk RWA (Art. 62(d)). |
 | **SCRA — non-defaulted** | Reduces exposure value: `EAD_net = EAD_gross − SCRA` (Art. 111(1)(a)). Does **not** flow to `SA_T2`. | Enters Pool B of Art. 159 together with GCRA; does not reduce EAD. |
 | **SCRA — defaulted** | Reduces exposure value (Art. 111(1)(a)); may also drive the 20% provision-coverage split under Art. 127(1)(a). | Enters Pool D of Art. 159 — drives the defaulted-EL vs provisions comparison for defaulted exposures. |
 
@@ -370,7 +423,7 @@ The key invariants are:
     `OutputFloorConfig`:
 
     - `OutputFloorConfig.gcra_amount` — the institution's total qualifying GCRA (gross of
-      tax effects). The engine applies the 1.25% S-TREA cap inside `compute_of_adj()`
+      tax effects). The engine applies the 1.25% paragraph-3A RWEA cap inside `compute_of_adj()`
       (`src/rwa_calc/engine/aggregator/_floor.py`); callers should pass the **uncapped**
       qualifying amount and let the engine cap it.
     - `OutputFloorConfig.sa_t2_credit` — the SA-side GCRA recognised under Art. 62(c).

@@ -5,7 +5,7 @@ Tests cover:
 - Portfolio floor binding vs not binding
 - Pro-rata shortfall distribution across multiple exposures
 - Slotting exposures included in floor scope
-- SA exposures excluded from floor
+- SA exposures keep their own RWEA but sit in both legs of the max (P1.367)
 - Mixed portfolios (SA + IRB + slotting)
 - Edge cases (zero sa_rwa, single exposure, empty portfolio)
 - OutputFloorSummary correctness
@@ -388,17 +388,28 @@ class TestSlottingInFloorScope:
 
 
 class TestSAExcludedFromFloor:
-    """SA exposures should be unaffected by the output floor."""
+    """SA exposures keep their own RWEA, but sit in BOTH legs of the max.
+
+    PS1/26 Art. 92(3) / 92(3A) take U-TREA and S-TREA over all the business
+    activities of the institution, so the SA book is in both legs (P1.367). It
+    takes no share of the shortfall (the recorded allocation choice) — only the
+    modelled rows do.
+    """
 
     def test_sa_rwa_unchanged_when_floor_binds(
         self, aggregator: OutputAggregator, b31_config: CalculationConfig
     ) -> None:
-        """SA exposures retain original RWA even when portfolio floor binds."""
+        """SA exposures retain original RWA when the portfolio floor binds.
+
+        U-TREA = 100k + 30k = 130k; S-TREA = 100k + 100k = 200k; threshold
+        0.725 x 200k = 145k, so the F-IRB row carries the 15k shortfall. Before
+        P1.367 the SA book sat outside the max and the F-IRB row read 72.5k.
+        """
         sa = pl.LazyFrame(
             {
                 "exposure_reference": ["SA1"],
                 "exposure_class": ["CORPORATE"],
-                "approach_applied": ["SA"],
+                "approach_applied": ["standardised"],
                 "ead_final": [100_000.0],
                 "risk_weight": [1.0],
                 "rwa_final": [100_000.0],
@@ -421,12 +432,12 @@ class TestSAExcludedFromFloor:
         )
         df = result.results.collect().sort("exposure_reference")
 
-        # IRB floor binds: 72.5k > 30k
+        # Floor binds on the whole book: 145k > 130k
         irb_row = df.filter(pl.col("approach_applied") == "FIRB")
-        assert irb_row["rwa_final"][0] == pytest.approx(72_500.0, rel=0.001)
+        assert irb_row["rwa_final"][0] == pytest.approx(45_000.0, rel=0.001)
 
         # SA unchanged
-        sa_row = df.filter(pl.col("approach_applied") == "SA")
+        sa_row = df.filter(pl.col("approach_applied") == "standardised")
         assert sa_row["rwa_final"][0] == pytest.approx(100_000.0, rel=0.001)
 
     def test_sa_not_in_floor_impact(
@@ -437,7 +448,7 @@ class TestSAExcludedFromFloor:
             {
                 "exposure_reference": ["SA1"],
                 "exposure_class": ["CORPORATE"],
-                "approach_applied": ["SA"],
+                "approach_applied": ["standardised"],
                 "ead_final": [100_000.0],
                 "risk_weight": [1.0],
                 "rwa_final": [100_000.0],
@@ -523,15 +534,19 @@ class TestOutputFloorSummary:
         # P2.20: modelled-only post-floor; floor not binding so equals U-TREA.
         assert summary.floored_modelled_rwa == pytest.approx(80_000.0, rel=0.001)
 
-    def test_summary_excludes_sa_from_totals(
+    def test_summary_includes_sa_in_both_legs(
         self, aggregator: OutputAggregator, b31_config: CalculationConfig
     ) -> None:
-        """U-TREA and S-TREA only include floor-eligible (IRB+slotting), not SA."""
+        """U-TREA and S-TREA include the SA book (PS1/26 Art. 92(3) / 92(3A)).
+
+        U-TREA = 500k + 50k; S-TREA = 500k + 100k. Before P1.367 both legs held
+        the IRB row alone (50k / 100k).
+        """
         sa = pl.LazyFrame(
             {
                 "exposure_reference": ["SA1"],
                 "exposure_class": ["CORPORATE"],
-                "approach_applied": ["SA"],
+                "approach_applied": ["standardised"],
                 "ead_final": [500_000.0],
                 "risk_weight": [1.0],
                 "rwa_final": [500_000.0],
@@ -555,9 +570,9 @@ class TestOutputFloorSummary:
         summary = result.output_floor_summary
         assert summary is not None
 
-        # U-TREA and S-TREA should only reflect the IRB exposure
-        assert summary.u_trea == pytest.approx(50_000.0, rel=0.001)
-        assert summary.s_trea == pytest.approx(100_000.0, rel=0.001)
+        assert summary.u_trea == pytest.approx(550_000.0, rel=0.001)
+        assert summary.s_trea == pytest.approx(600_000.0, rel=0.001)
+        assert summary.portfolio_floor_binding is False
 
     def test_summary_includes_slotting(
         self, aggregator: OutputAggregator, b31_config: CalculationConfig
@@ -713,12 +728,12 @@ class TestPortfolioFloorEdgeCases:
     def test_all_sa_portfolio_no_floor(
         self, aggregator: OutputAggregator, b31_config: CalculationConfig
     ) -> None:
-        """All-SA portfolio should have no floor impact."""
+        """All-SA portfolio: U-TREA = S-TREA, so the floor cannot bind (x < 1)."""
         sa = pl.LazyFrame(
             {
                 "exposure_reference": ["SA1", "SA2"],
                 "exposure_class": ["CORPORATE", "RETAIL"],
-                "approach_applied": ["SA", "SA"],
+                "approach_applied": ["standardised", "standardised"],
                 "ead_final": [100_000.0, 50_000.0],
                 "risk_weight": [1.0, 0.75],
                 "rwa_final": [100_000.0, 37_500.0],
@@ -731,8 +746,9 @@ class TestPortfolioFloorEdgeCases:
         summary = result.output_floor_summary
         assert summary is not None
 
-        assert summary.u_trea == pytest.approx(0.0, abs=0.01)
-        assert summary.s_trea == pytest.approx(0.0, abs=0.01)
+        assert summary.u_trea == pytest.approx(137_500.0, rel=1e-9)
+        assert summary.s_trea == pytest.approx(137_500.0, rel=1e-9)
+        assert summary.shortfall == pytest.approx(0.0, abs=0.01)
         assert summary.portfolio_floor_binding is False
 
     def test_floor_rwa_column_still_per_exposure(

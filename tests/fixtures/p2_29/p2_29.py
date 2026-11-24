@@ -68,7 +68,7 @@ Scenario design (P2.29 — PRA PS1/26 UKB OV1 template):
     OF-ADJ formula (compute_of_adj):
         of_adj = 12.5 × (irb_t2_credit - irb_cet1_deduction - gcra_capped + sa_t2_credit)
         inputs: irb_t2_credit=500.0, irb_cet1_deduction=0.0, gcra_amount=0.0, sa_t2_credit=0.0,
-                s_trea=100_000.0  → gcra_capped = min(0.0, 1_250.0) = 0.0
+                gcra_cap_base=100_000.0  → gcra_capped = min(0.0, 1_250.0) = 0.0
         of_adj = 12.5 × (500.0 - 0.0 - 0.0 + 0.0) = 6_250.0   ✓
 
     Expected OV1 output (framework="BASEL_3_1", column "a" / column "c"):
@@ -229,7 +229,7 @@ def build_output_floor_summary() -> OutputFloorSummary:
 
     OF-ADJ is derived from compute_of_adj with:
         irb_t2_credit=500.0, irb_cet1_deduction=0.0, gcra_amount=0.0,
-        sa_t2_credit=0.0, s_trea=100_000.0
+        sa_t2_credit=0.0, gcra_cap_base=100_000.0
         → of_adj = 12.5 * (500.0 − 0.0 − 0.0 + 0.0) = 6_250.0
 
     The floor binds: x * S-TREA + OF-ADJ = 72_500 + 6_250 = 78_750 > U-TREA = 10_310.
@@ -267,7 +267,7 @@ def _verify_of_adj() -> None:
         irb_cet1_deduction=OF_ADJ_IRB_CET1_DEDUCTION,
         gcra_amount=OF_ADJ_GCRA_AMOUNT,
         sa_t2_credit=OF_ADJ_SA_T2_CREDIT,
-        s_trea=S_TREA,
+        gcra_cap_base=S_TREA,
     )
     assert computed == OF_ADJ, f"OF-ADJ mismatch: computed={computed}, expected={OF_ADJ}"
     assert gcra_capped == 0.0, f"GCRA capped should be 0.0, got {gcra_capped}"

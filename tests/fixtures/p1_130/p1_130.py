@@ -30,22 +30,34 @@ Why the floor BINDS (hand-calc):
                 PD=0.0015: K ≈ ~2.5% → RWA_2 ≈ 2,500,000
                 U-TREA (modelled) ≈ 4,600,000 (well below threshold)
 
-        S-TREA (SA-equivalent of IRB rows):
+        S-TREA (PS1/26 Art. 92(3A) — the WHOLE book, P1.367):
             Both IRB corporates are UNRATED → SA RW = 100%.
             EAD_1 = EAD_2 = 100m → SA-equiv = 100m + 100m = 200,000,000
+            SA control (EXP_SA_1, unrated → 100%): RWA = 50,000,000, in BOTH legs
+            S-TREA = 200,000,000 + 50,000,000 = 250,000,000
+            U-TREA = modelled + 50,000,000 (measured ≈ 109,600,000; see below)
 
-        Floor threshold = 0.725 × 200,000,000 + 0 = 145,000,000
-            145,000,000 >> 4,600,000  =>  FLOOR BINDS
+        Floor threshold = 0.725 × 250,000,000 + 0 = 181,250,000
+            181,250,000 >> U-TREA  =>  FLOOR BINDS
 
-        Floored modelled RWA = floor_threshold = 145,000,000
-        SA control (EXP_SA_1, unrated → 100%): RWA = 50,000,000 (not in U-TREA / S-TREA)
-
-        total_rwa_post_floor = 145,000,000 + 50,000,000 = 195,000,000
+        total_rwa_post_floor = max(U-TREA, threshold) = 181,250,000
+            of which the SA control keeps its own 50,000,000 and the modelled rows
+            carry floored_modelled_rwa = 131,250,000
         total_rwa_pre_floor  =   4,600,000 + 50,000,000 =  54,600,000  (approx)
+
+        Before P1.367 the SA control sat outside the max: threshold 145m on the
+        modelled rows alone, plus 50m re-added = 195m.
+
+        Measured 2026-11-23 (P1.367): the modelled rows' own RWEA is 59,624,524.87
+        (the K approximation above understates it) and OF-ADJ is -1,250,000 (an
+        EL-shortfall CET1 deduction), so the run's threshold and TREA are
+        0.725 x 250m - 1.25m = 180,000,000 (before P1.367: 143.75m + 50m =
+        193.75m). The constants below state x · S-TREA without OF-ADJ, and the
+        tests compare them at a 1% tolerance.
 
     Critical constraint: ALL corporates are UNRATED (no external_cqs, no cqs column in
     ratings rows). SA-equivalent RW = 100% (not 75%, which would be CQS 3 under B31).
-    This makes S-TREA = 200m and sets the 145m threshold.
+    This makes S-TREA = 250m and sets the 181.25m threshold.
 
 Model permissions wiring:
     EXP_IRB_1 and EXP_IRB_2 carry an internal rating (model_id=CORP_FIRB_P1130) on
@@ -119,13 +131,13 @@ EFFECTIVE_MATURITY: float = 2.5  # years
 FLOOR_FACTOR: float = 0.725
 
 # Hand-calc expected values (binding-floor precondition check)
-# S-TREA: unrated corporate → 100% SA RW; 100m + 100m = 200m
-EXPECTED_S_TREA: float = 200_000_000.0
-EXPECTED_FLOOR_THRESHOLD: float = FLOOR_FACTOR * EXPECTED_S_TREA  # 145,000,000
-# SA control EXP_SA_1: unrated corporate 100% → RWA = 50m
+# SA control EXP_SA_1: unrated corporate 100% → RWA = 50m, in BOTH legs (P1.367)
 EXPECTED_SA_RWA: float = 50_000_000.0
-# Post-floor total (floor binds; floored_modelled_rwa + SA control):
-EXPECTED_TOTAL_RWA_POST_FLOOR: float = EXPECTED_FLOOR_THRESHOLD + EXPECTED_SA_RWA  # 195,000,000
+# S-TREA: unrated corporate → 100% SA RW; 100m + 100m modelled + 50m SA = 250m
+EXPECTED_S_TREA: float = 200_000_000.0 + EXPECTED_SA_RWA
+EXPECTED_FLOOR_THRESHOLD: float = FLOOR_FACTOR * EXPECTED_S_TREA  # 181,250,000
+# Post-floor total (floor binds; TREA = threshold, SA control included):
+EXPECTED_TOTAL_RWA_POST_FLOOR: float = EXPECTED_FLOOR_THRESHOLD  # 181,250,000
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +267,8 @@ def create_p1130_counterparties() -> pl.DataFrame:
     All three are unrated corporate entities.  No cqs / external rating is set
     on any counterparty or rating row — this is load-bearing: unrated corporates
     receive a 100% SA risk weight (PRA PS1/26 Art. 122(2) Table 6 unrated column),
-    producing S-TREA = 200m and a binding floor threshold of 145m.
+    producing a modelled SA-equivalent of 200m; with the 50m SA control in both
+    legs, S-TREA = 250m and a binding floor threshold of 181.25m.
 
     CP_IRB_1 and CP_IRB_2: paired with internal ratings (model CORP-FIRB-P1130),
         enabling F-IRB routing.  annual_revenue=200m avoids the Basel 3.1

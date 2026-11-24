@@ -34,16 +34,24 @@ Two metrics, and the floor is what separates them:
 - **P0 — own approach.** ``argmax`` of the candidate's own pre-floor RWA. The
   rule under CRR (capital is additive there), and under Basel 3.1 whenever the
   floor is inapplicable or the firm has elected ``own_approach``.
-- **P2 — floor-aware.** ``TREA = SA + EQ + max(U-TREA, x . S-TREA + OF-ADJ)`` is
-  a portfolio ``max``, so "riskiest" is state-dependent. Assignment A picks every
-  group by ``argmax u_i``; assignment B by ``argmax b_i``, where ``b_i`` is
-  ``x . s_i`` for a floor-eligible member and ``u_i`` for every other. The two
-  are evaluated END TO END through the caller's closure and the larger wins —
-  exactly twice when the assignments name DIFFERENT members, and never when they
-  coincide, because an identical survivor set yields an identical total by
-  construction. That is a bound rather than an identity: OF-ADJ moves with the
-  winners' expected loss, so the floored branch is not additive across groups and
-  the two assignments cannot be compared on marginals alone.
+- **P2 — floor-aware.** ``TREA = max(U-TREA, x . S-TREA + OF-ADJ)`` is a
+  portfolio ``max`` over the whole book (PS1/26 Art. 92(3) / 92(3A) put every
+  row in BOTH legs), so "riskiest" is state-dependent. Assignment A picks every
+  group by ``argmax u_i``; assignment B by ``argmax b_i``, where
+  ``b_i = x . s_i`` is the member's marginal contribution to the floored branch
+  and ``s_i`` its standardised RWEA — ``sa_rwa`` for a floor-eligible member, its
+  own ``u_i`` for a standardised one. The two are evaluated END TO END through the
+  caller's closure and the larger wins — exactly twice when the assignments name
+  DIFFERENT members, and never when they coincide, because an identical survivor
+  set yields an identical total by construction. That is a bound rather than an
+  identity: OF-ADJ moves with the winners' expected loss, so the floored branch
+  is not additive across groups and the two assignments cannot be compared on
+  marginals alone.
+
+  Until P1.367 this module scored a standardised member at its full ``u_i``, as
+  if it sat OUTSIDE the max — the engine's former modelled-subset floor, which
+  re-added the SA book unscaled. Ranking and totalling must use one formula, so
+  the two moved together.
 
 References:
 - docs/plans/facility-share-riskiest-member.md — the design of record (D1-D5)
@@ -409,20 +417,23 @@ def _optional(column: str, dtype: PolarsDataType) -> pl.Expr:
 def _floored_contribution(row: dict[str, Any], floor_pct: float) -> float | None:
     """``b_i`` — the member's marginal contribution to the FLOORED branch.
 
-    ONE predicate, and the place an implementer goes wrong. A member on a
-    floor-eligible approach contributes ``x . s_i`` (it sits inside the
-    Art. 92(2A) max, scaled); every other member contributes its full ``u_i``
-    (it sits OUTSIDE the max, unscaled). Keyed on
-    ``FLOOR_ELIGIBLE_APPROACHES``, never on "not in ``IRB_APPROACHES``": the
-    two do not partition the domain — slotting and CCR-via-SA are floor-eligible
-    without being IRB, and ``standardised_ccr`` is deliberately kept out of
-    ``SA_APPROACHES`` — so the negated form sends both down the ``u_i`` branch
-    and understates the floored assignment wherever ``u_i > x . s_i``.
+    Every member sits inside the Art. 92(2A) max (PS1/26 Art. 92(3) / 92(3A)
+    take both legs over the whole book), so ``b_i = x . s_i`` for every member.
+    ONE predicate decides the carrier, and it is the place an implementer goes
+    wrong: a member on a floor-eligible approach takes its ``sa_rwa``; every
+    other member is standardised, so its standardised RWEA IS its own ``u_i`` —
+    the same split ``_floor.standardised_rwea`` makes for S-TREA. Keyed on
+    ``FLOOR_ELIGIBLE_APPROACHES``, never on ``IRB_APPROACHES``: the two do not
+    partition the domain — slotting and CCR-via-SA are floor-eligible without
+    being IRB, and ``standardised_ccr`` is deliberately kept out of
+    ``SA_APPROACHES`` — so the narrower form reads the own RWA of a slotting or
+    CCR member instead of its SA-equivalent.
     """
     if row[APPROACH_COL] in FLOOR_ELIGIBLE_APPROACHES:
-        sa_equivalent = row[SA_RWA_COL]
-        return None if sa_equivalent is None else floor_pct * sa_equivalent
-    return row[OWN_RWA_COL]
+        standardised = row[SA_RWA_COL]
+    else:
+        standardised = row[OWN_RWA_COL]
+    return None if standardised is None else floor_pct * standardised
 
 
 def _choose_assignment(
@@ -449,8 +460,9 @@ def _choose_assignment(
     and there is nothing to compare. Skipping them is a saving, not a shortcut:
     it costs two whole-book expected-loss / OF-ADJ / floor evaluations plus the
     materialisation of every non-candidate reference, and on a share-dense
-    all-standardised book (where ``b_i = u_i`` on every row, so the assignments
-    can never differ) that measured as +233% on the aggregator stage.
+    all-standardised book (where ``b_i = x . u_i`` on every row, an order-
+    preserving rescaling of ``u_i``, so the assignments can never differ) that
+    measured as +233% on the aggregator stage.
 
     ``metric_used`` is then ``own_approach``: the own-approach ranking picked the
     winner, and no floored-branch comparison decided anything.

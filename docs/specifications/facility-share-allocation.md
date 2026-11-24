@@ -175,28 +175,29 @@ Under Basel 3.1 total risk exposure is a portfolio-level `max`, so "riskiest" is
 floor binds, and whether the floor binds depends in part on which member was
 chosen.
 
-### The engine's floor formula
+### The floor formula
 
-The engine takes the `max` over the floor-eligible rows and adds the standardised
-book outside it:
+The engine takes the PS1/26 Art. 92(2A) `max` over the whole book:
 
 ```
-TREA = SA_total + EQ + max( U_elig , x . S_elig + OF-ADJ )
+TREA = max( U , x . S + OF-ADJ )
 ```
 
-where `U_elig` and `S_elig` are summed over floor-eligible approaches
-(internal ratings, slotting and counterparty-credit-risk-via-standardised),
-`x` is the Art. 92(5) phase-in percentage from the pack Schedule
-`output_floor_pct` (or `output_floor_pct_full` where the firm skips the
-transition), and `OF-ADJ` is the own-funds adjustment.
+where `U` sums every row's own RWA and `S` every row's standardised RWA — the
+standardised-equivalent of a floor-eligible row (internal ratings, slotting and
+counterparty-credit-risk-via-standardised), and its own RWA for a standardised or
+equity row — each plus the BA-CVA RWEA. `x` is the Art. 92(5) phase-in percentage
+from the pack Schedule `output_floor_pct` (or `output_floor_pct_full` where the firm
+skips the transition), and `OF-ADJ` is the own-funds adjustment.
 
-!!! note "This is the engine's form, not the article's"
-    PS1/26 Art. 92(2A) takes the `max` over whole-firm totals, in which
-    standardised rows appear on **both** sides. The two agree only where `x` is
-    one; otherwise the engine's form binds more often and by more, so it is
-    conservative. The divergence is a recorded, out-of-scope finding — see
-    [Known findings](#known-findings) — and every statement on this page is made
-    against the engine's form.
+!!! note "The article's form since P1.367"
+    Art. 92(3) / 92(3A) build both legs from "all the business activities of an
+    institution", so standardised rows sit on **both** sides. Until P1.367 the
+    engine took the `max` over the floor-eligible rows alone and added the
+    standardised book outside it (`SA + EQ + max(U_elig, x . S_elig + OF-ADJ)`),
+    which bound more often and by more. The ranking below moved with it: ranking
+    on one formula and totalling on the other would let the chosen member and the
+    reported total disagree.
 
     The floor itself is documented in
     [Output Floor](basel31/output-floor.md).
@@ -204,25 +205,27 @@ transition), and `OF-ADJ` is the own-funds adjustment.
 ### The floored-branch marginal
 
 For a member `i`, let `u_i` be its own-approach pre-floor RWA and `s_i` its
-standardised-equivalent. Its marginal contribution to the floored branch is
+standardised RWA. Every member sits inside the `max`, so its marginal
+contribution to the floored branch is
 
 ```
-b_i = x . s_i      if the member's applied approach is floor-eligible
-      u_i          otherwise
+b_i = x . s_i
+s_i = the standardised-equivalent (sa_rwa)   if the applied approach is floor-eligible
+      u_i                                    otherwise
 ```
 
-The second limb is the one an implementation gets wrong. Floor-eligible and
-standardised do **not** partition the domain: counterparty-credit-risk-via-
-standardised and slotting are floor-eligible without being standardised, so a
-predicate written as "not internal-ratings gets `u_i`" sends both down the wrong
-limb and understates the floored assignment. A specialised-lending facility's
-undrawn candidate is a live slotting case.
+The predicate for `s_i` is the one an implementation gets wrong. Floor-eligible
+and internal-ratings do **not** partition the domain: counterparty-credit-risk-
+via-standardised and slotting are floor-eligible without being internal-ratings,
+so a predicate written as "internal-ratings reads the standardised-equivalent"
+reads their own RWA instead and misranks the floored assignment. A
+specialised-lending facility's undrawn candidate is a live slotting case.
 
 ### The rule: evaluate two assignments, keep the larger
 
 The un-floored branch is additive across shares, so it is maximised exactly by
 **assignment A** — every share to its `argmax u_i`. The floored branch is
-strictly increasing in `S_elig`, so it is maximised share by share by
+strictly increasing in `S`, so it is maximised share by share by
 **assignment B** — every share to its `argmax b_i`. Since total risk exposure is
 the `max` of the two branches, the capital-maximising assignment is one of those
 two. The engine evaluates **both end to end** — recomputing the expected-loss
@@ -246,21 +249,22 @@ assignment with the larger total. Ties go to A, for attribution stability.
 
 ### When the floor state cannot change the answer
 
-A useful boundary falls straight out of the two marginals. A standardised
-member's marginal is its **full** RWA under both assignments, while a modelled
-member's falls to `x` times its standardised-equivalent under assignment B. So:
+A useful boundary falls straight out of the two marginals. Every member's
+floored marginal is `x` times its standardised RWA, so `x` cancels out of the
+comparison and assignment B is simply `argmax s_i`, where a standardised
+member's `s_i` is its own RWA. So:
 
-> **No facility share whose standardised members all sit at or above the floor
-> percentage — that is, whose own risk weight is at least `x` times the
-> standardised-equivalent risk weight of every modelled member — can ever flip on
+> **No facility share whose standardised members' own risk weight is at least the
+> standardised-equivalent risk weight of every modelled member can ever flip on
 > the floor state.**
 
-A regulatory-retail member is the everyday case: its full risk weight already
-exceeds `x` times an unrated corporate's standardised-equivalent at every step of
-the `output_floor_pct` Schedule, so assignment A and assignment B agree and the
-election below changes nothing. Shares that *can* flip are the ones holding a
-low-PD modelled member with a much higher standardised-equivalent weight, against
-standardised members priced below the floor percentage.
+Shares that *can* flip are the ones holding a low-PD modelled member whose
+standardised-equivalent weight exceeds the standardised members' own weight. A
+regulatory-retail member (75%) against an unrated corporate's 100%
+standardised-equivalent is such a share. Before P1.367 the engine scored a
+standardised member at its full RWA against `x` times the modelled member's, so
+that share could not flip at any step of the `output_floor_pct` Schedule; under the
+article's form it can.
 
 ## The `facility_share_metric` election
 
@@ -475,13 +479,13 @@ Reading the four rows:
 ## Known findings
 
 Recorded here because they bound what this page claims, and filed for separate
-decisions. None is fixed by this design; the third has since been closed.
+decisions. None is fixed by this design; the first and third have since been closed.
 
-1. **The engine floors the modelled subset, not the firm.** The floor `max` is
-   taken over floor-eligible rows with the standardised book added outside it,
-   where Art. 92(2A) takes it over whole-firm totals. The engine's form is
-   conservative; correcting it would be RWA-reducing and needs its own evidence
-   and sign-off.
+1. **Closed 2026-11-23 (P1.367): the engine floored the modelled subset, not the
+   firm.** The floor `max` was taken over floor-eligible rows with the standardised
+   book added outside it, where Art. 92(2A) takes it over whole-firm totals. Both
+   the floor and this page's ranking now use the whole-book form; the release was
+   measured and signed off as RWA-reducing.
 2. **Closed by P1.368: the Art. 110A due-diligence input now reaches the
    standardised branch.** The two input columns were accepted by the loan and
    contingent schemas but dropped at the hierarchy stage, so the override was

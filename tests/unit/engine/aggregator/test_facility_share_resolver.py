@@ -14,14 +14,16 @@ and two of them are the ones an implementer is most likely to get wrong:
 - **The tie-break chain.** Every metric on FS-1 is distinct by more than 10%, on
   purpose. A near-tie there would exercise the chain silently.
 - **The all-non-finite group.** No FS-1 candidate produces a NaN.
-- **``b_i`` on a slotting or CCR-via-SA candidate.** FS-1 has neither row, so a
-  ``b_i`` predicate written as "not in ``IRB_APPROACHES``" instead of "in
-  ``FLOOR_ELIGIBLE_APPROACHES``" passes every acceptance guard. That is the
-  Attack-8 sibling shape: the repo offers ``is_in(list(FLOOR_ELIGIBLE_APPROACHES))``
-  at ``aggregator.py`` (correct) and ``not in IRB_APPROACHES`` elsewhere (wrong
-  here), and ``standardised_ccr`` is deliberately in the first set and NOT in
-  ``SA_APPROACHES``.
-- **``argmax b_i`` versus ``argmax s_i``.** They pick the same member on FS-1.
+- **``s_i`` on a slotting or CCR-via-SA candidate.** FS-1 has neither row, so
+  the ``b_i = x . s_i`` carrier predicate written as "in ``IRB_APPROACHES``"
+  instead of "in ``FLOOR_ELIGIBLE_APPROACHES``" passes every acceptance guard.
+  That is the Attack-8 sibling shape: the repo offers
+  ``is_in(list(FLOOR_ELIGIBLE_APPROACHES))`` at ``aggregator.py`` (correct) and
+  ``IRB_APPROACHES`` elsewhere (wrong here), and ``standardised_ccr`` is
+  deliberately in the first set and NOT in ``SA_APPROACHES``.
+- **A standardised member inside the max.** Since P1.367 every member sits in
+  both legs of the Art. 92(2A) max, so a standardised member scores ``x . u_i``,
+  not its full ``u_i``. On FS-1 the two formulas pick the same member.
 
 The resolver contract these tests assume
 ----------------------------------------
@@ -378,23 +380,27 @@ def test_resolver_marks_exactly_one_winner_and_one_collapsed_reference_per_group
 # ---------------------------------------------------------------------------
 
 
-def test_resolver_prefers_floored_branch_not_raw_sa_equivalent() -> None:
+def test_resolver_scales_every_member_inside_the_max() -> None:
     """
-    Assignment B is ``argmax b_i``, NOT ``argmax s_i``.
+    ``b_i = x . s_i`` for EVERY member: a standardised one is inside the max too.
 
     Arrange: a standardised candidate at ``u = s = 100,000`` and a foundation-IRB
              candidate at ``s = 150,000`` with a smaller ``u``, at ``x = 0.60``.
     Act:     resolve under the floor-aware default with a TREA closure that makes
              assignment B the larger.
-    Assert:  the winner is the STANDARDISED candidate.
+    Assert:  the winner is the MODELLED candidate, and the standardised one's
+             floored contribution is ``x . u``, not its full ``u``.
 
-    ``b_SA = u_SA = 100,000`` because a standardised row sits outside the
-    Art. 92(2A) max at FULL weight; ``b_IRB = 0.60 x 150,000 = 90,000``. So
-    ``argmax b`` picks the standardised member while ``argmax s`` picks the
-    modelled one. ``b_SA = u_SA`` is precisely the discriminating property, which
-    is why ``u_SA`` is pinned rather than left free.
+    PS1/26 Art. 92(3) / 92(3A) put the SA book in BOTH legs of the Art. 92(2A)
+    max, so a standardised member adds ``u_i`` to U-TREA and ``s_i = u_i`` to
+    S-TREA, and its marginal contribution to the floored branch is ``x . u_i``.
+    ``b_SA = 0.60 x 100,000 = 60,000`` against ``b_IRB = 0.60 x 150,000 = 90,000``,
+    so assignment B names the F-IRB member while assignment A (``argmax u``)
+    names the standardised one; the two are evaluated and B wins.
 
-    Mutation it detects (d): assignment B computed as ``argmax s_i``.
+    Mutation it detects: the pre-P1.367 subset formula, which gave a standardised
+    member its full ``u_i`` "outside the max" - ``b_SA = 100,000`` - made the two
+    assignments coincide on the standardised member and never evaluated B.
     """
     # Arrange
     rows = [
@@ -402,51 +408,50 @@ def test_resolver_prefers_floored_branch_not_raw_sa_equivalent() -> None:
         candidate("M-IRB", approach="foundation_irb", u=60_000.0, s=150_000.0),
     ]
     assert X * 150_000.0 < 100_000.0, (
-        "the floored contribution of the modelled candidate must sit BELOW the "
-        "standardised candidate's full RWA, or argmax b and argmax s agree and "
-        "this test cannot tell them apart"
+        "the modelled candidate's floored contribution must sit below the "
+        "standardised candidate's FULL RWA, or the subset formula would pick the "
+        "same member and this test could not tell the two formulas apart"
     )
-    # B must win the end-to-end comparison, or P2 falls back to A and the test
-    # would pass for the wrong reason.
-    spy = TreaSpy({"M-SA": 2_000_000.0, "M-IRB": 1_000_000.0})
+    spy = TreaSpy({"M-IRB": 2_000_000.0, "M-SA": 1_000_000.0})
 
     # Act
     resolution, summary = resolve(frame(rows), evaluate_trea=spy)
 
     # Assert
-    assert winner_of(resolution) == "M-SA"
+    assert winner_of(resolution) == "M-IRB"
+    assert summary.metric_used == "sa_equivalent"
     entries = {row["counterparty_reference"]: row for row in audit(resolution)}
-    assert entries["M-SA"]["floored_branch_contribution"] == pytest.approx(100_000.0)
+    assert entries["M-SA"]["floored_branch_contribution"] == pytest.approx(X * 100_000.0)
     assert entries["M-IRB"]["floored_branch_contribution"] == pytest.approx(X * 150_000.0)
 
 
 def test_resolver_floored_branch_covers_every_floor_eligible_approach() -> None:
     """
-    ``b_i`` keys on ``FLOOR_ELIGIBLE_APPROACHES``, not on ``IRB_APPROACHES``.
+    ``s_i`` is ``sa_rwa`` on every ``FLOOR_ELIGIBLE_APPROACHES`` member, not on IRB alone.
 
-    Arrange: four candidates in one group — standardised, foundation IRB,
-             slotting and standardised CCR — sized so the two predicates pick
+    Arrange: four candidates in one group - standardised, foundation IRB,
+             slotting and standardised CCR - sized so the two predicates pick
              DIFFERENT winners.
     Act:     resolve under the floor-aware default.
     Assert:  the slotting candidate wins on the correct predicate.
 
-    The two conditions do not partition the domain. ``FLOOR_ELIGIBLE_APPROACHES``
-    is ``IRB_APPROACHES | {slotting, SLOTTING, standardised_ccr}``, and
-    ``standardised_ccr`` is deliberately kept OUT of ``SA_APPROACHES``. Writing
-    the standardised limb as "not in ``IRB_APPROACHES``" sends both the slotting
-    and the CCR-via-SA candidate down the ``u_i`` branch and OVERSTATES the
-    floored assignment wherever ``u_i > x . s_i``.
+    Every member's ``b_i`` is ``x . s_i``; the predicate decides only which
+    carrier ``s_i`` is: ``sa_rwa`` for a modelled (floor-eligible) member, the
+    member's own RWA for a standardised one (whose SA-equivalent IS its own RWA).
+    ``FLOOR_ELIGIBLE_APPROACHES`` is ``IRB_APPROACHES | {slotting, SLOTTING,
+    standardised_ccr}``, and ``standardised_ccr`` is deliberately kept OUT of
+    ``SA_APPROACHES``, so the two conditions do not partition the domain.
 
     A slotting candidate is production-reachable: a specialised-lending
     facility's undrawn row takes the slotting branch, and the F-IRB-only
     permission helper grants slotting for specialised lending.
 
-    Mutation it detects (f). Note that under the mutation the slotting candidate
-    scores ``b = 200,000`` rather than ``120,000`` and beats the standardised
-    candidate's ``150,000``, so the winner MOVES — a mutation that merely
-    perturbed a losing row would prove nothing.
+    Mutation it detects (f): the limb written as "in ``IRB_APPROACHES``" reads the
+    slotting member's own 100,000 instead of its 200,000 SA-equivalent, scores it
+    ``b = 60,000`` rather than ``120,000``, and hands assignment B to the
+    standardised member (``b = 90,000``) - the winner MOVES.
     """
-    # Arrange — the predicate the code must use, asserted against the module's
+    # Arrange - the predicate the code must use, asserted against the module's
     # own sets rather than a hand-written list.
     assert "slotting" in FLOOR_ELIGIBLE_APPROACHES
     assert "standardised_ccr" in FLOOR_ELIGIBLE_APPROACHES
@@ -457,25 +462,32 @@ def test_resolver_floored_branch_covers_every_floor_eligible_approach() -> None:
     rows = [
         candidate("M-STD", approach="standardised", u=150_000.0, s=150_000.0),
         candidate("M-IRB", approach="foundation_irb", u=50_000.0, s=100_000.0),
-        candidate("M-SLOT", approach="slotting", u=200_000.0, s=200_000.0),
+        candidate("M-SLOT", approach="slotting", u=100_000.0, s=200_000.0),
         candidate("M-CCR", approach="standardised_ccr", u=60_000.0, s=100_000.0),
     ]
-    correct_b = {"M-STD": 150_000.0, "M-IRB": X * 100_000.0, "M-SLOT": X * 200_000.0}
-    assert max(correct_b, key=lambda key: correct_b[key]) == "M-STD", (
-        "sized so the CORRECT predicate picks the standardised candidate and "
-        "the mutated one picks the slotting candidate at its unscaled 200,000"
+    correct_b = {
+        "M-STD": X * 150_000.0,
+        "M-IRB": X * 100_000.0,
+        "M-SLOT": X * 200_000.0,
+        "M-CCR": X * 100_000.0,
+    }
+    mutated_b = {**correct_b, "M-SLOT": X * 100_000.0, "M-CCR": X * 60_000.0}
+    assert max(correct_b, key=lambda key: correct_b[key]) == "M-SLOT"
+    assert max(mutated_b, key=lambda key: mutated_b[key]) == "M-STD", (
+        "sized so the CORRECT predicate picks the slotting candidate and the "
+        "mutated one the standardised candidate, which is also assignment A's"
     )
-    spy = TreaSpy({"M-STD": 9_000_000.0, "M-SLOT": 1_000_000.0, "M-IRB": 1_000_000.0})
+    spy = TreaSpy({"M-SLOT": 9_000_000.0, "M-STD": 1_000_000.0})
 
     # Act
     resolution, _summary = resolve(frame(rows), evaluate_trea=spy)
 
-    # Assert — the winner, and the per-row contribution that decided it.
+    # Assert - the winner, and the per-row contribution that decided it.
     entries = {row["counterparty_reference"]: row for row in audit(resolution)}
     assert entries["M-SLOT"]["floored_branch_contribution"] == pytest.approx(X * 200_000.0)
     assert entries["M-CCR"]["floored_branch_contribution"] == pytest.approx(X * 100_000.0)
-    assert entries["M-STD"]["floored_branch_contribution"] == pytest.approx(150_000.0)
-    assert winner_of(resolution) == "M-STD"
+    assert entries["M-STD"]["floored_branch_contribution"] == pytest.approx(X * 150_000.0)
+    assert winner_of(resolution) == "M-SLOT"
 
 
 def test_resolver_evaluates_the_trea_closure_exactly_twice_under_p2() -> None:

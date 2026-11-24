@@ -474,11 +474,13 @@ class TestFacilityShareOwnershipUnderTheOwnApproachMetric:
 
         Asserted BEFORE any Basel 3.1 winner is read, because the whole B31 arm's
         derivation rests on it. Every row here runs ``PermissionMode.STANDARDISED``,
-        so U-TREA and S-TREA are 0.00 and there is nothing for the floor to bind
-        against. Under that state a standardised candidate's floored-branch
-        marginal equals its own-approach RWA, assignments A and B pick the same
-        member in every group, and the floor-aware default reduces to the
-        own-approach rule this module asserts.
+        so there is no floor-eligible row: the modelled book is 0.00, and since both
+        legs of the max are whole-book (P1.367) U-TREA equals S-TREA and an x < 1
+        floor cannot bind against it. Under that state a standardised candidate's
+        floored-branch marginal is ``x`` times its own-approach RWA — an
+        order-preserving rescaling — so assignments A and B pick the same member in
+        every group, and the floor-aware default reduces to the own-approach rule
+        this module asserts.
 
         If a later edit gave this book an IRB member, the floor could bind and
         the Basel 3.1 winners would have to be re-derived under the two-assignment
@@ -491,11 +493,12 @@ class TestFacilityShareOwnershipUnderTheOwnApproachMetric:
         assert summary is not None, "the Basel 3.1 run produced no output-floor summary"
         assert summary.portfolio_floor_binding is False
         assert summary.shortfall == 0.0
-        assert summary.u_trea == 0.0, (
-            f"u_trea is {summary.u_trea:,.2f}, so this portfolio HAS a "
-            "floor-eligible row and the P2 two-assignment rule is live; the "
-            "winners below are derived under P0 and must be re-derived"
+        assert summary.floored_modelled_rwa == 0.0, (
+            f"the modelled book is {summary.floored_modelled_rwa:,.2f}, so this "
+            "portfolio HAS a floor-eligible row and the P2 two-assignment rule is "
+            "live; the winners below are derived under P0 and must be re-derived"
         )
+        assert summary.u_trea == pytest.approx(summary.s_trea, rel=1e-12)
 
     # --- the vacuity guard -------------------------------------------------
 

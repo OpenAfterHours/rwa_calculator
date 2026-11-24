@@ -170,31 +170,43 @@ def adequacy_three_candidates(case: Case) -> None:
 
 
 def adequacy_divergence_chain() -> None:
-    """(2) ``u_IRB < u_SA < x . s_IRB`` — the whole scenario in one line."""
+    """(2) ``u_IRB < u_SA`` and ``b_SA < b_IRB`` — the whole scenario in one line.
+
+    Assignment A is ``argmax u_i`` and picks the standardised owner; assignment B
+    is ``argmax b_i = argmax x . s_i`` (P1.367: every member is inside the max)
+    and picks the F-IRB member, because its SA-equivalent exceeds the owner's own
+    RWA. If either inequality failed, A and B would pick the SAME member and the
+    floor-aware metric would be untested by this portfolio.
+    """
     members = fx.candidates("b31")
     u_irb = members[CP_IRB].u
     u_sa = members[CP_SA].u
     b_irb = members[CP_IRB].b
+    b_sa = members[CP_SA].b
     assert b_irb is not None
-    assert u_irb < u_sa < b_irb, (
-        f"the divergence chain {u_irb:,.6f} < {u_sa:,.2f} < {b_irb:,.2f} is "
-        "broken: if it does not hold, assignment A and assignment B pick the "
-        "SAME member and the floor-aware metric is untested by this portfolio"
-    )
+    assert b_sa is not None
+    assert u_irb < u_sa, f"assignment A no longer picks {CP_SA}: {u_irb:,.6f} >= {u_sa:,.2f}"
+    assert b_sa < b_irb, f"assignment B no longer picks {CP_IRB}: {b_sa:,.2f} >= {b_irb:,.2f}"
     # Both margins stated, because a chain that holds by a rounding error would
     # make every downstream assertion a coin toss.
     assert (u_sa - u_irb) / u_sa > 0.5, "lower margin below 50% of u_SA"
-    assert (b_irb - u_sa) / u_sa > 0.15, "upper margin below 15% of u_SA"
+    assert (b_irb - b_sa) / b_sa > 0.15, "upper margin below 15% of b_SA"
 
 
-def adequacy_standardised_b_equals_u() -> None:
-    """(3) A standardised candidate's floored-branch contribution is its own RWA."""
+def adequacy_standardised_b_is_x_times_u() -> None:
+    """(3) A standardised candidate's floored-branch contribution is ``x . u_i``.
+
+    PS1/26 Art. 92(3) / 92(3A) put a standardised member in BOTH legs of the
+    Art. 92(2A) max, at its own RWA, so its marginal to the floored branch is
+    ``x`` times that RWA (P1.367). The engine's former subset formula scored it
+    at its full ``u_i`` "outside the max"; that is the wrong answer this guards.
+    """
+    x = fx.output_floor_pct()
     for reference in (CP_SA, CP_LOW):
         member = fx.candidates("b31")[reference]
-        assert member.b == member.u, (
-            f"{reference} is standardised, so it sits OUTSIDE the Art. 92(2A) "
-            f"max at full weight and b_i must equal u_i ({member.u:,.2f}); if "
-            "the resolver scales it by x the floored branch is wrong"
+        assert member.b == pytest.approx(x * member.u, rel=1e-12), (
+            f"{reference} is standardised, so it sits INSIDE the Art. 92(2A) max "
+            f"and b_i must equal x . u_i ({x * member.u:,.2f})"
         )
 
 
@@ -241,7 +253,7 @@ def adequacy_variants_pick_different_members() -> None:
     """(6) The two Basel 3.1 variants pick DIFFERENT members, by stated margins.
 
     ``binding`` -> FS-CP-IRB, because ``TREA(B)`` exceeds ``TREA(A)`` by exactly
-    19,200.00. ``nonbinding`` -> FS-CP-SA, because ``TREA(A)`` exceeds ``TREA(B)``
+    59,200.00. ``nonbinding`` -> FS-CP-SA, because ``TREA(A)`` exceeds ``TREA(B)``
     by 53,756.13. If the two variants agreed on the winner, the pair would be a
     duplicate: the whole point of the second bundle is that ONE input — the
     non-member anchor's PD — flips the floor state and with it the allocation.
@@ -253,8 +265,11 @@ def adequacy_variants_pick_different_members() -> None:
     pass while proving half of what it claims.
 
     The binding margin is EXACT — both floored branches are pinned by
-    ``x . S_irb + OF-ADJ``, whose terms are integers on this portfolio — so it is
-    asserted to the penny (``abs=1e-6``) rather than to a relative tolerance.
+    ``x . S-TREA + OF-ADJ`` over the whole book (0.60 x 2,640,000 against
+    0.60 x 2,740,000 - 800), whose terms are integers on this portfolio — so it
+    is asserted to the penny (``abs=1e-6``) rather than to a relative tolerance.
+    Before P1.367 the engine floored the modelled subset and the margin was
+    19,200.00.
 
     ``abs=1e-6`` rather than bare ``==`` because the margin is a DIFFERENCE of
     two independently summed TREA totals, each a float accumulation over the
@@ -272,11 +287,11 @@ def adequacy_variants_pick_different_members() -> None:
         "the floor-aware metric is not distinguished from the own-approach one"
     )
     assert binding_b.total_rwa_post_floor - binding_a.total_rwa_post_floor == pytest.approx(
-        19_200.00, abs=1e-6
+        59_200.00, abs=1e-6
     ), (
         f"binding TREA(B) - TREA(A) is "
         f"{binding_b.total_rwa_post_floor - binding_a.total_rwa_post_floor:,.6f}, "
-        "not the exact 19,200.00 the integer floored branches give; a non-exact "
+        "not the exact 59,200.00 the integer floored branches give; a non-exact "
         "margin means a term that should be an integer no longer is"
     )
     assert free_a.total_rwa_post_floor - free_b.total_rwa_post_floor > 50_000.0, (

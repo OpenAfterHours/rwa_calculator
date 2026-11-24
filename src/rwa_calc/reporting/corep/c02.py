@@ -781,11 +781,14 @@ def _warn_if_the_engine_floor_differs(ledger: _Ledger, floor: _Floor) -> None:
     """WARN when the engine's post-floor total is not the template's TREA.
 
     The template's TREA is max(U-TREA, floor) — row 0010, columns 0010 and 0030;
-    ``boe_b0560`` and its siblings take exactly that maximum. The engine floors
-    the modelled subset alone (docs/plans/c07-ccr-derivatives.md §4 D6), so its
-    total is higher whenever its floor binds on a book with SA exposures, and
-    Pillar 3 OV1 discloses the engine's figure. Not an error channel: neither
-    figure is this template's to correct, and silence would hide the gap.
+    ``boe_b0560`` and its siblings take exactly that maximum. Since P1.367 the
+    engine takes the same whole-book max (PS1/26 Art. 92(3) / 92(3A)), so on a
+    credit-risk-only book the two agree and this stays silent. What can still
+    separate them is a component in the engine's max that this template's
+    credit-risk floor does not state — the BA-CVA RWEA, which the engine puts in
+    both legs and which OF 02.00's CVA row does not yet carry — and Pillar 3 OV1
+    discloses the engine's figure. Not an error channel: neither figure is this
+    template's to correct, and silence would hide the gap.
     """
     add_on = ledger.final_total - ledger.total.own
     if floor.amount is None:
@@ -801,7 +804,8 @@ def _warn_if_the_engine_floor_differs(ledger: _Ledger, floor: _Floor) -> None:
     if abs(ledger.final_total - template_trea) > _TOLERANCE:
         logger.warning(
             "OF 02.00: the engine's post-floor total (%.2f) differs from max(U-TREA %.2f, "
-            "floor %.2f) by %.2f — the engine floors the modelled subset only",
+            "floor %.2f) by %.2f — a component of the engine's floor (e.g. BA-CVA) is not "
+            "stated on this template",
             ledger.final_total,
             ledger.total.own,
             floor.amount,

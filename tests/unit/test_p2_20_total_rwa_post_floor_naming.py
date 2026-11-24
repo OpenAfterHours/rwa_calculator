@@ -13,23 +13,27 @@ P2.20 makes the following changes to OutputFloorSummary:
 These tests assert the new field names exist on the dataclass and that the
 arithmetic is correct given the hand-calc reference from the architect proposal.
 
-Hand-calc reference (4-row combined frame):
+Hand-calc reference (4-row combined frame). Both legs of the Art. 92(2A) max
+are whole-book (PS1/26 Art. 92(3) / 92(3A), P1.367), so the SA and equity rows
+sit in U-TREA and S-TREA alike:
   SA1   : approach_applied="standardised", rwa_final=100.0, sa_rwa=100.0
   IRB1  : approach_applied="FIRB",         rwa_final=200.0, sa_rwa=S_IRB
   SLOT1 : approach_applied="slotting",     rwa_final=50.0,  sa_rwa=S_SLOT
-  EQ1   : approach_applied="equity",       rwa_final=30.0,  sa_rwa=0.0
+  EQ1   : approach_applied="equity",       rwa_final=30.0,  sa_rwa=30.0
 
-  Modelled (U-TREA) = 200 + 50 = 250.0
-  S-TREA chosen so floor binds: pick S_IRB + S_SLOT such that
-      0.725 * (S_IRB + S_SLOT) = 280.0  →  S_IRB + S_SLOT ≈ 386.2069
-  We use S_IRB = 250.0 and S_SLOT = 136.2069 (sums to 386.2069).
-  SA1's sa_rwa (100) is excluded from S-TREA (not floor-eligible).
-  floor_threshold = 0.725 * 386.2069 = 280.0
-  shortfall = max(0, 280.0 - 250.0) = 30.0
+  U-TREA = 100 + 200 + 50 + 30 = 380.0
+  S-TREA chosen so the floor binds by 30: 0.725 * S-TREA = 410.0
+      ->  S-TREA = 565.5172, of which the SA and equity rows are 130.0
+      ->  S_IRB + S_SLOT = 435.5172; we use S_IRB = 250.0, S_SLOT = 185.5172
+  floor_threshold = 0.725 * 565.5172 = 410.0
+  shortfall = max(0, 410.0 - 380.0) = 30.0 (carried by IRB1 and SLOT1 only)
   floored_modelled_rwa = 250.0 + 30.0 = 280.0
   sa_rwa_total = 100.0          (SA1's rwa_final)
   equity_rwa_total = 30.0       (EQ1's rwa_final)
-  total_rwa_post_floor = 280.0 + 100.0 + 30.0 = 410.0
+  total_rwa_post_floor = 280.0 + 100.0 + 30.0 = 410.0 = max(U-TREA, threshold)
+
+  Before P1.367 the SA and equity rows were left out of both legs: threshold
+  0.725 * 435.5172 = 315.75, floored_modelled_rwa 315.75, total 445.75.
 
 References:
 - PRA PS1/26 Art. 92 para 2A
@@ -51,18 +55,20 @@ from rwa_calc.contracts.bundles import OutputFloorSummary
 
 _FLOOR_PCT = 0.725
 
-# We want floor_threshold = 280.0 exactly when modelled = 250.
-# floor_threshold = 0.725 * S_TREA_MODELLED  ->  S_TREA_MODELLED = 280 / 0.725
-_S_TREA_MODELLED = 280.0 / 0.725  # ≈ 386.20689655
-
-# Arbitrary split of S_TREA between IRB and slotting that sums to _S_TREA_MODELLED.
-_S_IRB = 250.0
-_S_SLOT = _S_TREA_MODELLED - _S_IRB  # ≈ 136.20689655
-
-_MODELLED_RWA = 250.0  # U-TREA
 _SA_RWA_TOTAL = 100.0
 _EQUITY_RWA_TOTAL = 30.0
-_SHORTFALL = 30.0  # max(0, 280 - 250)
+_MODELLED_RWA = 250.0  # IRB1 + SLOT1 own RWEA
+_U_TREA = _MODELLED_RWA + _SA_RWA_TOTAL + _EQUITY_RWA_TOTAL  # = 380.0
+
+# We want floor_threshold = 410.0 exactly: 0.725 * S-TREA = 410, S-TREA whole-book.
+_S_TREA = 410.0 / _FLOOR_PCT  # ≈ 565.51724138
+_S_TREA_MODELLED = _S_TREA - _SA_RWA_TOTAL - _EQUITY_RWA_TOTAL  # ≈ 435.51724138
+
+# Arbitrary split of the modelled SA-equivalent between IRB and slotting.
+_S_IRB = 250.0
+_S_SLOT = _S_TREA_MODELLED - _S_IRB  # ≈ 185.51724138
+
+_SHORTFALL = 30.0  # max(0, 410 - 380)
 _FLOORED_MODELLED_RWA = _MODELLED_RWA + _SHORTFALL  # = 280.0
 _TOTAL_RWA_POST_FLOOR = _FLOORED_MODELLED_RWA + _SA_RWA_TOTAL + _EQUITY_RWA_TOTAL  # = 410.0
 
@@ -81,7 +87,7 @@ def _make_combined() -> pl.LazyFrame:
             "ead_final": [100.0, 200.0, 50.0, 30.0],
             "risk_weight": [1.0, 1.0, 1.0, 1.0],
             "rwa_final": [100.0, 200.0, 50.0, 30.0],
-            "sa_rwa": [100.0, _S_IRB, _S_SLOT, 0.0],
+            "sa_rwa": [100.0, _S_IRB, _S_SLOT, 30.0],
         }
     )
 
@@ -139,9 +145,9 @@ class TestFlooredModelledRwaFieldRenamed:
         )
 
     def test_floored_modelled_rwa_value_equals_u_trea_plus_shortfall(self) -> None:
-        """``floored_modelled_rwa`` = u_trea + shortfall (modelled-only scope).
+        """``floored_modelled_rwa`` = modelled own RWEA + shortfall (modelled-only scope).
 
-        Hand-calc: U-TREA=250, shortfall=30 → floored_modelled_rwa=280.
+        Hand-calc: modelled RWEA=250, shortfall=30 → floored_modelled_rwa=280.
         """
         # Arrange
         combined = _make_combined()
@@ -193,7 +199,7 @@ class TestTotalRwaPostFloorSumsAllComponents:
     def test_total_rwa_post_floor_is_genuine_portfolio_total(self) -> None:
         """``total_rwa_post_floor`` = floored_modelled_rwa + sa_rwa_total + equity_rwa_total.
 
-        Hand-calc: 280 + 100 + 30 = 410.
+        Hand-calc: 280 + 100 + 30 = 410 = max(U-TREA 380, threshold 410).
         """
         # Arrange
         combined = _make_combined()
@@ -202,6 +208,8 @@ class TestTotalRwaPostFloorSumsAllComponents:
         summary = _run_floor(combined)
 
         # Assert
+        assert summary.u_trea == pytest.approx(_U_TREA, rel=1e-9)
+        assert summary.s_trea == pytest.approx(_S_TREA, rel=1e-9)
         assert summary.total_rwa_post_floor == pytest.approx(_TOTAL_RWA_POST_FLOOR, rel=1e-4), (
             f"Expected total_rwa_post_floor={_TOTAL_RWA_POST_FLOOR} "
             f"(floored_modelled={_FLOORED_MODELLED_RWA} + "
@@ -226,13 +234,15 @@ class TestTotalRwaPostFloorSumsAllComponents:
             f"equity_rwa_total ({summary.equity_rwa_total})"
         )
 
-    def test_modelled_only_scope_unchanged_by_sa_and_equity(self) -> None:
-        """``floored_modelled_rwa`` is unaffected by SA or equity rows.
+    def test_sa_and_equity_rows_move_the_modelled_floor(self) -> None:
+        """The SA and equity book is inside both legs, so it changes the floor's bite.
 
-        U-TREA only sums floor-eligible (IRB + slotting) approaches.
-        SA rows and equity rows do NOT inflate the modelled total.
+        Removing SA1 and EQ1 leaves U-TREA 250 and S-TREA 435.5172: threshold
+        315.75, so the modelled rows carry a 65.75 shortfall. With them in both
+        legs (380 vs 410) the shortfall is 30 — the article's (1 - x) of the SA
+        and equity book, 0.275 x 130 = 35.75, is the difference.
         """
-        # Arrange — remove SA and equity; modelled total should be identical
+        # Arrange
         combined_modelled_only = pl.LazyFrame(
             {
                 "exposure_reference": ["IRB1", "SLOT1"],
@@ -250,10 +260,11 @@ class TestTotalRwaPostFloorSumsAllComponents:
         summary_modelled_only = _run_floor(combined_modelled_only)
         summary_full = _run_floor(combined_full)
 
-        # Assert — floored_modelled_rwa must be identical regardless of SA/equity rows
-        assert summary_full.floored_modelled_rwa == pytest.approx(
-            summary_modelled_only.floored_modelled_rwa, rel=1e-4
-        ), (
-            "floored_modelled_rwa must equal u_trea + shortfall for modelled exposures only; "
-            "SA and equity rows must not inflate it."
+        # Assert
+        assert summary_modelled_only.floored_modelled_rwa == pytest.approx(
+            _FLOOR_PCT * _S_TREA_MODELLED, rel=1e-9
         )
+        assert summary_full.floored_modelled_rwa == pytest.approx(_FLOORED_MODELLED_RWA, rel=1e-9)
+        assert (
+            summary_modelled_only.floored_modelled_rwa - summary_full.floored_modelled_rwa
+        ) == pytest.approx((1 - _FLOOR_PCT) * (_SA_RWA_TOTAL + _EQUITY_RWA_TOTAL), rel=1e-9)

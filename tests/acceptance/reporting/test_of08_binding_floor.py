@@ -17,14 +17,15 @@ binding floor's shortfall over ``rwa_final`` (``engine/aggregator/_floor.py``);
 every template RWEA reads the un-floored ``rwa_pre_floor`` instead.
 
 ``facility-share-binding`` is the one registered run whose floor binds (shortfall
-453,708.71 on three F-IRB corporate legs); the supervisory register banks that
-set as ``BINDING_FLOOR_RUNS`` and the shapes each state reaches as
-``FLOOR_STATE_SHAPES``. The three forced cases reach the states no registered
-run does — slotting, A-IRB retail, defaulted, LFSE and SA-CCR rows under a
-binding floor — by giving the firm an Art. 62(c) SA T2 credit (OF-ADJ = 12.5 x
-the credit), a real engine run with nothing edited. They are test-local: the
-register's other legs never see them, which is the gap ``FLOOR_STATE_SHAPES``
-records as owed.
+397,708.71 on three F-IRB corporate legs since P1.367 took the max over the
+whole book; 453,708.71 under the former modelled-subset formula); the supervisory
+register banks that set as ``BINDING_FLOOR_RUNS`` and the shapes each state
+reaches as ``FLOOR_STATE_SHAPES``. The three forced cases reach the states no
+registered run does — slotting, A-IRB retail, defaulted, LFSE and SA-CCR rows
+under a binding floor — by giving the firm an Art. 62(c) SA T2 credit (OF-ADJ =
+12.5 x the credit), a real engine run with nothing edited. They are test-local:
+the register's other legs never see them, which is the gap
+``FLOOR_STATE_SHAPES`` records as owed.
 
 Before the fix (measured 2026-11-16): OF 08.01 r0010 c0260 summed 1,559,200.00
 against U-TREA 1,105,491.29 on facility-share-binding; STR007 on OF02.00.01.01 and
@@ -143,18 +144,22 @@ def binding() -> _Run:
     # Adequacy: on a non-binding floor the two carriers are equal and this
     # module proves nothing.
     assert run.summary.portfolio_floor_binding, "the floor does not bind"
-    assert run.summary.shortfall > 400_000.0, "the shortfall is too small to see"
+    assert run.summary.shortfall > 350_000.0, "the shortfall is too small to see"
     return run
 
 
 def test_irb_class_sheets_add_up_to_the_unfloored_modelled_rwea(binding: _Run) -> None:
     """Sum over the OF 08.01 class sheets of r0010 c0260 is U-TREA's modelled part
-    (1,105,491.29), not the floored figure (1,559,200.00)."""
+    (1,105,491.29), not the floored figure (1,503,200.00). Since P1.367 U-TREA is
+    whole-book, so its modelled part is the floored modelled RWEA less the
+    shortfall the modelled rows carry."""
     # Act
     sheets = c08_class_sheets(binding.corep.c08_01)
     total = sum(_cell(sheet, "0010", "0260") for sheet in sheets.values())
     # Assert
-    assert total == pytest.approx(binding.summary.u_trea)
+    modelled_own = binding.summary.floored_modelled_rwa - binding.summary.shortfall
+    assert modelled_own == pytest.approx(1_105_491.2910688268)
+    assert total == pytest.approx(modelled_own)
 
 
 def test_the_return_files_one_value_per_data_point_and_keeps_the_footing_rules(
@@ -170,15 +175,16 @@ def test_the_return_files_one_value_per_data_point_and_keeps_the_footing_rules(
 
 def test_total_reported_rwa_does_not_move(binding: _Run) -> None:
     """The floor is still reported, once, where Annex II puts it: OF 02.00 r0010
-    c0010 is U-TREA and c0030 the floor (0.60 x 2,740,000 - 800); the engine's
-    ledger is untouched."""
+    c0010 is U-TREA and c0030 the floor (0.60 x 2,740,000 - 800). The engine's
+    ledger is the same whole-book max since P1.367 (it was 1,699,200.00, the
+    modelled subset floored with the 140,000.00 SA book re-added outside it)."""
     # Act
     c02 = binding.corep.c_02_00
     assert c02 is not None, "OF 02.00 was not generated"
     # Assert
     assert _cell(c02, "0010", "0010") == pytest.approx(1_245_491.2910688268)
     assert _cell(c02, "0010", "0030") == pytest.approx(1_643_200.0)
-    assert float(binding.ledger["rwa_final"].sum()) == pytest.approx(1_699_200.0)
+    assert float(binding.ledger["rwa_final"].sum()) == pytest.approx(1_643_200.0)
 
 
 class _Forced(NamedTuple):

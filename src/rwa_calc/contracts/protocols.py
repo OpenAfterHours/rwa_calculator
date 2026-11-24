@@ -532,6 +532,7 @@ class OutputAggregatorProtocol(Protocol):
         securitisation_audit: pl.LazyFrame | None = None,
         *,
         pack: ResolvedRulepack | None = None,
+        cva_rwa: float = 0.0,
     ) -> AggregatedResultBundle:
         """
         Aggregate calculator outputs into final result bundle.
@@ -546,6 +547,8 @@ class OutputAggregatorProtocol(Protocol):
             pack: Resolved rulepack sourcing the output-floor / supporting-factor
                 regime gates; resolved from ``config`` via
                 ``RulepackV0.from_config(config).pack`` when ``None``.
+            cva_rwa: Portfolio BA-CVA RWEA, added to both legs of the Basel 3.1
+                output floor's max (PS1/26 Art. 92(3)(d), 92(3A)); 0.0 when none.
 
         Returns:
             AggregatedResultBundle with all summaries and adjustments.

@@ -926,13 +926,20 @@ ENTRIES: dict[str, RuleEntry] = {
         citation=Citation("PS1/26", "92", "fully phased-in output floor (72.5%)"),
     ),
     # GCRA cap for OF-ADJ (PRA PS1/26 Art. 92 para 2A): general credit risk
-    # adjustments are capped at 1.25% of S-TREA before entering
+    # adjustments are capped at 1.25% of the risk-weighted exposure amounts
+    # calculated under paragraph 3A (the whole book's credit and CCR RWEA at its
+    # standardised value — not S-TREA) before entering
     # OF-ADJ = 12.5 * (IRB_T2 - IRB_CET1 - GCRA + SA_T2). Read in
-    # engine/aggregator/_floor.py::compute_of_adj (output floor is Basel-3.1-only).
+    # engine/aggregator/_floor.py::compute_of_adj, against
+    # _floor.py::gcra_cap_base (output floor is Basel-3.1-only).
     "gcra_cap_rate": ScalarParam(
         name="gcra_cap_rate",
         value=Decimal("0.0125"),
-        citation=Citation("PS1/26", "92", "GCRA cap at 1.25% of S-TREA (Art. 92 para 2A)"),
+        citation=Citation(
+            "PS1/26",
+            "92",
+            "GCRA cap at 1.25% of paragraph-3A risk-weighted exposure amounts (Art. 92 para 2A)",
+        ),
     ),
     # Basel-3.1 capital-stack regime GATES (S11d). Mirror the regime-derived
     # `enabled` flags on EquityTransitionalConfig / PostModelAdjustmentConfig

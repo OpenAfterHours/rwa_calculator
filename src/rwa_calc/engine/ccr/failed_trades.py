@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from typing import TYPE_CHECKING
 
 import polars as pl
 
@@ -63,6 +64,9 @@ from rwa_calc.domain.enums import RiskType
 from rwa_calc.rulebook.compile import scalar_value
 from rwa_calc.rulebook.resolve import resolve
 
+if TYPE_CHECKING:
+    from collections.abc import Collection
+
 logger = logging.getLogger(__name__)
 
 # Settlement-type discriminators (mirror ``FAILED_TRADE_SCHEMA``).
@@ -72,6 +76,9 @@ _SETTLEMENT_TYPE_NON_DVP: str = "non_dvp_free_delivery"
 # Synthetic exposure-row namespace and Column 3 band (stable audit strings).
 _ROW_PREFIX: str = "ft__"
 _BAND_NON_DVP_COL3: str = "non_dvp_col3"
+# Every Art. 378 DvP band (``dvp_5_15`` ... ``dvp_46_plus``, ``dvp_pre_t5``)
+# carries this prefix and no free-delivery band does (``regulatory_band`` below).
+_DVP_BAND_PREFIX: str = "dvp_"
 
 # Failed-trade regulatory multipliers / conversion factor + working-days-past-due
 # band lower bounds resolved from the rulepack once at module load (CRR Art. 378 /
@@ -327,4 +334,26 @@ def failed_trade_exposure_rows(
     )
 
 
-__all__ = ["compute_failed_trade_rwa", "failed_trade_exposure_rows"]
+def is_dvp_own_funds_line(column_names: Collection[str]) -> pl.Expr:
+    """True on an Art. 378 DvP own-funds line, False on every other row.
+
+    The discriminator is the settlement row's ``risk_type`` AND its DvP
+    ``regulatory_band``, never ``risk_type`` alone: Art. 379(1) Table 2 Column 4
+    free deliveries are ``SETTLEMENT_FAILED_TRADE`` own-funds lines too, but
+    Column 4 "treat[s] as an exposure risk weighted at 1 250 %" — a risk-weighted
+    exposure amount, which PS1/26 Art. 92(3)(a) counts ("Articles 379 and 380 of
+    CRR"), while the Art. 378 DvP charge is an own-funds requirement under
+    Art. 92(3)(ca). A frame that carries no settlement row has neither column
+    and holds no DvP line. Null-safe: a null in either column reads False.
+
+    References:
+        CRR Art. 378, Art. 379(1) Table 2; PRA PS1/26 Art. 92(3)(a), 92(3)(ca).
+    """
+    if not {"risk_type", "regulatory_band"} <= set(column_names):
+        return pl.lit(value=False)
+    return pl.col("risk_type").eq_missing(RiskType.SETTLEMENT_FAILED_TRADE.value) & pl.col(
+        "regulatory_band"
+    ).str.starts_with(_DVP_BAND_PREFIX).eq_missing(other=True)
+
+
+__all__ = ["compute_failed_trade_rwa", "failed_trade_exposure_rows", "is_dvp_own_funds_line"]

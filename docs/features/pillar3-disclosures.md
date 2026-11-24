@@ -1071,7 +1071,8 @@ OF-ADJ applied; both feed the un-multiplied S-TREA leg of
 `TREA = max{U-TREA; x · S-TREA + OF-ADJ}` (Art. 92(2A), `docs/assets/ps126app1.pdf`
 p. 13).
 
-The 1.25% S-TREA cap on the GCRA component of OF-ADJ (Art. 92(2A)) is therefore
+The 1.25% cap on the GCRA component of OF-ADJ (Art. 92(2A): 1.25% of the paragraph-3A
+risk-weighted exposure amounts, i.e. the credit-risk portion of S-TREA) is therefore
 also gated by **the sum of CMS2 col d across all asset classes** for the
 credit-risk portion of S-TREA. See the
 [CMS1 col d cross-reference admonition](#col-d--pre-of-adj-s-trea-input-reconciles-to-of-0201-col-0040)

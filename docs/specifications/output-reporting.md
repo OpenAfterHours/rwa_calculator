@@ -43,7 +43,7 @@ Where:
 |-----------|-------------|----------------|
 | IRB_T2 | IRB excess provisions T2 **credit** (provisions > EL), capped at 0.6% of IRB credit RWAs | Art. 62(d) |
 | IRB_CET1 | IRB EL shortfall CET1 deductions (EL > provisions) + Art. 40 additional deductions | Art. 36(1)(d), Art. 40 |
-| GCRA | General credit risk adjustment included in T2, capped at **1.25% of S-TREA** | Art. 62(c), Art. 92(2A) |
+| GCRA | General credit risk adjustment included in T2, capped at **1.25% of the Art. 92(3A) risk-weighted exposure amounts** (the whole book's credit and CCR RWEA at its standardised value) | Art. 62(c), Art. 92(2A) |
 | SA_T2 | SA general credit risk adjustments T2 credit | Art. 62(c) |
 
 !!! info "GCRA qualifying criteria"

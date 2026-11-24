@@ -98,7 +98,9 @@ class OutputFloorConfig:
     # and the floor formula simplifies to max(U-TREA, x * S-TREA).
     gcra_amount: float = 0.0
     """General credit risk adjustments, gross of tax effects.
-    Capped internally at 1.25% of S-TREA per Art. 92 para 2A."""
+    Capped internally at 1.25% of the paragraph-3A risk-weighted exposure amounts
+    (the whole book's credit and CCR RWEA at its standardised value, Art. 378 DvP
+    settlement lines excluded) per Art. 92 para 2A."""
     sa_t2_credit: float = 0.0
     """Art. 62(c) SA T2 credit for general credit risk adjustments."""
     art_40_deductions: float = 0.0
@@ -1001,7 +1003,7 @@ class CalculationConfig:
                 Required whenever reporting_entity is set (a ValueError otherwise).
             reporting_entity: Optional reporting-scope entity_reference.
             gcra_amount: General credit risk adjustments for OF-ADJ (Art. 92 para 2A).
-                Capped at 1.25% of S-TREA.
+                Capped at 1.25% of the paragraph-3A risk-weighted exposure amounts.
             sa_t2_credit: Art. 62(c) SA T2 credit for general CRAs (OF-ADJ input).
             art_40_deductions: Art. 40 additional CET1 deductions (OF-ADJ input).
             skip_transitional_floor: When True, bypass the PRA 4-year transitional

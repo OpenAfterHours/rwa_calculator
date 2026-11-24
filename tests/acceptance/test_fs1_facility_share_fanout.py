@@ -62,7 +62,7 @@ from tests.acceptance._fs1_harness import (
     adequacy_no_ties,
     adequacy_pool_b_does_not_move_ead,
     adequacy_retail_granularity_is_inert,
-    adequacy_standardised_b_equals_u,
+    adequacy_standardised_b_is_x_times_u,
     adequacy_three_candidates,
     adequacy_variants_pick_different_members,
     run_case,
@@ -276,21 +276,23 @@ class TestFacilityShareUnderBasel31:
                  TREA(A) as the alternative, and the undrawn row carries its
                  derived post-floor RWA.
 
-        ``TREA(B) - TREA(A) = 19,200.00`` exactly, because both floored branches
-        are pinned by ``x . S_irb + OF-ADJ`` whose terms are integers here.
+        ``TREA(B) - TREA(A) = 59,200.00`` exactly, because both floored branches
+        are pinned by ``x . S-TREA + OF-ADJ`` over the whole book (PS1/26
+        Art. 92(3) / 92(3A), P1.367) whose terms are integers here: 1,643,200.00
+        against 1,584,000.00. Before P1.367 the engine floored the modelled subset,
+        re-added the 140,000.00 standardised book outside the max and reported
+        1,699,200.00 — the 56,000.00 = (1 - 0.60) x 140,000.00 it overstated.
 
-        Red today ONLY on the audit frame, the candidate rows and the two summary
-        fields — NOT on ``rwa_final``. On THIS portfolio the existing preview's
-        winner coincides with assignment B's, because the one standardised
-        candidate that could beat it carries a full RWA of 100,000.00, below
-        ``x . s_IRB = 120,000.00``. That coincidence is a property of these
-        inputs, not of the mechanism: a regulatory-retail member at 75% would
-        give ``u_SA = 150,000`` and the two orderings would diverge.
+        Every member is inside the max, so assignment B is ``argmax x . s_i``:
+        ``b_IRB = 0.60 x 200,000 = 120,000.00`` against the standardised owner's
+        ``b_SA = 0.60 x 100,000 = 60,000.00``. The winner is the same as under
+        the former subset formula (which scored the owner at its full 100,000.00),
+        so this portfolio's winner does not flip with P1.367.
         """
         # Arrange
         case = run_case("BASEL_3_1", "binding")
         adequacy_divergence_chain()
-        adequacy_standardised_b_equals_u()
+        adequacy_standardised_b_is_x_times_u()
         adequacy_no_ties()
         adequacy_variants_pick_different_members()
         adequacy_floor_state_matches_variant(case)
@@ -440,11 +442,11 @@ class TestFacilityShareUnderBasel31:
                  OF-ADJ, the threshold, the shortfall and the total all match the
                  derived assignment-A figures.
 
-        THIS ELECTION LOWERS RWA — 1,680,000.00 against the default's
-        1,699,200.00 and against today's 1,699,200.00. It is opt-in and
-        non-default, justified as a stability election for firms whose reporting
-        cannot tolerate attribution moving with the floor state, and the
-        direction is stated here rather than left to be discovered.
+        THIS ELECTION LOWERS RWA — 1,584,000.00 against the default's
+        1,643,200.00. It is opt-in and non-default, justified as a stability
+        election for firms whose reporting cannot tolerate attribution moving with
+        the floor state, and the direction is stated here rather than left to be
+        discovered.
 
         ``irb_cet1_deduction`` is 0.00 under this assignment and 64.00 under the
         default: the winning candidate is standardised, so its expected loss
@@ -453,7 +455,7 @@ class TestFacilityShareUnderBasel31:
         Mutation it detects (c'): losers dropped from ``combined`` but not from
         ``irb_results`` leaves the dropped F-IRB candidate's 64.00 of expected
         loss in the summary, moving OF-ADJ 0.00 -> -800.00 and the threshold
-        1,440,000.00 -> 1,439,200.00.
+        1,584,000.00 -> 1,583,200.00.
         """
         # Arrange
         case = run_case("BASEL_3_1", "binding", metric="own_approach")
@@ -495,22 +497,24 @@ class TestFacilityShareUnderBasel31:
                  whose winner is standardised and whose losers include the
                  modelled candidate.
         Act:     read ``s_trea`` and ``floor_threshold``.
-        Assert:  S-TREA is the non-share book's, with no share contribution.
+        Assert:  S-TREA is the non-share book's plus the WINNER's standardised RWA
+                 (its own 100,000.00), with no loser contribution.
 
-        Named on THIS run deliberately. Under the default election the winner is
-        the F-IRB candidate and both losers are standardised — standardised is
-        not in ``FLOOR_ELIGIBLE_APPROACHES``, so ``s_trea`` would not move at all
-        there and only ``sa_rwa_total`` would.
+        Named on THIS run deliberately: its losers include the MODELLED candidate,
+        whose SA-equivalent (200,000.00) is the largest a retained loser could
+        add, and whose expected loss also moves OF-ADJ.
 
         Mutation it detects (c): losers dropped AFTER the floor instead of
-        before. Retaining the modelled loser moves S-TREA 2,400,000 -> 2,600,000
+        before. Retaining the modelled loser moves S-TREA 2,640,000 -> 2,840,000
         and the threshold by 119,200.00 — not 120,000.00, because the retained
-        candidate also drags OF-ADJ to -800.00.
+        candidate also drags OF-ADJ to -800.00. (S-TREA is whole-book since
+        P1.367: 2,400,000.00 modelled + 140,000.00 standardised book + the
+        winner's 100,000.00.)
         """
         # Arrange
         case = run_case("BASEL_3_1", "binding", metric="own_approach")
         adequacy_floor_state_matches_variant(case)
-        _u0, s0, _sa0 = fx.non_share_totals("b31", "binding")
+        _u0, s0, sa0 = fx.non_share_totals("b31", "binding")
         loser_sa_equivalent = fx.candidates("b31")[CP_IRB].s
         assert loser_sa_equivalent is not None
         assert loser_sa_equivalent > 0.0, (
@@ -524,21 +528,24 @@ class TestFacilityShareUnderBasel31:
         assert summary is not None
 
         # Assert
-        assert summary.s_trea == pytest.approx(s0, rel=RTOL)
+        whole_book = s0 + sa0 + fx.candidates("b31")[CP_SA].u
+        assert summary.s_trea == pytest.approx(whole_book, rel=RTOL)
         assert summary.floor_threshold == pytest.approx(
-            fx.output_floor_pct() * s0 + summary.of_adj, rel=RTOL
+            fx.output_floor_pct() * whole_book + summary.of_adj, rel=RTOL
         )
 
     def test_facility_share_binding_floor_allocation_sums_to_threshold(self) -> None:
         """
-        The floor add-on foots: eligible RWA sums to the threshold, add-ons to the shortfall.
+        The floor add-on foots: eligible RWA plus the SA book is the threshold.
 
         Arrange: the ``binding`` variant under the default election, whose winner
                  is the F-IRB candidate, so three rows are floor-eligible.
         Act:     sum ``rwa_final`` and ``floor_impact_rwa`` over those rows.
-        Assert:  the first equals ``floored_modelled_rwa`` and ``floor_threshold``;
-                 the second equals ``shortfall``; and each row's own add-on
-                 matches its derived pro-rata share of the SA-equivalent basis.
+        Assert:  the first equals ``floored_modelled_rwa``, and with the
+                 standardised book (in both legs of the max, P1.367) the
+                 ``floor_threshold``; the second equals ``shortfall``; and each
+                 row's own add-on matches its derived pro-rata share of the
+                 SA-equivalent basis.
 
         The shares are ``1/13``, ``2/13`` and ``10/13``. The add-on is NOT a
         uniform ``x . sa_rwa``: the anchor's own-to-SA-equivalent ratio differs
@@ -570,8 +577,8 @@ class TestFacilityShareUnderBasel31:
         assert sum(row["rwa_final"] for row in eligible) == pytest.approx(
             summary.floored_modelled_rwa, rel=RTOL
         )
-        assert sum(row["rwa_final"] for row in eligible) == pytest.approx(
-            summary.floor_threshold, rel=RTOL
+        assert sum(row["rwa_final"] for row in eligible) + summary.sa_rwa_total == (
+            pytest.approx(summary.floor_threshold, rel=RTOL)
         )
         assert sum(row["floor_impact_rwa"] for row in eligible) == pytest.approx(
             summary.shortfall, rel=RTOL

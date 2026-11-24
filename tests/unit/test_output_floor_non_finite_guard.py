@@ -11,13 +11,15 @@ The guard excludes rows with a non-finite ``rwa_pre_floor`` or ``sa_rwa`` from
 the floor computation entirely: they take no shortfall share, contribute
 nothing to the totals, and keep their own (already AGG001-flagged) value.
 
-Hand-calc (mirrors test_p2_20 fixture + one poisoned row):
+Hand-calc (mirrors test_p2_20 fixture + one poisoned row). Both legs are
+whole-book (PS1/26 Art. 92(3) / 92(3A), P1.367), so SA1 sits in both:
   SA1  : standardised, rwa 100
   IRB1 : FIRB, rwa 200, sa_rwa 250
   SLOT1: slotting, rwa 50, sa_rwa 386.2069 - 250
   BAD1 : FIRB, rwa NaN, sa_rwa NaN            (excluded from the floor)
-  U-TREA = 250, S-TREA = 386.2069, threshold = 0.725 x S-TREA = 280,
-  shortfall = 30 — identical to the clean fixture.
+  U-TREA = 100 + 250 = 350, S-TREA = 100 + 386.2069 = 486.2069,
+  threshold = 0.725 x S-TREA = 72.5 + 280 = 352.5, shortfall = 2.5 — identical
+  to the clean fixture, and shared by IRB1 and SLOT1 alone.
 
 References:
 - PRA PS1/26 Art. 92 para 2A (portfolio floor)
@@ -37,6 +39,9 @@ _FLOOR_PCT = 0.725
 _S_TREA_MODELLED = 280.0 / 0.725
 _S_IRB = 250.0
 _S_SLOT = _S_TREA_MODELLED - _S_IRB
+_SA_RWA = 100.0
+#: 0.725 x (100 + 386.2069) - (100 + 250): the SA book is in both legs.
+_SHORTFALL = _FLOOR_PCT * (_SA_RWA + _S_TREA_MODELLED) - (_SA_RWA + 250.0)
 NAN = float("nan")
 
 
@@ -69,15 +74,16 @@ class TestFloorSummaryIgnoresNonFiniteRows:
 
     def test_u_trea_excludes_poisoned_row(self, floored) -> None:
         _, _, summary = floored
-        assert summary.u_trea == pytest.approx(250.0)
+        assert summary.u_trea == pytest.approx(350.0)
 
     def test_s_trea_excludes_poisoned_row(self, floored) -> None:
         _, _, summary = floored
-        assert summary.s_trea == pytest.approx(_S_TREA_MODELLED)
+        assert summary.s_trea == pytest.approx(_SA_RWA + _S_TREA_MODELLED)
 
     def test_shortfall_matches_clean_fixture(self, floored) -> None:
         _, _, summary = floored
-        assert summary.shortfall == pytest.approx(30.0)
+        assert pytest.approx(2.5) == _SHORTFALL, "the hand-calc shortfall is 2.5"
+        assert summary.shortfall == pytest.approx(_SHORTFALL)
         assert summary.portfolio_floor_binding is True
 
     def test_summary_totals_are_finite(self, floored) -> None:
@@ -94,12 +100,12 @@ class TestHealthyRowsStayFinite:
         healthy = result.filter(pl.col("exposure_reference").is_in(["IRB1", "SLOT1"]))
         assert healthy.get_column("rwa_final").is_finite().all()
         total_impact = healthy.get_column("floor_impact_rwa").sum()
-        assert total_impact == pytest.approx(30.0)
+        assert total_impact == pytest.approx(_SHORTFALL)
 
     def test_irb1_pro_rata_share(self, floored) -> None:
         result, _, _ = floored
         irb1 = result.filter(pl.col("exposure_reference") == "IRB1")
-        expected = 200.0 + 30.0 * (_S_IRB / _S_TREA_MODELLED)
+        expected = 200.0 + _SHORTFALL * (_S_IRB / _S_TREA_MODELLED)
         assert irb1.get_column("rwa_final")[0] == pytest.approx(expected)
 
     def test_sa_row_untouched(self, floored) -> None:

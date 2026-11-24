@@ -15,7 +15,9 @@ is adjusted accordingly.
 Components:
 - IRB_T2: Art. 62(d) excess provisions added to T2 (capped at 0.6% of IRB RWA)
 - IRB_CET1: Art. 36(1)(d) EL shortfall CET1 deduction + Art. 40 supervisory add-on
-- GCRA: General credit risk adjustments (capped at 1.25% of S-TREA)
+- GCRA: General credit risk adjustments (capped at 1.25% of the paragraph-3A
+  risk-weighted exposure amounts — the whole book's, see
+  tests/unit/engine/aggregator/test_gcra_cap_base.py)
 - SA_T2: Art. 62(c) SA T2 credit for general CRAs
 
 References:
@@ -135,7 +137,7 @@ class TestComputeOfAdj:
     def test_gcra_only(self) -> None:
         """GCRA alone produces negative OF-ADJ.
 
-        GCRA = 500k, S-TREA = 100m → GCRA cap = 1.25m → GCRA uncapped at 500k.
+        GCRA = 500k, cap base = 100m → GCRA cap = 1.25m → GCRA uncapped at 500k.
         OF-ADJ = 12.5 * (0 - 0 - 500k + 0) = -6.25m.
         """
         of_adj, gcra_capped = compute_of_adj(0.0, 0.0, 500_000.0, 0.0, 100_000_000.0)
@@ -171,9 +173,9 @@ class TestComputeOfAdj:
         assert of_adj == pytest.approx(-6_250_000.0)
 
     def test_gcra_cap_at_1_25_pct_of_s_trea(self) -> None:
-        """GCRA is capped at 1.25% of S-TREA per Art. 92 para 2A.
+        """GCRA is capped at 1.25% of the paragraph-3A RWEA per Art. 92 para 2A.
 
-        GCRA = 2m, S-TREA = 100m → cap = 1.25m → GCRA capped at 1.25m.
+        GCRA = 2m, cap base = 100m → cap = 1.25m → GCRA capped at 1.25m.
         OF-ADJ = 12.5 * (0 - 0 - 1.25m + 0) = -15.625m.
         """
         of_adj, gcra_capped = compute_of_adj(0.0, 0.0, 2_000_000.0, 0.0, 100_000_000.0)
@@ -186,15 +188,15 @@ class TestComputeOfAdj:
         assert gcra_capped == pytest.approx(500_000.0)
 
     def test_gcra_at_cap_boundary(self) -> None:
-        """GCRA exactly at 1.25% of S-TREA is not reduced."""
-        # S-TREA = 80m → cap = 1m
+        """GCRA exactly at 1.25% of the cap base is not reduced."""
+        # cap base = 80m → cap = 1m
         of_adj, gcra_capped = compute_of_adj(0.0, 0.0, 1_000_000.0, 0.0, 80_000_000.0)
         assert gcra_capped == pytest.approx(1_000_000.0)
 
     def test_gcra_cap_with_zero_s_trea(self) -> None:
-        """Zero S-TREA: GCRA cap is 0, so gcra_capped must be 0 and OF-ADJ = 0.
+        """Zero cap base: GCRA cap is 0, so gcra_capped must be 0 and OF-ADJ = 0.
 
-        GCRA = 500k, S-TREA = 0 → cap = 0 * 1.25% = 0 → gcra_capped = min(500k, 0) = 0.
+        GCRA = 500k, cap base = 0 → cap = 0 * 1.25% = 0 → gcra_capped = min(500k, 0) = 0.
         OF-ADJ = 12.5 * (0 - 0 - 0 + 0) = 0.
         """
         of_adj, gcra_capped = compute_of_adj(0.0, 0.0, 500_000.0, 0.0, 0.0)
@@ -332,9 +334,10 @@ class TestOfAdjAggregator:
         assert summary.sa_t2_credit == pytest.approx(100_000.0, rel=0.001)
 
     def test_of_adj_gcra_capped_at_1_25_pct_of_s_trea(self, aggregator: OutputAggregator) -> None:
-        """GCRA input exceeding 1.25% of S-TREA is capped.
+        """GCRA input exceeding 1.25% of the paragraph-3A RWEA is capped.
 
-        S-TREA (for floor-eligible) = 100m → GCRA cap = 1.25m.
+        IRB-only book, so the cap base is the F-IRB row's SA-equivalent 100m →
+        GCRA cap = 1.25m.
         GCRA input = 2m → capped to 1.25m.
         OF-ADJ = 12.5 × (0 - 0 - 1.25m + 0) = -15.625m.
         """

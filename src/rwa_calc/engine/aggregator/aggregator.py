@@ -49,15 +49,16 @@ from rwa_calc.domain.enums import ApproachType, ExposureClass
 from rwa_calc.engine.aggregator._el_summary import compute_el_portfolio_summary
 from rwa_calc.engine.aggregator._equity_prep import prepare_equity_results
 from rwa_calc.engine.aggregator._facility_share import (
-    APPROACH_COL,
-    SA_RWA_COL,
     drop_losing_candidates,
     resolvable_candidate,
     resolve_facility_shares,
 )
-from rwa_calc.engine.aggregator._floor import apply_floor_with_impact, compute_of_adj
+from rwa_calc.engine.aggregator._floor import (
+    apply_floor_with_impact,
+    compute_of_adj,
+    gcra_cap_base,
+)
 from rwa_calc.engine.aggregator._lgd_floor_check import check_retail_re_portfolio_lgd_floors
-from rwa_calc.engine.aggregator._schemas import FLOOR_ELIGIBLE_APPROACHES
 from rwa_calc.engine.aggregator._securitisation import (
     EL_SUMMARY_MONEY_COLS,
     apply_residual_multiplier,
@@ -108,6 +109,7 @@ class OutputAggregator:
         securitisation_audit: pl.LazyFrame | None = None,
         *,
         pack: ResolvedRulepack | None = None,
+        cva_rwa: float = 0.0,
     ) -> AggregatedResultBundle:
         """
         Aggregate calculator outputs into final result bundle.
@@ -126,6 +128,11 @@ class OutputAggregator:
                 the ``output_floor`` / ``supporting_factors`` regime gates).
                 Production threads the orchestrator's pack; direct callers may
                 omit it, in which case one is resolved from ``config``.
+            cva_rwa: The portfolio BA-CVA RWEA (PS1/26 Art. 92(3)(d) x 12.5),
+                computed by the aggregation stage before this call. It enters
+                BOTH legs of the Basel 3.1 output floor's max and nothing else:
+                it is never folded into ``rwa_final``. 0.0 when there is no CVA
+                charge, and ignored where the floor does not apply.
 
         Returns:
             AggregatedResultBundle with all summaries and adjustments. Every
@@ -154,8 +161,10 @@ class OutputAggregator:
             # ``include_sa_equivalent`` mirrors the SA calculator's ``output_floor``
             # gate on ``sa_rwa``: under Basel 3.1 equity is standardised-only
             # (Art. 147A), so its sa_rwa = its own pre-floor RWA and must reach the
-            # disclosed S-TREA (OF 02.01 / C 02.00 / CMS). Equity is not
-            # floor-eligible, so the floor base and rwa_final are unaffected.
+            # disclosed S-TREA (OF 02.01 / C 02.00 / CMS). Equity sits in both
+            # legs of the floor's max at its own RWEA (Art. 92(3) / 92(3A)); it is
+            # not floor-eligible, so it never carries a share of the shortfall and
+            # its rwa_final is unaffected.
             equity_prepared = prepare_equity_results(
                 equity_bundle.results,
                 include_sa_equivalent=resolved_pack.feature("output_floor"),
@@ -175,7 +184,7 @@ class OutputAggregator:
         # the securitisation views, the residual multiplier, the expected-loss
         # summary and the output floor — because
         # ``compute_el_portfolio_summary`` reads the BRANCH frames directly and
-        # ``apply_floor_with_impact`` sums every floor-eligible row into S-TREA.
+        # ``apply_floor_with_impact`` sums every row into U-TREA and S-TREA.
         # A drop applied to the combined frame later is green on ``rwa_final``
         # and wrong on OF-ADJ, hence on the floor threshold.
         #
@@ -218,6 +227,7 @@ class OutputAggregator:
                     config=config,
                     resolved_pack=resolved_pack,
                     floor_pct=floor_pct,
+                    cva_rwa=cva_rwa,
                 ),
                 floor_applicable=floor_applicable,
                 floor_pct=floor_pct,
@@ -411,7 +421,7 @@ class OutputAggregator:
                 irb_cet1,
                 config.output_floor.gcra_amount,
                 sa_t2,
-                _floor_eligible_sa_equivalent(combined, set(combined_df.columns)),
+                gcra_cap_base(combined, set(combined_df.columns)),
                 pack=resolved_pack,
             )
 
@@ -424,6 +434,7 @@ class OutputAggregator:
                 irb_cet1_deduction=irb_cet1,
                 gcra_amount=gcra_capped,
                 sa_t2_credit=sa_t2,
+                cva_rwa=cva_rwa,
             )
             if facility_share_summary is not None:
                 # Which assignment decided the allocation, and what the other one
@@ -557,34 +568,6 @@ def _capital_tier_inputs(
     return irb_t2, irb_cet1
 
 
-def _floor_eligible_sa_equivalent(combined: pl.LazyFrame, column_names: set[str]) -> float:
-    """Total SA-equivalent RWA over the floor-eligible rows — the GCRA cap base.
-
-    Deliberately duplicates a slice of ``apply_floor_with_impact``'s own S-TREA:
-    the 1.25% GCRA cap is an INPUT to OF-ADJ, which is an input to the floor, so
-    the number is needed one step before the floor module computes it. Kept as
-    ONE definition, used by the main path and by the facility-share trial
-    evaluation, so the two cannot drift.
-
-    ``.sum()`` skips nulls (and returns 0.0 over an empty or all-null column),
-    which is the existing convention: a null SA-equivalent contributes nothing
-    to S-TREA. A frame with no ``approach_applied`` has no eligible rows by
-    definition.
-    """
-    if APPROACH_COL not in column_names:
-        return 0.0
-    sa_equivalent_col = SA_RWA_COL if SA_RWA_COL in column_names else "rwa_final"
-    totals = collect_views(
-        {
-            "s_trea": combined.filter(
-                pl.col(APPROACH_COL).is_in(list(FLOOR_ELIGIBLE_APPROACHES))
-            ).select(pl.col(sa_equivalent_col).sum().alias("s_trea"))
-        }
-    )["s_trea"]
-    value = totals.get_column("s_trea").item() if totals.height else None
-    return float(value) if value is not None else 0.0
-
-
 def _facility_share_trea(
     surviving: Sequence[str],
     *,
@@ -596,6 +579,7 @@ def _facility_share_trea(
     config: CalculationConfig,
     resolved_pack: ResolvedRulepack,
     floor_pct: float,
+    cva_rwa: float,
 ) -> float:
     """``TREA`` for ONE facility-share assignment, end to end.
 
@@ -629,7 +613,7 @@ def _facility_share_trea(
         irb_cet1,
         config.output_floor.gcra_amount,
         sa_t2,
-        _floor_eligible_sa_equivalent(trial_combined, column_names),
+        gcra_cap_base(trial_combined, column_names),
         pack=resolved_pack,
     )
     _floored, _impact, summary = apply_floor_with_impact(
@@ -641,6 +625,7 @@ def _facility_share_trea(
         irb_cet1_deduction=irb_cet1,
         gcra_amount=gcra_capped,
         sa_t2_credit=sa_t2,
+        cva_rwa=cva_rwa,
     )
     return summary.total_rwa_post_floor
 

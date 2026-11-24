@@ -831,32 +831,51 @@ class OutputFloorSummary:
     Portfolio-level output floor summary (Basel 3.1).
 
     The output floor is applied at portfolio level per PRA PS1/26 Art. 92
-    para 2A: TREA = max(U-TREA, x * S-TREA + OF-ADJ). When the floor binds,
-    the shortfall is distributed pro-rata across floor-eligible exposures
-    (IRB + slotting) proportional to each exposure's SA-equivalent RWA.
+    para 2A: TREA = max(U-TREA, x * S-TREA + OF-ADJ). Both legs are taken over
+    the whole priced book (paras 3 / 3A, "all the business activities"): every
+    row's own RWEA is in U-TREA, every row's standardised RWEA in S-TREA — a
+    modelled row's ``sa_rwa``, a standardised or equity row's own RWEA — and the
+    BA-CVA RWEA is in both (para 3(d), x 12.5). When the floor binds, the
+    shortfall is distributed pro-rata across floor-eligible exposures (IRB +
+    slotting + CCR-via-SA) by each one's SA-equivalent RWA; standardised and
+    equity rows keep their own RWEA (the recorded allocation choice; the article
+    is silent on it).
+
+    Scope: the engine prices the credit-risk book and BA-CVA only, so these are
+    Art. 92's aggregates over those components, not the entity's whole TREA
+    (market, operational and settlement risk outside the ledger are not priced).
 
     OF-ADJ = 12.5 * (IRB_T2 - IRB_CET1 - GCRA + SA_T2) reconciles the
     different provision treatments between IRB (EL shortfall/excess) and SA
     (general credit risk adjustments) so the floor comparison is like-for-like.
 
     Attributes:
-        u_trea: Total RWA for floor-eligible exposures using actual approaches
-        s_trea: Total SA-equivalent RWA for the same exposures
+        u_trea: U-TREA (Art. 92(3)) — Σ own RWEA over the whole ledger + ``cva_rwa``
+        s_trea: S-TREA (Art. 92(3A)) — Σ standardised RWEA over the whole ledger
+            + ``cva_rwa``
         floor_pct: Floor percentage applied (e.g. 0.725 for 72.5%)
-        floor_threshold: x * s_trea + of_adj — the minimum acceptable RWA
+        floor_threshold: x * s_trea + of_adj — the minimum acceptable TREA
         shortfall: max(0, floor_threshold - u_trea) — add-on when floor binds
         portfolio_floor_binding: True when the portfolio floor binds
-        floored_modelled_rwa: u_trea + shortfall (= max(u_trea, floor_threshold))
-            — modelled-only post-floor RWA. Excludes SA and equity rows.
-        total_rwa_post_floor: Genuine portfolio total post-floor RWA
-            = floored_modelled_rwa + sa_rwa_total + equity_rwa_total.
+        floored_modelled_rwa: the floor-eligible (modelled) rows' own RWEA plus
+            the shortfall they carry — modelled-only post-floor RWA. Excludes
+            SA and equity rows.
+        total_rwa_post_floor: post-floor credit-risk RWEA, Σ ``rwa_final`` over
+            the ledger = floored_modelled_rwa + sa_rwa_total + equity_rwa_total.
+            Excludes the CVA RWEA, which is a separate scalar; with it,
+            ``total_rwa_post_floor + cva_rwa == max(u_trea, floor_threshold)``.
         of_adj: Output Floor Adjustment per Art. 92 para 2A
         irb_t2_credit: Art. 62(d) IRB T2 credit (capped at 0.6% of IRB RWA)
         irb_cet1_deduction: Art. 36(1)(d) + Art. 40 CET1 deductions
-        gcra_amount: General credit risk adjustments (capped at 1.25% of S-TREA)
+        gcra_amount: General credit risk adjustments, capped at 1.25% of the
+            paragraph-3A risk-weighted exposure amounts (the whole book's credit
+            and CCR RWEA at its standardised value, Art. 378 DvP lines excluded)
         sa_t2_credit: Art. 62(c) SA T2 credit
-        sa_rwa_total: Sum of ``rwa_final`` across SA rows in the portfolio
+        sa_rwa_total: Sum of ``rwa_final`` across standardised rows — every row
+            that is neither floor-eligible nor equity
         equity_rwa_total: Sum of ``rwa_final`` across equity rows in the portfolio
+        cva_rwa: The BA-CVA RWEA that entered both legs of the max (0.0 when the
+            firm has no BA-CVA charge)
         facility_share_metric_used: Which assignment decided every facility
             share's allocation — ``"own_approach"`` (assignment A, or the firm
             election) or ``"sa_equivalent"`` (the floored branch). ``None`` when
@@ -871,7 +890,7 @@ class OutputFloorSummary:
             one assignment was evaluated.
 
     References:
-    - PRA PS1/26 Art. 92 para 2A
+    - PRA PS1/26 Art. 92 para 2A, 3, 3A, 4
     - CRE99.1-8: Output floor (Basel 3.1)
     """
 
@@ -890,6 +909,7 @@ class OutputFloorSummary:
     sa_rwa_total: float = 0.0
     equity_rwa_total: float = 0.0
     total_rwa_post_floor: float = 0.0
+    cva_rwa: float = 0.0
     facility_share_metric_used: str | None = None
     facility_share_trea_alternative: float | None = None
 

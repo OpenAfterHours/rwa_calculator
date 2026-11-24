@@ -157,12 +157,15 @@ and the EBA validation rules with the PRA's rendering of the template for C 02.0
     do not are left as generated, so the structure check refuses the return (`STR007`).
     The same holds for the SA rows, which are one data point each with an OF 07.00 sheet.
 
-!!! warning "The engine's floor and the template's floor are not yet the same number"
-    The engine applies the floor to the modelled subset alone (recorded defect D6 in
-    `docs/plans/c07-ccr-derivatives.md`). When its floor binds on a book that also holds
-    standardised exposures, its post-floor total — the figure Pillar 3 OV1 row 29 discloses
-    — exceeds `max(row 0010 col 0010, col 0030)`. OF 02.00 reports the template's figures
-    and logs the difference; it does not hide it.
+!!! note "The engine's floor and the template's floor are the same whole-book max"
+    Since P1.367 the engine takes the Art. 92(2A) max over the whole book (PS1/26
+    Art. 92(3) / 92(3A)), as row 0010 does, so on a credit-risk book its post-floor total —
+    the figure Pillar 3 OV1 row 29 discloses — equals `max(row 0010 col 0010, col 0030)`.
+    Before it the engine floored the modelled subset alone (defect D6 in
+    `docs/plans/c07-ccr-derivatives.md`) and overstated that total by up to `(1 − x)` of the
+    standardised book. The engine also puts the BA-CVA RWEA in both legs; OF 02.00 does not
+    yet state a CVA row, so on a book with a CVA charge and a binding floor the two can
+    still differ, and OF 02.00 logs the difference rather than hiding it.
 
 !!! note "Template RWEA is the own-approach amount; the floor is reported once"
     Under Basel 3.1 the engine spreads a binding floor's shortfall pro rata over
@@ -362,7 +365,7 @@ consumed by [C 02.00 / OF 02.00](#c-0200-of-0200-own-funds-requirements) to appl
 | Bundle field | `COREPTemplateBundle.of_02_01` |
 | Framework | Basel 3.1 only — not generated for CRR frameworks |
 | CCR membership | Keyed by `risk_type` (`CCR_DERIVATIVE`, `CCR_SFT`, `CCR_DEFAULT_FUND`), never by the approach label — under CRR the CCR legs carry `standardised` and under Basel 3.1 `standardised_ccr` (the output-floor relabel), so an approach-based rule would no-op exactly where it matters |
-| Output floor summary | Deliberately **not** read: `OutputFloorSummary.u_trea` / `.s_trea` are modelled-subset quantities, not the Art. 92 aggregates |
+| Output floor summary | Deliberately **not** read: since P1.367 `OutputFloorSummary.u_trea` / `.s_trea` are the whole-book Art. 92 aggregates (modelled-subset quantities before it), but they include the BA-CVA RWEA, which this credit-risk comparison's rows must not, so the columns are derived from the ledger |
 | Status | **Complete** |
 
 ---

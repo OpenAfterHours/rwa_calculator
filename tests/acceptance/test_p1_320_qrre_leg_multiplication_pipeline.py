@@ -147,8 +147,10 @@ TOTAL_EAD_CRR: float = 170_000.0
 TOTAL_EAD_B31: float = 186_000.0
 
 #: The Basel 3.1 output-floor SA legs on the A-IRB run, measured pre-fix. Both
-#: must be UNCHANGED by the fix (LESSONS D1): ``s_trea`` is the SA-equivalent of
-#: the IRB-routed row and ``sa_rwa_total`` the SA-routed remainder.
+#: must be UNCHANGED by the fix (LESSONS D1): ``S_TREA_B31`` is the SA-equivalent
+#: of the IRB-routed row and ``sa_rwa_total`` the SA-routed remainder. Since
+#: P1.367 the summary's ``s_trea`` is the WHOLE book's S-TREA (PS1/26
+#: Art. 92(3A)), i.e. the two added together.
 S_TREA_B31: float = 15_000.0
 SA_RWA_TOTAL_B31: float = 124_500.0
 
@@ -384,7 +386,10 @@ class TestOutputFloorSAEquivalentDoesNotMove:
     """
 
     def test_b31_sa_equivalent_of_the_irb_leg_is_unchanged(self, b31_airb_result) -> None:
-        assert b31_airb_result.output_floor_summary.s_trea == pytest.approx(S_TREA_B31, rel=1e-9)
+        summary = b31_airb_result.output_floor_summary
+        modelled = summary.s_trea - summary.sa_rwa_total - summary.equity_rwa_total
+        assert modelled - summary.cva_rwa == pytest.approx(S_TREA_B31, rel=1e-9)
+        assert summary.s_trea == pytest.approx(S_TREA_B31 + SA_RWA_TOTAL_B31, rel=1e-9)
 
     def test_b31_sa_routed_total_is_unchanged(self, b31_airb_result) -> None:
         assert b31_airb_result.output_floor_summary.sa_rwa_total == pytest.approx(

@@ -7,7 +7,7 @@ Bug under test:
     portfolio-level output floor is applied to ``combined`` (line 198).  The floor modifies
     ``rwa_final`` in-place on ``combined``, but the summary LazyFrames were captured from the
     pre-floor snapshot.  As a result, both summary views report the un-floored total
-    (~54.6m for this scenario) instead of the post-floor total (~195m).
+    (~54.6m for this scenario) instead of the post-floor total (~181.25m).
 
 Why the floor BINDS here (hand-calc):
     Three corporate counterparties (ALL UNRATED — no external CQS):
@@ -15,16 +15,17 @@ Why the floor BINDS here (hand-calc):
         LN-P1130-IRB-2: EAD=100m, F-IRB, PD=0.15%, LGD=40%  → IRB RWA ≈ 2.5m
         LN-P1130-SA-1:  EAD=50m,  SA (unrated corporate → 100%) → RWA = 50m
 
-    S-TREA (SA-equiv of floor-eligible IRB rows):
+    S-TREA (PS1/26 Art. 92(3A): the whole book, SA control included — P1.367):
         Unrated corporate → 100% SA RW.
-        S-TREA = 100m + 100m = 200m.
+        S-TREA = 100m + 100m + 50m = 250m; U-TREA ≈ 59.6m + 50m = 109.6m (measured).
 
-    Floor threshold (72.5% × 200m) = 145m >> U-TREA ≈ 4.6m  →  floor BINDS.
-    Floored modelled RWA = 145m; SA control = 50m; total_rwa_post_floor = 195m.
+    Floor threshold (72.5% × 250m) = 181.25m >> U-TREA ≈ 109.6m  →  floor BINDS
+    (OF-ADJ, an EL-shortfall CET1 deduction, takes 1.25m off: 180m measured).
+    Floored modelled RWA = 131.25m; SA control = 50m; total_rwa_post_floor = 181.25m.
 
 Primary assertion:
     sum(summary_by_approach.total_rwa) == result.output_floor_summary.total_rwa_post_floor
-    i.e., the summary views must reflect 195m, not the buggy ~54.6m.
+    i.e., the summary views must reflect 181.25m, not the buggy ~54.6m.
 
 References:
     - PRA PS1/26 Art. 92(2A): TREA = max(U-TREA, x × S-TREA + OF-ADJ)
@@ -99,11 +100,11 @@ class TestP1130SummariesReflectPostFloorRWA:
 
     Scenario: two unrated F-IRB corporates (EAD 100m each) + one unrated SA corporate
     (EAD 50m).  Output floor 72.5% (reporting_date=2030-01-01, fully phased).
-    S-TREA = 200m → floor threshold = 145m >> U-TREA ≈ 4.6m → floor BINDS.
-    total_rwa_post_floor ≈ 195m.
+    S-TREA = 250m → floor threshold ≈ 181.25m >> U-TREA ≈ 109.6m → floor BINDS.
+    total_rwa_post_floor ≈ 181.25m.
 
     Bug: today the summaries are built pre-floor from the un-floored combined frame,
-    so they report ≈54.6m instead of 195m.  All five assertions below will fail with
+    so they report ≈54.6m instead of 181.25m.  All five assertions below will fail with
     an AssertionError (not an import/collection error) until the aggregator is fixed.
     """
 
@@ -139,26 +140,28 @@ class TestP1130SummariesReflectPostFloorRWA:
             f"P1.130: floor must bind for unrated F-IRB corporates. "
             f"u_trea={result.output_floor_summary.u_trea:,.0f}, "
             f"floor_threshold={result.output_floor_summary.floor_threshold:,.0f}. "
-            f"Expected floor_threshold ≈ {EXPECTED_FLOOR_THRESHOLD:,.0f} >> u_trea ≈ 4.6m."
+            f"Expected floor_threshold ≈ {EXPECTED_FLOOR_THRESHOLD:,.0f} >> u_trea ≈ 109.6m."
         )
 
-    def test_p1_130_guard_s_trea_equals_200m(self, result) -> None:
+    def test_p1_130_guard_s_trea_equals_250m(self, result) -> None:
         """
-        Guard: S-TREA must equal 200m (unrated corporates → 100% SA RW).
+        Guard: S-TREA must equal 250m (unrated corporates → 100% SA RW, plus the
+        50m SA control, which PS1/26 Art. 92(3A) puts in S-TREA too — P1.367).
 
         If S-TREA is wrong the floor threshold is wrong; this guard isolates
         the fixture data quality from the summary-level bug.
 
         Arrange: two IRB corporates at 100m EAD each, both unrated externally.
         Act:     full pipeline.
-        Assert:  output_floor_summary.s_trea ≈ 200,000,000.
+        Assert:  output_floor_summary.s_trea ≈ 250,000,000.
         """
         assert result.output_floor_summary is not None
 
         assert result.output_floor_summary.s_trea == pytest.approx(EXPECTED_S_TREA, rel=0.01), (
-            f"P1.130: S-TREA should be {EXPECTED_S_TREA:,.0f} (two 100m unrated corporates × 100% RW). "
+            f"P1.130: S-TREA should be {EXPECTED_S_TREA:,.0f} (two 100m unrated corporates × 100% "
+            "RW plus the 50m SA control). "
             f"Got {result.output_floor_summary.s_trea:,.0f}. "
-            "If S-TREA ≠ 200m check that the IRB counterparties have no external CQS "
+            "If S-TREA ≠ 250m check that the IRB counterparties have no external CQS "
             "(cqs=null → unrated → 100% SA RW under PS1/26 Art. 122(2) Table 6)."
         )
 
@@ -173,15 +176,15 @@ class TestP1130SummariesReflectPostFloorRWA:
         BUG SITE: summary_by_approach is built from post_crm_detailed BEFORE the floor
         is applied (aggregator.py line 134 vs line 198).  The summaries therefore
         reflect the un-floored IRB RWA (~4.6m) + SA RWA (50m) ≈ 54.6m, not the
-        floored total ≈ 195m.
+        floored total ≈ 181.25m.
 
         This test FAILS pre-fix because:
             sum(summary_by_approach.total_rwa) ≈ 54,600,000
-            output_floor_summary.total_rwa_post_floor ≈ 195,000,000
+            output_floor_summary.total_rwa_post_floor ≈ 181,250,000
 
         Arrange: P1.130 fixtures with floor-binding F-IRB + SA setup.
         Act:     full pipeline (uses class-scoped result fixture).
-        Assert:  summary_by_approach total ≈ 195m (post-floor).
+        Assert:  summary_by_approach total ≈ 181.25m (post-floor).
         """
         # Arrange
         assert result.output_floor_summary is not None
@@ -212,11 +215,11 @@ class TestP1130SummariesReflectPostFloorRWA:
 
         This test FAILS pre-fix because:
             sum(summary_by_class.total_rwa) ≈ 54,600,000
-            output_floor_summary.total_rwa_post_floor ≈ 195,000,000
+            output_floor_summary.total_rwa_post_floor ≈ 181,250,000
 
         Arrange: P1.130 fixtures with floor-binding F-IRB + SA setup.
         Act:     full pipeline.
-        Assert:  summary_by_class total ≈ 195m (post-floor).
+        Assert:  summary_by_class total ≈ 181.25m (post-floor).
         """
         # Arrange
         assert result.output_floor_summary is not None
@@ -254,7 +257,7 @@ class TestP1130SummariesReflectPostFloorRWA:
 
         Arrange: P1.130 fixtures with floor-binding F-IRB + SA setup.
         Act:     collect result.results['rwa_final'] and sum.
-        Assert:  results total ≈ 195m.
+        Assert:  results total ≈ 181.25m.
         """
         # Arrange
         assert result.output_floor_summary is not None
@@ -280,17 +283,19 @@ class TestP1130SummariesReflectPostFloorRWA:
         UNDERSTATEMENT-CLOSED: the summary total must strictly exceed floored_modelled_rwa.
 
         This asserts the specific bug: the shortfall (floor add-on) must appear in the
-        summary view.  floored_modelled_rwa = max(u_trea, floor_threshold) = 145m;
-        sa_rwa_total = 50m; total_rwa_post_floor = 195m.
+        summary view.  floored_modelled_rwa = 131.25m (the modelled rows' share of
+        max(u_trea, floor_threshold) = 181.25m); sa_rwa_total = 50m;
+        total_rwa_post_floor = 181.25m.
 
         Post-fix invariant:
             sum(summary_by_approach.total_rwa) - floored_modelled_rwa == sa_rwa_total
 
         Pre-fix (buggy):
-            summary_total ≈ 54.6m < floored_modelled_rwa (145m)  →  shortfall NOT reflected.
+            summary_total ≈ 54.6m < floored_modelled_rwa + sa_rwa_total  →  shortfall NOT
+            reflected.
 
-        This test FAILS pre-fix because the summary total (≈54.6m) is less than
-        floored_modelled_rwa (145m) — the add-on is entirely absent from the summary.
+        This test FAILED before P1.130 because the summary total (≈54.6m) was less
+        than the post-floor total — the add-on was entirely absent from the summary.
 
         Arrange: P1.130 fixtures.
         Act:     full pipeline.
@@ -305,11 +310,11 @@ class TestP1130SummariesReflectPostFloorRWA:
         summary_total = summary_df["total_rwa"].sum()
         floor_summary = result.output_floor_summary
 
-        floored_modelled = floor_summary.floored_modelled_rwa  # = 145m
+        floored_modelled = floor_summary.floored_modelled_rwa  # = 131.25m
         sa_rwa_total = floor_summary.sa_rwa_total  # = 50m
 
         # Assert — UNDERSTATEMENT-CLOSED:
-        # summary total should equal floored_modelled + SA = 195m
+        # summary total should equal floored_modelled + SA = 181.25m
         assert summary_total == pytest.approx(floored_modelled + sa_rwa_total, rel=_REL_TOL), (
             f"P1.130 BUG: summary_by_approach total ({summary_total:,.0f}) should equal "
             f"floored_modelled_rwa ({floored_modelled:,.0f}) + sa_rwa_total ({sa_rwa_total:,.0f}) "

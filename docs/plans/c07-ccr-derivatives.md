@@ -212,6 +212,11 @@ col 0030 to `summary.u_trea` would look reasonable and be wrong.
 
 **This needs a binding-floor fixture to prove, which no golden currently has.**
 
+**Resolved 2026-11-23 (P1.367).** `apply_floor_with_impact` now takes both legs over the whole
+priced book (PS1/26 Art. 92(3) / 92(3A)) plus the BA-CVA RWEA, so `summary.u_trea` / `.s_trea` are
+the Art. 92 aggregates. OF 02.01 still reads nothing off the summary — the summary's legs carry the
+CVA RWEA, which the template's credit-risk rows must not — and that stays the recorded decision.
+
 ### D7 — An IRB-treated CCR leg would be reported in BOTH C 07.00 and C 08.01 (NEW, latent)
 
 `c07_population` admits any row whose `risk_type` is in the CCR set **regardless of approach**. But an

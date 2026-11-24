@@ -8,21 +8,23 @@ bundles the same way production does, and asserts
 gate for the curated ties: if a real run failed a tie we believed valid, the tie
 (not the tolerance) is wrong.
 
-One break is a known ENGINE defect, not a tie defect: P1.367 (IMPLEMENTATION_PLAN)
-— ``engine/aggregator/_floor.py`` takes the Basel 3.1 output floor over the
-modelled subset and re-adds the SA book outside the max, so wherever its floor
-binds the engine's total (OV1 row 29, Σ ``rwa_final``) exceeds the PS1/26
-Art. 92(2A) TREA that C 02.00 states by up to (1 − x) · SA book. The fix releases
-capital and awaits owner sign-off. A second follows from any binding floor:
-P3.8 — Pillar 3 OV1 rows 3-5 still sum ``rwa_final``, which carries the engine's
-pro-rata floor add-on, while C 08.01 reports the un-floored own-approach RWEA, so
-``irb_rwea_c08_01_vs_ov1`` differs by exactly the engine's shortfall (the
-module docstring of ``reporting/tieouts.py`` records it). The Basel 3.1 test
-therefore admits exactly those two ties, each only by exactly the amount it
-derives from the run's own ``OutputFloorSummary``; when the owning item lands
-the amount is zero and the tie must hold. The floor binds on this estate since the product-review fixes of
-2026-11-18 raised S-TREA (e.g. IV-01's pre-operational default for project
-finance with no phase).
+One break follows from any binding floor: P3.8 — Pillar 3 OV1 rows 3-5 still
+sum ``rwa_final``, which carries the engine's pro-rata floor add-on, while
+C 08.01 reports the un-floored own-approach RWEA, so ``irb_rwea_c08_01_vs_ov1``
+differs by exactly the engine's shortfall (the module docstring of
+``reporting/tieouts.py`` records it). The Basel 3.1 test therefore admits that
+one tie, only by exactly the shortfall the run's own ``OutputFloorSummary``
+states; when P3.8 lands the amount is zero and the tie must hold. Since P1.367
+the floor does NOT bind on this estate at the 2027 multiplier (measured: U-TREA
+341,093,331.90 against a threshold of 270,268,958.40 — before P1.367 the subset
+formula bound by 1,012,555.79), so the shortfall is zero and that tie must hold
+here too; the allowance stays for the estate's binding states.
+
+``total_rwea_c02_vs_ov1`` is NOT admitted. Until P1.367 the engine took the
+Basel 3.1 output floor over the modelled subset and re-added the SA book outside
+the max, so OV1 row 29 (Σ ``rwa_final``) exceeded the PS1/26 Art. 92(2A) TREA
+that C 02.00 states by up to (1 − x) · SA book. Both are now the whole-book max,
+and the tie must hold exactly.
 """
 
 from __future__ import annotations
@@ -32,7 +34,6 @@ from datetime import date
 import pytest
 from workbooks.shared.fixture_loader import load_fixtures
 
-from rwa_calc.contracts.bundles import OutputFloorSummary
 from rwa_calc.contracts.config import CalculationConfig
 from rwa_calc.domain.enums import PermissionMode
 from rwa_calc.engine.pipeline import PipelineOrchestrator
@@ -75,24 +76,6 @@ def _run_and_generate(framework: str):
     return corep, pillar3, summary
 
 
-def _p1_367_overstatement(summary: OutputFloorSummary | None) -> float:
-    """Engine post-floor total minus the PS1/26 Art. 92(2A) TREA (P1.367).
-
-    The engine floors the modelled subset — ``book + max(U_m, x·S_m + adj)`` —
-    where the article floors the whole book — ``max(U_m + book, x·(S_m + book) +
-    adj)``; ``book`` is the SA and equity RWA the engine re-adds outside the max.
-    Zero where no floor applies (CRR) or the two agree.
-    """
-    if summary is None:
-        return 0.0
-    book = summary.sa_rwa_total + summary.equity_rwa_total
-    article = max(
-        summary.u_trea + book,
-        summary.floor_pct * (summary.s_trea + book) + summary.of_adj,
-    )
-    return summary.total_rwa_post_floor - article
-
-
 def _amount(text: str | None) -> float:
     return float((text or "0").replace(",", ""))
 
@@ -114,12 +97,10 @@ def test_crr_run_has_no_tieout_findings(crr_bundles):
 
 
 def test_b31_run_has_no_tieout_findings(b31_bundles):
-    """Every tie holds, bar two known engine / Pillar 3 gaps by exactly their amounts."""
+    """Every tie holds, bar one known Pillar 3 gap by exactly its amount."""
     corep, pillar3, summary = b31_bundles
     findings = check_cross_template_consistency(corep, pillar3, "BASEL_3_1")
     known = {
-        # P1.367: the engine floors the modelled subset (Art. 92(2A) floors the book).
-        "total_rwea_c02_vs_ov1": _p1_367_overstatement(summary),
         # P3.8: OV1 rows 3-5 sum rwa_final, which carries the floor add-on.
         "irb_rwea_c08_01_vs_ov1": summary.shortfall if summary is not None else 0.0,
     }

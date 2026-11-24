@@ -428,26 +428,6 @@ def test_own_funds_columns_are_exactly_eight_percent_of_their_rwea(templates) ->
     assert not breaks, "OV1 own-funds columns not 8% of their RWEA:\n  " + "\n  ".join(breaks)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "REWRITTEN 2026-11-13. The difference first registered here is resolved: OF 02.00 r0010 "
-        "c0030 no longer repeats c0010 (it published the post-floor TREA, 25,461,099.93). It is "
-        "now the Annex II formula, 'x * S-TREA + OF-ADJ' (PS1/26 Annex II printed p.29), and "
-        "row 0034 follows from comparing it with c0010. "
-        "What remains is the caveat this entry recorded from the start, now the WHOLE of the "
-        "difference: published 17,194,000.00 = 0.6 * 30,762,500.00 - 1,263,500.00, against the "
-        "sealed OutputFloorSummary.floor_threshold of 11,231,500.00 = 0.6 * 20,825,000.00 - "
-        "1,263,500.00. Delta 5,962,500.00 = 0.6 * the 9,937,500.00 standardised book. Annex II "
-        "defines S-TREA as 'the total of all SA exposures provided in columns 0010 and 0020' — "
-        "the whole portfolio, which is also what boe_b0716 / boe_b0793 compute — while the "
-        "engine's summary holds the floor-ELIGIBLE (modelled) subset only. That is the recorded "
-        "engine defect D6 (docs/plans/c07-ccr-derivatives.md s4): the engine floors the modelled "
-        "subset in isolation. The template is believed right and the summary's threshold wrong. "
-        "The test still compares against the engine's OWN threshold, so it stays red until the "
-        "floor's scope is fixed in the engine — at which point the two agree and this entry goes."
-    ),
-)
 def test_output_floor_column_is_the_floor_amount(templates, floor_summaries) -> None:
     """OF 02.00 r0010 c0030 equals x * S-TREA + OF-ADJ from the sealed summary.
 
@@ -456,6 +436,15 @@ def test_output_floor_column_is_the_floor_amount(templates, floor_summaries) -> 
     Act: read the published floor cell and the summary's ``floor_threshold``.
     Assert: they agree. The comparison is against a SEALED bundle field, not
     against anything the generator produced, so it stays a second opinion.
+
+    **Was a strict xfail until P1.367** (2026-11-23). The template published
+    17,194,000.00 = 0.6 x 30,762,500.00 - 1,263,500.00 — Annex II's S-TREA, "the
+    total of all SA exposures provided in columns 0010 and 0020", the whole
+    portfolio — against a summary threshold of 11,231,500.00 = 0.6 x 20,825,000.00
+    - 1,263,500.00: the engine floored the modelled subset in isolation, 0.6 x the
+    9,937,500.00 standardised book short (docs/plans/c07-ccr-derivatives.md s4
+    D6). PS1/26 Art. 92(3) / 92(3A) take both legs over all the business
+    activities of the institution, so the engine now does too and the two agree.
     """
     summary = floor_summaries["B31"]
     assert summary is not None, "no output floor summary — the cell cannot be judged"

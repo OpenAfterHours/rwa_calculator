@@ -244,10 +244,10 @@ class Candidate:
 def candidates(regime: str) -> dict[str, Candidate]:
     """The three share candidates, keyed by member reference.
 
-    ``b_i`` follows ONE predicate: ``x . s_i`` if and only if the row's applied
-    approach is floor-eligible, otherwise ``u_i``. A standardised row sits
-    outside the Art. 92(2A) max at full weight, so its floored-branch
-    contribution is its own RWA and cannot move with the floor state.
+    ``b_i = x . s_i`` for every member (P1.367): PS1/26 Art. 92(3) / 92(3A) put
+    every row inside both legs of the Art. 92(2A) max. ONE predicate decides
+    ``s_i``: the SA-equivalent if the row's applied approach is floor-eligible,
+    otherwise its own RWA — a standardised row's standardised RWEA IS its own.
     """
     sa_ccf = sa_conversion_factor(regime)
     firb_ccf = firb_conversion_factor(regime)
@@ -258,7 +258,10 @@ def candidates(regime: str) -> dict[str, Candidate]:
         ead = HEADROOM_SHARE * sa_ccf
         weight = corporate_sa_risk_weight(regime, cqs)
         rwa = ead * weight
-        return Candidate(reference, "standardised", ead, weight, rwa, rwa if is_b31 else None, rwa)
+        floored = rwa if x is None else x * rwa
+        return Candidate(
+            reference, "standardised", ead, weight, rwa, rwa if is_b31 else None, floored
+        )
 
     ead_irb = HEADROOM_SHARE * firb_ccf
     weight_irb = firb_risk_weight(regime, PD_IRB)
@@ -307,15 +310,15 @@ _MODELLED = (LN_IRB, LN_ANCHOR)
 
 
 def non_share_totals(regime: str, variant: str) -> tuple[float, float, float]:
-    """``(U0, S0, SA0)`` — the book outside the share.
+    """``(U0, S0, SA0)`` — the book outside the share, by partition.
 
-    ``U0``/``S0`` are summed over the floor-eligible rows only; the standardised
-    rows sit outside the Art. 92(2A) max at full weight in ``SA0``. That is the
-    ENGINE's formula (``_floor.py``), which sums both totals over floor-eligible
-    rows and re-adds the SA book unscaled — it agrees with Art. 92(2A) only at
-    ``x = 1`` and is more binding otherwise. The deviation is a recorded
-    out-of-scope finding (design doc Section 10 item 1); every number here is
-    computed against the engine's form deliberately.
+    ``U0``/``S0`` are the floor-eligible (modelled) rows' own RWEA and
+    SA-equivalent; ``SA0`` is the standardised rows' own RWEA, which is also
+    their standardised RWEA. PS1/26 Art. 92(3) / 92(3A) put the standardised
+    rows in BOTH legs of the Art. 92(2A) max (P1.367): U-TREA is ``U0 + SA0``
+    and S-TREA ``S0 + SA0`` before the share's winner is added —
+    :func:`evaluate_b31` does that. Until P1.367 the engine summed both legs
+    over the modelled rows alone and re-added ``SA0`` outside the max.
     """
     own = drawn_rwa(regime, variant)
     u0 = sum(own[reference] for reference in _MODELLED)
@@ -347,7 +350,10 @@ class Assignment:
 def evaluate_b31(variant: str, winner: str) -> Assignment:
     """Evaluate the Basel 3.1 book end-to-end with ``winner`` holding the share.
 
-    Mirrors ``apply_floor_with_impact``: the shortfall is distributed pro-rata by
+    Mirrors ``apply_floor_with_impact``: both legs of the Art. 92(2A) max are
+    whole-book (PS1/26 Art. 92(3) / 92(3A)) — every row's own RWEA in U-TREA,
+    every row's standardised RWEA (``sa_rwa`` on a modelled row, its own RWEA on
+    a standardised one) in S-TREA — and the shortfall is distributed pro-rata by
     each floor-eligible row's SA-equivalent RWA. The OF-ADJ expected-loss channel
     is recomputed per assignment, because Pool B covers the two drawn F-IRB
     loans' expected loss exactly and the winning candidate's own expected loss is
@@ -364,9 +370,10 @@ def evaluate_b31(variant: str, winner: str) -> Assignment:
     equivalent = drawn_sa_equivalent("b31", variant)
     share_reference = f"{FAC_SHARE}_UNDRAWN"
 
-    u_trea = u0 + (candidate.u if eligible else 0.0)
-    s_trea = s0 + (candidate.s or 0.0 if eligible else 0.0)
+    modelled_rwa = u0 + (candidate.u if eligible else 0.0)
     sa_rwa_total = sa0 + (0.0 if eligible else candidate.u)
+    u_trea = modelled_rwa + sa_rwa_total
+    s_trea = s0 + (candidate.s or 0.0 if eligible else 0.0) + sa_rwa_total
 
     # Pool B covers both drawn F-IRB loans exactly; only a MODELLED winner adds
     # uncovered expected loss, and only through the CET1 deduction limb.
@@ -375,7 +382,7 @@ def evaluate_b31(variant: str, winner: str) -> Assignment:
 
     floor_threshold = x * s_trea + of_adj
     shortfall = max(0.0, floor_threshold - u_trea)
-    floored = u_trea + shortfall
+    floored = modelled_rwa + shortfall
 
     basis = {reference: equivalent[reference] for reference in _MODELLED}
     rwa = {reference: own[reference] for reference in _MODELLED}

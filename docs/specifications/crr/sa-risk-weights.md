@@ -1450,14 +1450,46 @@ Art. 133(2) assigns a **flat 100%** to all equity. Art. 133 has only 3 paragraph
 !!! info "CRR Art. 127(1) Denominator"
     The CRR denominator is: "the unsecured part of the exposure value if those specific
     credit risk adjustments and deductions were not applied" — i.e., the pre-provision
-    unsecured exposure value. The code reconstructs this as `(ead + provision_deducted) ×
-    unsecured_pct`. The numerator includes both specific credit risk adjustments and
-    amounts deducted per Art. 36(1)(m).
+    unsecured exposure value. The code reconstructs this as `ead_final + provision_deducted`:
+    under the comprehensive method `ead_final` is already net of the financial collateral
+    the CRM stage recognised. On a row blended under Art. 127(3)–(4) (below) the test is
+    still measured on that whole value, not on the part above the property cap — the more
+    conservative reading, kept as it is. The numerator includes both specific credit risk
+    adjustments and amounts deducted per Art. 36(1)(m).
 
-!!! note "CRR Art. 127(3)–(4)"
-    CRR also provides flat 100% for defaulted exposures fully and completely secured by
-    mortgages on residential property (Art. 127(3)) or commercial immovable property
-    (Art. 127(4)), regardless of provision level.
+!!! note "CRR Art. 127(3)–(4): the property-secured share (P1.257, P1.315)"
+    Art. 127(4): "The exposure value remaining after specific credit risk adjustments of
+    exposures fully and completely secured by mortgages on commercial immovable property in
+    accordance with Article 126 shall be assigned a risk weight of 100 % if a default has
+    occurred in accordance with Article 178." Art. 127(3) says the same of residential
+    property and Article 125. Art. 125(2)(d) / 126(2)(d) limit the part that counts as
+    fully and completely secured to 80% / 50% of the property's market value, so the 100%
+    applies to a share and the rest stays on Art. 127(1):
+
+    ```
+    secured_share = min(1, cap / ltv)        cap = 0.80 residential, 0.50 commercial
+    rw = 100% × secured_share + provision_rw × (1 − secured_share)
+    ```
+
+    - **Residential (Art. 127(3)):** a residential row not attested
+      `is_qualifying_re = False`. A null attestation qualifies, as it does for the
+      non-defaulted 35%.
+    - **Commercial (Art. 127(4)):** a commercial row — by class string **or**
+      `property_type = "commercial"`, because a defaulted loan is not loan-split and arrives
+      classed by its obligor (`corporate`, `retail_mortgage`) — that meets the same Art. 126
+      test as the non-defaulted 50%: `is_qualifying_re` explicitly True (PRA Credit Risk
+      Part rule 4.1 / 4.1A; a null fails), `has_income_cover` False, and not ADC.
+    - A null or non-positive LTV, or a failed condition, leaves the whole row on Art. 127(1).
+
+    Worked example (commercial, no provisions): 400,000 on an attested owner-occupied
+    office worth 500,000 (LTV 0.8) — 0.625 at 100% and 0.375 at 150% → 118.75% / 475,000
+    (was 150% / 600,000 before P1.315). Worth 1,000,000 (LTV 0.4): 100% / 400,000.
+    Implemented in `engine/sa/crr_real_estate.py::crr_defaulted_re_secured_share_expr`.
+    Basel 3.1 has no commercial limb: PS1/26 Art. 127(3) covers residential property only.
+
+    **Reporting:** a blended weight is neither 100% nor 150%, so the row reports in C 07.00
+    row 0280 "Other risk weights" on the in-default sheet and in neither memorandum row 0300
+    nor 0320, the same as the residential blend.
 
 ### Basel 3.1 Default Risk Weights (PRA PS1/26 Art. 127)
 
@@ -1465,7 +1497,7 @@ Art. 133(2) assigns a **flat 100%** to all equity. Art. 133 has only 3 paragraph
 |-----------|-------------|
 | Specific provisions ≥ **20%** of the outstanding amount of the item or facility | 100% |
 | Specific provisions < **20%** of the outstanding amount of the item or facility | 150% |
-| RESI RE non-dependent (Art. 127(1A)) in default | **100% (always)** — regardless of provision level |
+| RESI RE non-dependent (Art. 127(3)) in default | **100% (always)** — regardless of provision level |
 
 !!! warning "Denominator Difference from CRR"
     Both CRR and Basel 3.1 use a **20%** provision threshold, but the **denominator differs**:
@@ -1709,7 +1741,7 @@ table.
 - **Payroll/pension loans** (CRR Art. 123, CRR2 / PRA PS1/26 Art. 123(4)): 35% — Done (both regimes; (a)–(c) attested via `is_payroll_loan`, (d) withheld where the loan's own maturity data exceeds ten years)
 - **Non-regulatory retail** (Art. 123(3)(c)): 100% — Done
 - **SA Specialised Lending** (Art. 122A-122B): OF/CF=100%, PF pre-op=130%, PF op=100%, high-quality PF=80% — Done
-- **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE always-100% exception — Done
+- **Default exposures** (Art. 127): Provision-based 100%/150% with RESI RE always-100% exception (Basel 3.1); CRR Art. 127(3)/(4) 100% on the Art. 125/126-secured share (P1.257, P1.315) — Done
 - **Other items** (Art. 134): Cash=0%, gold=0% to the extent backed by bullion liabilities (unbacked share 100%, `other_gold_unbacked`), collection=20%, tangible=100% — Done
 - **Covered bonds** (Art. 129): CQS-based risk weights, eligibility criteria, unrated derivation, PRA deviation — Added
 - **Pre-2007 covered bond grandfathering** (Art. 129(6)): CRR carve-out from Art. 129(1)/(3) eligibility tests retained until maturity; PRA PS1/26 Art. 129(6) retains the carve-out but additionally requires Art. 129(7) disclosure conditions — Added

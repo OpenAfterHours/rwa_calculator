@@ -314,15 +314,18 @@ ENTRIES: dict[str, RuleEntry] = {
     ),
     # SA defaulted-exposure treatment (Art. 127): Basel 3.1 revises the unsecured
     # denominator basis (gross outstanding vs the CRR pre-provision ead_final) and
-    # adds the Art. 127(3) residential-RE non-income flat-100% carve-out — see
-    # packs/b31.py. The Feature gates the whole regime block in
-    # engine/sa/risk_weights.py::_apply_defaulted_risk_weight; the thresholds /
-    # RW values stay in data/tables/{crr,b31}_risk_weights.py.
+    # replaces CRR Art. 127(3)/(4) (100% on the Art. 125 / 126-secured share,
+    # engine/sa/crr_real_estate.py::crr_defaulted_re_secured_share_expr) with a
+    # residential-only non-income flat 100% — see packs/b31.py. The Feature gates
+    # the whole regime block in
+    # engine/sa/risk_weights.py::_apply_defaulted_risk_weight.
     "sa_revised_defaulted_treatment": Feature(
         name="sa_revised_defaulted_treatment",
         enabled=False,
         citation=Citation(
-            "CRR", "127", "CRR defaulted RW: pre-provision denominator, no RE carve-out"
+            "CRR",
+            "127",
+            "CRR defaulted RW: pre-provision denominator; 100% on the Art. 125/126-secured share",
         ),
     ),
     # Basel-3.1-only SA post-RW adjustments — absent under CRR. The currency-

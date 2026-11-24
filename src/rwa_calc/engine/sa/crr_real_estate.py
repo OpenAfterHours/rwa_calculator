@@ -1,26 +1,33 @@
 """
-CRR real-estate risk weights: the Art. 125 / 126 preferential weights and the
-Art. 124(1) weight that applies where their conditions are not met.
+CRR real-estate risk weights: the Art. 125 / 126 preferential weights, the
+Art. 124(1) weight that applies where their conditions are not met, and the
+Art. 127(3) / 127(4) share of a defaulted exposure that they secure.
 
 Pipeline position:
     CRMProcessor -> RealEstateSplitter -> SACalculator
     (``engine/sa/risk_weights.py::_crr_append_real_estate_branches``, the CRR
-    override ladder only, and the CRR Art. 127(3) defaulted-RRE share)
+    override ladder only, and the CRR branch of
+    ``engine/sa/risk_weights.py::_apply_defaulted_risk_weight``)
 
 Key responsibilities:
 - ``crr_commercial_re_rw_expr`` — Art. 126: 50% on the part of the loan up to
   50% of the property value, only where the firm attests the conditions
   (``is_qualifying_re`` True, which for commercial property includes the PRA
   rule 4.1 / 4.1A loss conditions) AND repayment does not materially depend on
-  the property's cash flows (Art. 126(2)(b)); otherwise Art. 124(1).
+  the property's cash flows (Art. 126(2)(b)); otherwise Art. 124(1). The test
+  itself is ``crr_art_126_conditions_met_expr``, shared with the defaulted limb.
 - ``crr_residential_re_rw_expr`` — Art. 125: 35% on the part up to 80% of the
   property value, the counterparty's unsecured weight above it; an explicitly
   non-qualifying exposure takes Art. 124(1) instead.
 - ``crr_art_124_1_rw_expr`` — Art. 124(1): 100% on the part secured up to the
   property value, the counterparty's unsecured weight on any excess.
 - ``crr_re_conditions_not_met_expr`` — the explicit non-qualifying attestation.
+- ``crr_defaulted_re_secured_share_expr`` — Art. 127(3) / (4): the share of a
+  defaulted exposure secured "in accordance with" Art. 125 (residential, up to
+  80% of the value) or Art. 126 (commercial, up to 50%), which takes 100%; the
+  caller keeps the Art. 127(1) provision weight on the rest.
 
-Two review findings shaped this module:
+Three review findings shaped this module:
 
 - **CL-07 / RE-09.** ``is_qualifying_re`` was read only by the Basel 3.1 route,
   so an exposure the firm attested as NOT meeting the Art. 125(2) / 126(2)
@@ -42,6 +49,11 @@ Two review findings shaped this module:
   commercial property took 100% and investment property 50%. The Art. 126(3)
   derogation from limb (b) needs a competent-authority loss-rate determination
   and is not applied.
+- **P1.315.** Art. 127(4) was left unbuilt while RE-17 was open, so a defaulted
+  commercial exposure meeting Art. 126 took the Art. 127(1) provision weight
+  (150% with provisions under 20%) on its whole value. It now reads the same
+  Art. 126 test as the non-defaulted 50% weight — never the residential limb's
+  null-tolerant gate, which would hand the 100% to rows rule 4.1 / 4.1A exclude.
 
 Rule text (UK CRR as onshored, verbatim):
 - Art. 124(1): "An exposure or any part of an exposure fully secured by mortgage
@@ -64,6 +76,13 @@ Rule text (UK CRR as onshored, verbatim):
   valuation rules set out in Article 229(1) are met; (d) the 50 % risk weight
   ... shall be assigned to the part of the loan that does not exceed 50 % of the
   market value of the property".
+- Art. 127(4): "The exposure value remaining after specific credit risk
+  adjustments of exposures fully and completely secured by mortgages on
+  commercial immovable property in accordance with Article 126 shall be assigned
+  a risk weight of 100 % if a default has occurred in accordance with Article
+  178." Art. 127(3) says the same of residential property and Article 125.
+  PS1/26 Art. 127 keeps only a residential paragraph (127(3)), so this module's
+  defaulted share is CRR-only.
 - Art. 125(2)(d): "the part of the loan to which the 35 % risk weight is
   assigned does not exceed 80 % of the market value of the property".
 - PRA Rulebook, CRR Firms, Credit Risk Part, rule 4.1 (deleted by PS1/26 from
@@ -77,7 +96,7 @@ Extracted from ``risk_weights.py``, which sits at the ``max_engine_module_loc``
 ratchet.
 
 References:
-- CRR Art. 124(1), 125(1)-(2), 126(1)-(2), 127(3)
+- CRR Art. 124(1), 125(1)-(2), 126(1)-(2), 127(3)-(4)
 - PRA Rulebook, Credit Risk Part, rule 4.1 (to 31 December 2026)
 """
 
@@ -95,6 +114,7 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     CORPORATE_RISK_WEIGHTS,
     RESIDENTIAL_MORTGAGE_PARAMS,
 )
+from rwa_calc.engine.sa.re_class import is_commercial_re_class, is_residential_re_class
 from rwa_calc.engine.sa.re_residual_rw import crr_art_124_1_unsecured_cp_rw_expr
 from rwa_calc.engine.sa.sovereign_derived import cqs_table_lookup_expr
 from rwa_calc.rulebook.compile import scalar_value
@@ -129,17 +149,10 @@ def crr_commercial_re_rw_expr() -> pl.Expr:
     The 50% applies to the part of the loan up to 50% of the property value
     (Art. 126(2)(d)); above it the residual takes the Art. 122 corporate weight
     by CQS, looked up directly so it still fires on rows the splitter re-classed
-    to ``COMMERCIAL_MORTGAGE`` (P1.181). The preferential limb needs all of:
-
-    - the conditions attested as met (``is_qualifying_re`` True): PRA Credit
-      Risk Part rule 4.1 (UK property) and 4.1A (other jurisdictions), in force
-      to 31 December 2026, admit Art. 126 "only where annual average losses ...
-      did not exceed 0.5%", a market-data condition the engine cannot see, so a
-      null attestation does not show it;
-    - ``has_income_cover`` False — the risk does NOT materially depend on the
-      property's cash flows (Art. 126(2)(b), review RE-17) — and the row is not
-      ADC lending, whose risk depends on the project;
-    - an LTV (the hierarchy derives one wherever a valued property is linked).
+    to ``COMMERCIAL_MORTGAGE`` (P1.181). The preferential limb needs the
+    Art. 126 conditions of ``crr_art_126_conditions_met_expr``: the rule 4.1 /
+    4.1A attestation (``is_qualifying_re`` True), no material dependence on the
+    property's cash flows (Art. 126(2)(b), review RE-17), not ADC, and an LTV.
 
     Otherwise Art. 124(1): 100% up to the property value and the counterparty's
     unsecured weight above it, or a flat 100% where there is no LTV to size the
@@ -151,17 +164,8 @@ def crr_commercial_re_rw_expr() -> pl.Expr:
         "cqs", CORPORATE_RISK_WEIGHTS, pl.lit(_RW["corporate_unrated"])
     )
     preferential = _RW["cre_rw_low"] * secured_share + residual_rw * (1.0 - secured_share)
-    # ADC lending depends on the project by definition — Art. 126(2)(b) names
-    # "the performance of the underlying property or project" — so an ``is_adc``
-    # row never meets it, whatever its income flag says.
-    meets_art_126 = (
-        pl.col("is_qualifying_re").eq_missing(True)
-        & ~pl.col("has_income_cover").fill_null(True)
-        & ~pl.col("is_adc").eq_missing(True)
-        & ltv.is_not_null()
-    )
     return (
-        pl.when(meets_art_126)
+        pl.when(crr_art_126_conditions_met_expr())
         .then(preferential)
         .when(ltv.is_not_null())
         .then(crr_art_124_1_rw_expr())
@@ -209,6 +213,87 @@ def crr_art_124_1_rw_expr() -> pl.Expr:
     secured_share = pl.min_horizontal(pl.lit(1.0), _RW["full_value"] / pl.col("ltv"))
     return _RW["art_124_1"] * secured_share + crr_art_124_1_unsecured_cp_rw_expr() * (
         1.0 - secured_share
+    )
+
+
+@cites("CRR Art. 127")
+def crr_defaulted_re_secured_share_expr(upper_class: pl.Expr) -> pl.Expr:
+    """Art. 127(3) / (4): the share of a defaulted exposure secured by property.
+
+    Art. 127(3) and (4) give a flat 100% to "the exposure value remaining after
+    specific credit risk adjustments of exposures **fully and completely
+    secured** by mortgages on residential property in accordance with Article
+    125" / "on commercial immovable property in accordance with Article 126".
+    Art. 125(2) and 126(2) make that a PART — "an exposure or any part of an
+    exposure" — capped by their limb (d): 80% of the market value for
+    residential property, 50% for commercial. The remainder is not "fully and
+    completely secured" and stays on Art. 127(1), which by its own words
+    governs "the unsecured part". Hence a share, blended by the caller with the
+    Art. 127(1) provision weight, rather than a flat override of the whole row.
+
+    Each limb needs the conditions of its own article:
+
+    - residential (Art. 125): a residential row, not commercial, and not
+      attested as failing the conditions (``is_qualifying_re`` False, review
+      CL-07). A null attestation qualifies, as it does for the non-defaulted 35%
+      (the null default is the open item P1.292);
+    - commercial (Art. 126, P1.315): a commercial row by ``is_commercial_re_class``
+      — class string or ``property_type``, because the splitter skips defaulted
+      rows (``re_split/flagging.py``) and the loan arrives classed by its
+      obligor (``corporate``, ``retail_mortgage``) — that passes
+      ``crr_art_126_conditions_met_expr``,
+      the same test that grants the non-defaulted 50%. A null attestation does
+      NOT qualify there: PRA rules 4.1 / 4.1A admit Art. 126 only on a loss
+      condition the engine cannot see.
+
+    Returns **null** where neither limb applies, so the caller keeps the Art.
+    127(1) provision weight on the whole row. Null is also the answer for a
+    null or non-positive ``ltv``: without a usable LTV there is no defensible
+    secured share, and treating the row as fully secured would hand out the
+    100% leg on missing data. CRR only — PS1/26 Art. 127 has no commercial
+    paragraph, and its residential one is a flat weight, not a share.
+    """
+    ltv = pl.col("ltv")
+    has_usable_ltv = ltv.is_not_null() & (ltv > 0.0)
+    is_commercial = is_commercial_re_class(upper_class)
+    is_art_125_secured = (
+        is_residential_re_class(upper_class) & ~is_commercial & ~crr_re_conditions_not_met_expr()
+    )
+    is_art_126_secured = is_commercial & crr_art_126_conditions_met_expr()
+    return (
+        pl.when(is_art_125_secured & has_usable_ltv)
+        .then(pl.min_horizontal(pl.lit(1.0), _RW["resi_ltv_threshold"] / ltv))
+        .when(is_art_126_secured & has_usable_ltv)
+        .then(pl.min_horizontal(pl.lit(1.0), _RW["cre_ltv_threshold"] / ltv))
+        .otherwise(pl.lit(None, dtype=pl.Float64))
+    )
+
+
+@cites("CRR Art. 126")
+def crr_art_126_conditions_met_expr() -> pl.Expr:
+    """True where a commercial row meets the Art. 126 conditions the engine can see.
+
+    The one gate for both readers — the non-defaulted 50% weight
+    (``crr_commercial_re_rw_expr``) and the Art. 127(4) defaulted share
+    (``crr_defaulted_re_secured_share_expr``) — so the two cannot drift. All of:
+
+    - ``is_qualifying_re`` explicitly True: the firm attests Art. 126(2)(a) and
+      (c) and the PRA Credit Risk Part rule 4.1 (UK property) / 4.1A (other
+      jurisdictions) loss conditions, in force to 31 December 2026, which admit
+      Art. 126 "only where annual average losses ... did not exceed 0.5%". A
+      null attestation does not show them;
+    - ``has_income_cover`` False, null failing: Art. 126(2)(b), repayment does
+      not materially depend on the property's cash flows (review RE-17);
+    - not ADC lending: Art. 126(2)(b) names "the performance of the underlying
+      property or project", and development finance depends on the project by
+      definition, whatever its income flag says;
+    - an LTV, which the hierarchy derives wherever a valued property is linked.
+    """
+    return (
+        pl.col("is_qualifying_re").eq_missing(True)
+        & ~pl.col("has_income_cover").fill_null(True)
+        & ~pl.col("is_adc").eq_missing(True)
+        & pl.col("ltv").is_not_null()
     )
 
 

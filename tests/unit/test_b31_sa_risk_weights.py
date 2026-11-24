@@ -3867,7 +3867,12 @@ class TestDefaultedResiREBasel31:
         sa_calculator: SACalculator,
         crr_config: CalculationConfig,
     ) -> None:
-        """CRR has no RESI RE defaulted exception — provision-based test applies."""
+        """CRR with no LTV: the provision-based test applies to the whole row.
+
+        CRR does have a residential limb — Art. 127(3), 100% on the share secured
+        in accordance with Art. 125 (P1.257) — but it needs an LTV to size that
+        share, and this row has none, so it stays on Art. 127(1).
+        """
         result = calculate_single_sa_exposure(
             sa_calculator,
             ead=Decimal("500000"),
@@ -3878,7 +3883,7 @@ class TestDefaultedResiREBasel31:
             provision_allocated=Decimal("0"),  # 0% provisions
             config=crr_config,
         )
-        # CRR: no provisions → 150% (provision-based test, no RESI RE exception)
+        # CRR: no provisions → 150% (Art. 127(1); no LTV, so no Art. 127(3) share)
         assert result["risk_weight"] == pytest.approx(1.50)
 
     def test_defaulted_corporate_still_provision_based(

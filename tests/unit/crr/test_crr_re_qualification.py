@@ -16,6 +16,11 @@ Key responsibilities pinned here:
   the borrower does NOT materially depend on the property's cash flows
   (``has_income_cover=False``). The gate was inverted: income-producing CRE took
   50% and owner-occupied CRE 100%.
+- P1.315: a defaulted commercial exposure that meets the same Art. 126 test
+  takes the Art. 127(4) 100% on its Art. 126(2)(d) secured share
+  (``min(1, 0.50 / ltv)``) and the Art. 127(1) provision weight on the rest. It
+  took the provision weight (150% with no provisions) on the whole row. Basel
+  3.1 has no such limb: PS1/26 Art. 127(3) covers residential property only.
 
 Rule text (verbatim, UK CRR as onshored):
 - Art. 124(1): "An exposure or any part of an exposure fully secured by mortgage
@@ -40,10 +45,20 @@ Rule text (verbatim, UK CRR as onshored):
   adjustments of exposures fully and completely secured by mortgages on
   residential property in accordance with Article 125 shall be assigned a risk
   weight of 100 % if a default has occurred".
+- Art. 127(4): "The exposure value remaining after specific credit risk
+  adjustments of exposures fully and completely secured by mortgages on
+  commercial immovable property in accordance with Article 126 shall be assigned
+  a risk weight of 100 % if a default has occurred in accordance with Article
+  178."
+- PS1/26 Art. 127(3) (the Basel 3.1 control): "A residential real estate
+  exposure which is a defaulted exposure and is not materially dependent on the
+  cash-flows of the property shall be assigned a risk weight of 100%." There is
+  no commercial paragraph.
 
 References:
-- CRR Art. 124(1), 125(2), 126(2)(b), 126(2)(d), 127(3)
-- PS1/26 Art. 124J, 124L (the Basel 3.1 controls)
+- CRR Art. 124(1), 125(2), 126(2)(b), 126(2)(d), 127(3), 127(4)
+- PRA Rulebook, Credit Risk Part, rules 4.1 / 4.1A (to 31 December 2026)
+- PS1/26 Art. 124J, 124L, 127 (the Basel 3.1 controls)
 """
 
 from __future__ import annotations
@@ -302,3 +317,143 @@ class TestCrrArt126MaterialDependenceGate:
 
         # Assert
         assert rw == pytest.approx(1.00)
+
+
+# A defaulted commercial-property row that meets the Art. 126 test: attested
+# (rule 4.1 / 4.1A), repayment not dependent on the property's cash flows, not
+# ADC, no provisions. The shapes are the classes such a row carries: the
+# splitter skips defaulted rows (re_split/flagging.py), so a defaulted loan
+# arrives whole, classed by its obligor, with ``property_type`` naming the
+# property.
+_DEFAULTED_CRE: dict[str, object] = {
+    "property_type": "commercial",
+    "is_defaulted": True,
+    "has_income_cover": False,
+    "is_qualifying_re": True,
+}
+
+_CRE_SHAPES: dict[str, dict[str, object]] = {
+    "commercial_mortgage": {"exposure_class": "commercial_mortgage", "qualifies_as_retail": False},
+    # Production shape: a corporate term loan on commercial property.
+    "corporate": {"exposure_class": "corporate", "qualifies_as_retail": False},
+    # Production shape: a natural person's commercial mortgage. The class also
+    # matches the residential predicate, so a gate written as "commercial and
+    # not residential" would drop it.
+    "retail_mortgage": {
+        "exposure_class": "retail_mortgage",
+        "cp_is_natural_person": True,
+        "qualifies_as_retail": True,
+    },
+}
+
+
+class TestCrrArt127_4DefaultedCommercialProperty:
+    """P1.315: CRR Art. 127(4) 100% on the Art. 126-secured share of a default."""
+
+    @pytest.mark.parametrize("shape", list(_CRE_SHAPES))
+    @pytest.mark.parametrize(
+        ("ltv", "expected_rw"),
+        [
+            # Art. 126(2)(d) secures the part up to 50% of the value: share
+            # 0.5 / 0.8 = 0.625 at Art. 127(4) 100%, the other 0.375 unsecured
+            # at Art. 127(1)(a) 150% (no provisions). Pre-fix 1.50.
+            (Decimal("0.80"), 0.625 * 1.00 + 0.375 * 1.50),
+            # LTV 0.4: the cap covers the whole loan -> 100%. Pre-fix 1.50.
+            (Decimal("0.40"), 1.00),
+        ],
+        ids=["ltv0.8", "ltv0.4"],
+    )
+    def test_secured_share_takes_one_hundred_percent(
+        self, sa_calculator: SACalculator, shape: str, ltv: Decimal, expected_rw: float
+    ) -> None:
+        # Arrange
+        kwargs: dict = {**_DEFAULTED_CRE, **_CRE_SHAPES[shape], "ltv": ltv}
+
+        # Act
+        result = calculate_single_sa_exposure(
+            sa_calculator, ead=Decimal("1000000"), config=_config("crr"), **kwargs
+        )
+
+        # Assert
+        assert float(result["risk_weight"]) == pytest.approx(expected_rw)
+        assert float(result["rwa"]) == pytest.approx(1_000_000.0 * expected_rw)
+
+    @pytest.mark.parametrize("shape", ["corporate", "retail_mortgage"])
+    @pytest.mark.parametrize(
+        "failed_condition",
+        [
+            # PRA rule 4.1 / 4.1A not shown: a null attestation does not show
+            # the loss condition, so the row is not secured "in accordance with
+            # Article 126" (the residential limb's null-tolerant gate is wrong here).
+            {"is_qualifying_re": None},
+            {"is_qualifying_re": False},
+            # Art. 126(2)(b): repayment materially depends on the property.
+            {"has_income_cover": True},
+            # ADC lending depends on the project.
+            {"is_adc": True},
+            # No usable LTV: no defensible secured share.
+            {"ltv": None},
+            {"ltv": Decimal("0")},
+        ],
+        ids=[
+            "attestation_null",
+            "attestation_false",
+            "income_dependent",
+            "adc",
+            "ltv_null",
+            "ltv_zero",
+        ],
+    )
+    def test_not_secured_in_accordance_with_art_126_stays_on_art_127_1(
+        self, sa_calculator: SACalculator, shape: str, failed_condition: dict[str, object]
+    ) -> None:
+        # Arrange
+        kwargs: dict = {
+            **_DEFAULTED_CRE,
+            **_CRE_SHAPES[shape],
+            "ltv": Decimal("0.80"),
+            **failed_condition,
+        }
+
+        # Act
+        rw = _rw(sa_calculator, "crr", **kwargs)
+
+        # Assert: Art. 127(1)(a) 150% on the whole row (no provisions).
+        assert rw == pytest.approx(1.50)
+
+    def test_provisions_of_twenty_percent_put_the_unsecured_part_at_one_hundred(
+        self, sa_calculator: SACalculator
+    ) -> None:
+        """30,000 of provisions on a 130,000 pre-provision loan: Art. 127(1)(b).
+
+        23% is "no less than 20 %", so the unsecured part takes 100% as well as
+        the Art. 127(4) secured share, and the blend is 1.00 whatever the share.
+        """
+        # Act
+        rw = _rw(
+            sa_calculator,
+            "crr",
+            ltv=Decimal("0.80"),
+            provision_allocated=Decimal("30000"),
+            provision_deducted=Decimal("30000"),
+            **_DEFAULTED_CRE,
+            **_CRE_SHAPES["corporate"],
+        )
+
+        # Assert
+        assert rw == pytest.approx(1.00)
+
+    @pytest.mark.parametrize("shape", list(_CRE_SHAPES))
+    def test_basel_3_1_has_no_commercial_limb(
+        self, sa_calculator: SACalculator, shape: str
+    ) -> None:
+        """Control: PS1/26 Art. 127 has no commercial paragraph -> Art. 127(1) 150%.
+
+        The positive CRR shape (attested, not dependent, LTV 0.8, no provisions),
+        so a commercial limb leaking into the Basel 3.1 branch would move it.
+        """
+        # Act
+        rw = _rw(sa_calculator, "b31", ltv=Decimal("0.80"), **_DEFAULTED_CRE, **_CRE_SHAPES[shape])
+
+        # Assert
+        assert rw == pytest.approx(1.50)

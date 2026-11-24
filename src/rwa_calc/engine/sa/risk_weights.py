@@ -93,7 +93,7 @@ from rwa_calc.engine.sa.covered_bond import b31_unrated_cb_rw_expr, crr_unrated_
 from rwa_calc.engine.sa.cqs_lift import lift_institution_cqs
 from rwa_calc.engine.sa.crr_real_estate import (
     crr_commercial_re_rw_expr,
-    crr_re_conditions_not_met_expr,
+    crr_defaulted_re_secured_share_expr,
     crr_residential_re_rw_expr,
 )
 from rwa_calc.engine.sa.crr_risk_weight_tables import (
@@ -115,7 +115,6 @@ from rwa_calc.engine.sa.crr_risk_weight_tables import (
     PSE_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     PSE_SHORT_TERM_RW,
     PSE_UNRATED_DEFAULT_RW,
-    RESIDENTIAL_MORTGAGE_PARAMS,
     RGLA_DOMESTIC_CURRENCY_RW,
     RGLA_RISK_WEIGHTS_SOVEREIGN_DERIVED,
     RGLA_UK_DEVOLVED_RW,
@@ -268,9 +267,6 @@ _ECA_MEIP_RW = lookup_float_map(_CRR_PACK.lookup("eca_meip_risk_weights"))
 # CRR-specific scalars (Art. 112-134).
 _SA_CRR_RW: dict[str, float] = {
     "high_risk": scalar_value(_CRR_PACK.scalar_param("high_risk_rw")),
-    # Art. 125(2)(d) 80% limit, for the Art. 127(3) defaulted-RRE share. The
-    # Art. 124-126 real-estate weights are in engine/sa/crr_real_estate.py.
-    "resi_ltv_threshold": float(RESIDENTIAL_MORTGAGE_PARAMS["ltv_threshold"]),
     # Institution short-term (Art. 121, original maturity <=3m)
     "inst_st_low": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS1]),
     "inst_st_mid": float(INSTITUTION_SHORT_TERM_RISK_WEIGHTS_CRR[CQS.CQS4]),
@@ -1485,46 +1481,6 @@ def _apply_crr_risk_weight_overrides(
 
 @cites("CRR Art. 127")
 @cites("PS1/26, paragraph 127")
-@cites("CRR Art. 127")
-def _crr_defaulted_re_secured_share(upper_class: pl.Expr) -> pl.Expr:
-    """CRR Art. 127(3): the Art. 125-secured share of a defaulted RRE exposure.
-
-    Art. 127(3) gives a flat 100% to "the exposure value remaining after
-    specific credit risk adjustments of exposures **fully and completely
-    secured** by mortgages on residential property **in accordance with
-    Article 125**". Art. 124(1) defines that phrase as a capped PART of the
-    exposure — "the part treated as fully and completely secured shall not be
-    higher than the pledged amount of the market value" — with Art. 125(2)(d)
-    setting the cap at 80% of value. The remainder is not "fully and completely
-    secured" and stays on Art. 127(1), which by its own words governs only
-    "the unsecured part". Hence a share, blended by the caller, rather than a
-    flat override of the whole row.
-
-    Returns **null** where the rule does not apply, so the caller keeps the
-    Art. 127(1) provision RW untouched. Null is also the answer for a null or
-    non-positive ``ltv``: without a usable LTV there is no defensible secured
-    share, and defaulting it to "fully secured" would hand out the 100% leg on
-    missing data — the anti-conservative failure mode this batch keeps finding.
-    An exposure attested as NOT meeting the Art. 125(2) conditions
-    (``is_qualifying_re`` False, review CL-07) is not secured "in accordance
-    with Article 125" either, so it stays on Art. 127(1) whole.
-
-    **Art. 127(4) (commercial property) is deliberately NOT implemented here.**
-    Its trigger is "secured … in accordance with Article 126". P1.263 (review
-    RE-17) has now settled the Art. 126(2)(b) flag — the 50% goes to an
-    exposure whose ``has_income_cover`` is False — so the commercial limb is
-    unblocked but still owed: P1.315, not built here.
-    """
-    ltv = pl.col("ltv")
-    is_rre_only = is_residential_re_class(upper_class) & ~is_commercial_re_class(upper_class)
-    is_art_125_secured = is_rre_only & ~crr_re_conditions_not_met_expr()
-    return (
-        pl.when(is_art_125_secured & ltv.is_not_null() & (ltv > 0.0))
-        .then(pl.min_horizontal(pl.lit(1.0), pl.lit(_SA_CRR_RW["resi_ltv_threshold"]) / ltv))
-        .otherwise(pl.lit(None).cast(pl.Float64))
-    )
-
-
 def _apply_defaulted_risk_weight(
     exposures: pl.LazyFrame,
     config: CalculationConfig,
@@ -1549,7 +1505,12 @@ def _apply_defaulted_risk_weight(
 
     Basel 3.1 Art. 127(3) / CRE20.88 exception: a residential RE default
     that is not materially dependent on cash-flows of the property is
-    assigned 100% flat, regardless of provisions.
+    assigned 100% flat, regardless of provisions. There is no commercial one.
+
+    CRR Art. 127(3) / (4): the share of a defaulted exposure secured in
+    accordance with Art. 125 (residential) or Art. 126 (commercial, P1.315)
+    takes 100% and the rest keeps the Art. 127(1) provision weight
+    (``crr_real_estate.py::crr_defaulted_re_secured_share_expr``).
 
     The coverage numerator is ``provision_specific_allocated``: both
     regimes' Art. 127(1) count "specific credit risk adjustments" only, so a
@@ -1563,6 +1524,7 @@ def _apply_defaulted_risk_weight(
     - PS1/26 Art. 127(2): unsecured part determined by the CRM method
     - PS1/26 Art. 127(3) / CRE20.88: RESI RE non-income flat 100%
     - CRR Art. 127(1)-(2): CRR predecessor (pre-provision denominator)
+    - CRR Art. 127(3)-(4): 100% on the Art. 125 / 126-secured share
     """
     resolved_pack = pack if pack is not None else RulepackV0.from_config(config).pack
     _uc = pl.col("exposure_class").fill_null("").str.to_uppercase()
@@ -1617,8 +1579,10 @@ def _apply_defaulted_risk_weight(
         # coexist as a blend rather than a flat override — assigning 100% to
         # the WHOLE exposure (as the audit bullet proposed) would under-
         # capitalise the slice above the cap. Gated on a usable LTV: a null
-        # LTV must not buy the 100% leg off missing data (P1.257).
-        secured_share = _crr_defaulted_re_secured_share(_uc)
+        # LTV must not buy the 100% leg off missing data (P1.257). Each limb
+        # needs its own article's conditions; the commercial one reads the
+        # same Art. 126 test as the non-defaulted 50% weight (P1.315).
+        secured_share = crr_defaulted_re_secured_share_expr(_uc)
         defaulted_rw = (
             pl.when(secured_share.is_not_null())
             .then(

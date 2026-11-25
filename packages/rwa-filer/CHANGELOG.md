@@ -7,6 +7,16 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
+- (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.1.9] - 2026-11-25
+
+### Added
 - Select **Errors only** in dashboard review filters or pass `--errors-only`
   to `rwa-filer validate` to hide warnings from the working list.
 

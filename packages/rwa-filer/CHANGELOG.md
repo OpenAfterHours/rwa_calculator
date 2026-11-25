@@ -10,6 +10,13 @@ and released independently of `rwa-calc`; its release tags are prefixed
 - (Next release changes will go here)
 
 ### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.1.8] - 2026-11-25
+
+### Changed
 - Dashboard review filters now follow an open return across tabs. Warning
   materiality and zero-only error settings apply to template highlights,
   cell details and review lists. Filing verdicts and evidence use every occurrence.

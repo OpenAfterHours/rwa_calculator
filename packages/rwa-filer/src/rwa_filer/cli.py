@@ -307,7 +307,12 @@ def _add_validate_command(commands: argparse._SubParsersAction[argparse.Argument
     validate.add_argument(
         "--hide-zero-null-errors",
         action="store_true",
-        help="hide occurrences caused solely by reporting zero in a must-be-empty cell (text working list)",
+        help="hide errors and warnings caused solely by a zero in a must-be-empty cell (text working list)",
+    )
+    validate.add_argument(
+        "--errors-only",
+        action="store_true",
+        help="show only errors in the text working list and breakdown",
     )
     validate.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
     validate.add_argument(
@@ -469,7 +474,10 @@ def _validate(args: argparse.Namespace) -> int:
         return _fail(problem)
     try:
         review = ReviewFilter.from_text(
-            args.warning_materiality, args.warning_materiality_bps, args.hide_zero_null_errors
+            args.warning_materiality,
+            args.warning_materiality_bps,
+            args.hide_zero_null_errors,
+            errors_only=args.errors_only,
         )
         limit = (
             None
@@ -539,13 +547,11 @@ def _validate(args: argparse.Namespace) -> int:
         else render_text(source.ret, validation, review=review)
     )
     if breakdown and args.format != "json":
-        if review.active:
-            _out("Breakdown across all filing findings (unfiltered)")
         labels = {
             rule.rule_id: (rule.label or "").rstrip("|").strip() for rule in _rules_of(validation)
         }
         for item in breakdown:
-            _out("\n" + "\n".join(describe(item, labels=labels)))
+            _out("\n" + "\n".join(describe(item.reviewed(validation, review), labels=labels)))
     if not validation.is_submittable:
         return EXIT_FAILED
     if args.require_complete and validation.status == VERDICT_INCOMPLETE:

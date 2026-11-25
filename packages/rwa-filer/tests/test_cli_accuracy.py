@@ -190,3 +190,50 @@ def test_cli_warning_threshold_keeps_the_boundary_and_full_json(
     assert main([*args, "5.01", "--format", "json"]) == status
     report = json.loads(capsys.readouterr().out)
     assert any(r["rule_id"] == "boe_b0317" and r["status"] == "FAIL" for r in report["rules"])
+
+
+def test_cli_hides_only_the_reported_zero_for_b0430(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "empty-cells.csv"
+    source.write_text(
+        "table,sheet,row,column,value,team\n"
+        "OF07.00.01.01,0002,0170,0010,0,Loans\n"
+        "OF07.00.01.01,0003,0170,0010,0.01,Loans\n"
+    )
+    args = ["validate", str(source), *HEADER_ARGS, "--breakdown", "team"]
+    status = main(args)
+    assert "[VAL002] WARNING: Validation rule boe_b0430 " in capsys.readouterr().out
+
+    report = tmp_path / "report.json"
+    assert main([*args, "--hide-zero-null-errors", "--report", str(report)]) == status
+    output = capsys.readouterr().out
+    result = next(r for r in json.loads(report.read_text())["rules"] if r["rule_id"] == "boe_b0430")
+    assert result["status"] == "FAIL" and result["unsatisfied"] == 2
+    assert "boe_b0430 has 2 failing evaluations, 1 hidden." in output
+    assert "= 0.01" in output.split("boe_b0430 has", 1)[1].splitlines()[1]
+    assert "boe_b0430 (Warning), 1 break(s)" in output
+
+
+def test_cli_errors_only_filters_findings_and_breakdown_and_keeps_the_full_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "detail.csv"
+    source.write_text(
+        "table,sheet,row,column,value,team\n"
+        "OF07.00.01.01,0002,0170,0010,1,Loans\n"
+        "OF08.01.01.01,0006,0010,0101,0,Loans\n"
+    )
+    args = ["validate", str(source), *HEADER_ARGS, "--breakdown", "team"]
+    assert main(args) == 1
+    before = capsys.readouterr().out
+    assert "[VAL002] WARNING: Validation rule boe_b0430 " in before
+    assert "boe_b0430 (Warning)" in before
+
+    report = tmp_path / "report.json"
+    assert main([*args, "--errors-only", "--report", str(report)]) == 1
+    after = capsys.readouterr().out
+    assert "[VAL001] ERROR: Validation rule boe_b1039 " in after
+    assert "] WARNING:" not in after and "boe_b0430" not in after
+    record = json.loads(report.read_text())
+    assert any(r["rule_id"] == "boe_b0430" and r["status"] == "FAIL" for r in record["rules"])

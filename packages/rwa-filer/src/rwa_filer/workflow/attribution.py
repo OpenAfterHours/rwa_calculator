@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Final
 
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_PASS, trace_rules
@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     from rwa_filer.progress import ProgressCallback
     from rwa_filer.readers.detail import Cell, Member, ReturnDetail
     from rwa_filer.validate.returns import ReturnValidation
+    from rwa_filer.validate.review import ReviewFilter
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +209,30 @@ class Attribution:
     hidden: tuple[TracedBreak, ...] = ()
     searched_hidden: bool = False
     rules_run: int = 0
+
+    def reviewed(self, validation: ReturnValidation, review: ReviewFilter) -> Attribution:
+        """Select breaks for display while retaining the full attribution for evidence."""
+        report = validation.report
+        if not review.active or report is None:
+            return self
+        # Both paths record occurrences in evaluation order. Display labels can repeat.
+        hidden = {
+            (result.rule_id, index)
+            for result in report.results
+            if result.status == STATUS_FAIL and not review.hides_severity(result.severity)
+            for index, failure in enumerate(result.failures)
+            if review.hides(result.severity, failure)
+        }
+        return replace(
+            self,
+            broken=tuple(
+                item
+                for rule_id, occurrences in _by_rule(self.broken)
+                for index, item in enumerate(occurrences)
+                if not review.hides_severity(item.severity) and (rule_id, index) not in hidden
+            ),
+            hidden=tuple(item for item in self.hidden if not review.hides_severity(item.severity)),
+        )
 
     @property
     def traced(self) -> int:

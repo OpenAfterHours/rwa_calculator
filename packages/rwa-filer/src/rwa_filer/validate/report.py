@@ -286,7 +286,7 @@ def render_text(
                 f"  linked templates not reported: {_missing_line(report.templates_missing)}"
             )
         lines.extend(_deny_lines(validation))
-        lines.extend(_issue_lines(validation))
+        lines.extend(_issue_lines(validation, review))
     if validation.findings:
         lines.append("")
         lines.extend(_working_list(validation, review))
@@ -309,6 +309,9 @@ def _working_list(validation: ReturnValidation, review: ReviewFilter) -> list[st
     for finding in validation.findings:
         result = results.get(finding.subject)
         prefix = f"[{finding.code}] {finding.severity}"
+        if review.hides_severity(finding.severity):
+            hidden_warnings += result.unsatisfied if result and result.status == STATUS_FAIL else 1
+            continue
         if result is None or result.status != STATUS_FAIL:
             lines.append(f"{prefix}: {finding.message}")
             continue
@@ -358,17 +361,28 @@ def _deny_lines(validation: ReturnValidation) -> list[str]:
     return lines
 
 
-def _issue_lines(validation: ReturnValidation) -> list[str]:
+def _issue_lines(validation: ReturnValidation, review: ReviewFilter) -> list[str]:
     """One line per result a known issue with the published rule labels."""
     report = validation.report
     if report is None or not report.issue_notes:
         return []
+    notes = report.issue_notes
+    if review.active:
+        visible = {
+            r.rule_id
+            for r in report.results
+            if not review.hides_severity(r.severity)
+            and (r.status != STATUS_FAIL or r.unsatisfied > review.hidden_count(r))
+        }
+        notes = tuple(note for note in notes if note.rule_id in visible)
+        if not notes:
+            return []
     lines = [
         f"  known issues with the published rules (taxonomy {validation.release.version}): "
-        f"{len(validation.publisher_issues)} issue(s) label {len(report.issue_notes)} result(s) "
+        f"{len({note.issue_id for note in notes})} issue(s) label {len(notes)} result(s) "
         "— the verdict is unchanged; see `rwa-filer rulebook issues`"
     ]
-    for note in report.issue_notes:
+    for note in notes:
         if note.inside is None:
             what = "a pass, no evidence" if note.effect == "passes_wrong_returns" else "never runs"
         elif note.inside == 0:

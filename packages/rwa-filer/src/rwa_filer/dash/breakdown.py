@@ -28,15 +28,12 @@ from __future__ import annotations
 import csv
 import io
 import math
-from dataclasses import dataclass, replace
-from itertools import groupby
-from operator import attrgetter
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 import polars as pl
 
 from rwa_filer.boe.catalogue import SEVERITY_ERROR
-from rwa_filer.boe.engine import STATUS_FAIL
 from rwa_filer.dash.views import rule_label
 from rwa_filer.readers.detail import address
 from rwa_filer.release import long_date
@@ -47,7 +44,6 @@ if TYPE_CHECKING:
 
     from rwa_filer.dash.workspace import OpenedReturn, WorkingReturn
     from rwa_filer.readers.detail import Cell, Member, ReturnDetail
-    from rwa_filer.validate.review import ReviewFilter
     from rwa_filer.workflow.attribution import Attribution, Standing, TracedBreak
 
 #: Hidden breaks the Investigate page lists, the largest first.
@@ -335,33 +331,6 @@ def cell_breakdown(
             for rule_id in rule_ids
             if attribution is not None
         },
-    )
-
-
-def reviewed_attribution(
-    opened: OpenedReturn, attribution: Attribution, review: ReviewFilter
-) -> Attribution:
-    """Filter whole-return breaks after attribution so its shared cache stays complete."""
-    report = opened.validation.report
-    if not review.active or report is None:
-        return attribution
-    # Validation and attribution both record failures in engine evaluation order
-    # within each rule. Two places can have the same display label.
-    hidden = {
-        (result.rule_id, index)
-        for result in report.results
-        if result.status == STATUS_FAIL
-        for index, failure in enumerate(result.failures)
-        if review.hides(result.severity, failure)
-    }
-    return replace(
-        attribution,
-        broken=tuple(
-            item
-            for rule_id, occurrences in groupby(attribution.broken, key=attrgetter("rule_id"))
-            for index, item in enumerate(occurrences)
-            if (rule_id, index) not in hidden
-        ),
     )
 
 

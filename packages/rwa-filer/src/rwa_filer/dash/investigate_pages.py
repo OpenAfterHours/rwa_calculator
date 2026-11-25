@@ -32,7 +32,6 @@ from rwa_filer.dash.breakdown import (
     breaks_csv,
     investigate_page,
     pick_dimension,
-    reviewed_attribution,
 )
 from rwa_filer.dash.context import review_of
 from rwa_filer.dash.task_pages import follow
@@ -83,7 +82,7 @@ class InvestigatePages:
         kept = self.context.workspace.kept_attribution(working, dimension)
         if kept is not None:
             picked = _index(request.query_params.get("m"))
-            kept = reviewed_attribution(working.current, kept, review_of(request))
+            kept = kept.reviewed(working.current.validation, review_of(request))
             return self._render(
                 request, working, view=investigate_page(working.current, kept, picked)
             )
@@ -119,7 +118,7 @@ class InvestigatePages:
             return RedirectResponse(f"/returns/{working.opened.return_id}/investigate", 303)
         dimension = pick_dimension(detail, request.query_params.get("by", ""))
         attribution = self.context.workspace.attribution(working, dimension)
-        attribution = reviewed_attribution(working.current, attribution, review_of(request))
+        attribution = attribution.reviewed(working.current.validation, review_of(request))
         picked = _index(request.query_params.get("m"))
         name = f"{working.opened.path.stem}.breaks-by-{_safe(dimension)}.csv"
         return Response(

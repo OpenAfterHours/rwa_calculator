@@ -38,7 +38,6 @@ from rwa_filer.dash.breakdown import (
     breakdown_summary,
     cell_breakdown,
     pick_dimension,
-    reviewed_attribution,
 )
 from rwa_filer.dash.context import (
     REVIEW_KEYS,
@@ -224,6 +223,7 @@ class ReturnPages:
                     str(form.get("money", "")),
                     str(form.get("bps", "")),
                     form.get("hide_zero") == "1",
+                    errors_only=form.get("errors_only") == "1",
                 )
             )
         except ValueError as exc:
@@ -334,7 +334,7 @@ class ReturnPages:
                 rule_ids=rule_ids,
                 search_hidden=False,
             )
-            attribution = reviewed_attribution(working.current, attribution, review)
+            attribution = attribution.reviewed(working.current.validation, review)
         return cell_breakdown(working, cell, dimension, rule_ids, attribution)
 
     def _home(

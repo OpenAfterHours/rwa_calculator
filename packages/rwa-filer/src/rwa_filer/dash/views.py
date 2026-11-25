@@ -286,7 +286,13 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
     report = opened.validation.report
     results = report.results if report else ()
     status = status if status in STATUSES else STATUS_FAIL
-    rows = [_row(result, opened.pack, report, review) for result in results]
+    if review.errors_only:
+        severity = ""  # The return-wide setting takes precedence over a tab's previous selection.
+    rows = [
+        _row(result, opened.pack, report, review)
+        for result in results
+        if result.status == STATUS_FAIL or not review.hides_severity(result.severity)
+    ]
     counts = Counter(row.status for row in rows)
     needle = query.strip().lower()
     matched = [

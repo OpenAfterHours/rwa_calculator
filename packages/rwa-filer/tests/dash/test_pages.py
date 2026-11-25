@@ -722,3 +722,48 @@ def test_review_settings_follow_the_return_through_tabs_and_reset(
     )
     assert reset.url.params["col"] == "0101" and mark in reset.text
     assert warning in client.get(warning_url).text
+
+
+def test_zero_only_b0430_warning_disappears_from_rules_and_templates(
+    client: TestClient, tmp_path: Path
+) -> None:
+    source = tmp_path / "zero.csv"
+    source.write_text("table,sheet,row,column,value\nOF07.00.01.01,0002,0170,0010,0\n")
+    base = _open(client, source, **HEADER_FORM)
+    query = "q=boe_b0430&rule=boe_b0430"
+    grid = f"{base}/templates?table=OF07.00.01.01&sheet=0002&row=0170&col=0010"
+    marker = 'data-rule="boe_b0430"'
+    assert 'id="rule-detail"' in client.get(f"{base}/rules?{query}").text
+    assert marker in client.get(grid).text
+
+    rules = client.post(
+        f"{base}/review", data={"hide_zero": "1", "section": "rules", "query": query}
+    )
+    assert "1 warning occurrence(s) hidden" in rules.text
+    assert "No rule matches." in rules.text
+    assert marker not in client.get(grid).text
+
+
+def test_errors_only_follows_the_return_and_combines_with_the_zero_filter(
+    client: TestClient, tmp_path: Path
+) -> None:
+    source = tmp_path / "errors-and-warnings.csv"
+    source.write_text(
+        "table,sheet,row,column,value\n"
+        "OF07.00.01.01,0002,0170,0010,1\n"
+        "OF08.01.01.01,0006,0010,0101,0\n"
+    )
+    base = _open(client, source, **HEADER_FORM)
+    warning = f"{base}/templates?table=OF07.00.01.01&sheet=0002&row=0170&col=0010"
+    error = f"{base}/templates?table=OF08.01.01.01&sheet=0006&row=0010&col=0101"
+    assert 'data-rule="boe_b0430"' in client.get(warning).text
+
+    rules = client.post(f"{base}/review", data={"section": "rules", "errors_only": "1"})
+    assert "boe_b1039" in rules.text and "boe_b0430" not in rules.text
+    assert 'data-rule="boe_b0430"' not in client.get(warning).text
+    assert 'data-rule="boe_b1039"' in client.get(error).text
+
+    client.post(f"{base}/review", data={"section": "rules", "errors_only": "1", "hide_zero": "1"})
+    assert 'data-rule="boe_b1039"' not in client.get(error).text
+    client.post(f"{base}/review", data={"section": "rules", "reset": "1"})
+    assert 'data-rule="boe_b0430"' in client.get(warning).text

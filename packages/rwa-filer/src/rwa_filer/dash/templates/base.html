@@ -82,21 +82,23 @@
     {% if current and section %}
     <details class="panel" id="review-filters">
       <summary><strong>Review filters</strong>{% if review.active %}
+        {% if review.errors_only %} · Errors only{% endif %}
         {% if review.money %} · {{ current.ret.header.currency }} {{ review.money }}{% endif %}
         {% if review.basis_points %} · {{ review.basis_points }} bp{% endif %}
-        {% if review.hide_zero_null %} · Zero-only errors hidden{% endif %}{% endif %}
+        {% if review.hide_zero_null %} · Zero-only null checks hidden{% endif %}{% endif %}
       </summary>
       <p class="small muted">Settings apply across this return in this browser. Filing verdicts, evidence and referee results include all occurrences.</p>
       <form method="post" action="/returns/{{ current.return_id }}/review" class="btn-row">
         <input type="hidden" name="section" value="{{ section }}">
         <input type="hidden" name="query" value="{{ review_query }}">
+        <label><input type="checkbox" name="errors_only" value="1"{% if review.errors_only %} checked{% endif %}> Errors only</label>
         <label>Warning threshold ({{ current.ret.header.currency }})
           <input type="number" name="money" min="0" step="any" value="{{ review.money if review.money is not none else '' }}">
         </label>
         <label>Warning threshold (basis points)
           <input type="number" name="bps" min="0" step="any" value="{{ review.basis_points if review.basis_points is not none else '' }}">
         </label>
-        <label><input type="checkbox" name="hide_zero" value="1"{% if review.hide_zero_null %} checked{% endif %}> Hide zero-only errors in must-be-empty cells</label>
+        <label><input type="checkbox" name="hide_zero" value="1"{% if review.hide_zero_null %} checked{% endif %}> Hide errors and warnings caused solely by zeros in must-be-empty cells</label>
         <button class="btn" type="submit">Apply to this return</button>
         {% if review.active %}<button class="btn" type="submit" name="reset" value="1" formnovalidate>Show all occurrences</button>{% endif %}
       </form>

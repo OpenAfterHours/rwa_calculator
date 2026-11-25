@@ -7,10 +7,14 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- Select **Errors only** in dashboard review filters or pass `--errors-only`
+  to `rwa-filer validate` to hide warnings from the working list.
 
 ### Changed
-- (Next release changes will go here)
+- The CLI and dashboard zero filter now also hides warnings caused solely by a
+  reported zero in a must-be-empty cell, including PRA001 rule `boe_b0430`.
+- The CLI text breakdown follows the selected review filters. The JSON report
+  and evidence retain all occurrences.
 
 ---
 

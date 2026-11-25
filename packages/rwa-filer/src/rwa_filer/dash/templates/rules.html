@@ -19,7 +19,7 @@
   </nav>
   <form method="get" action="{{ base }}">
     <input type="hidden" name="status" value="{{ view.status }}">
-    {% if view.status == "FAIL" %}
+    {% if view.status == "FAIL" and not review.errors_only %}
     <label class="visually-hidden" for="severity">Severity</label>
     <select id="severity" name="severity">
       <option value="">Every severity</option>

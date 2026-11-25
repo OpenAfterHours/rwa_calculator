@@ -49,7 +49,7 @@ STATIC_DIR: Final = Path(__file__).resolve().parent / "static"
 
 THEME_COOKIE: Final = "rwa_filer_theme"
 REVIEW_COOKIE: Final = "rwa_filer_review"
-REVIEW_KEYS: Final = ("money", "bps", "hide_zero")
+REVIEW_KEYS: Final = ("money", "bps", "hide_zero", "errors_only")
 THEMES: Final = ("dark", "light")
 #: The look a session starts in: the dark slate of ``rwa-ui`` and the docs.
 DEFAULT_THEME: Final = "dark"
@@ -192,7 +192,10 @@ def review_of(request: Request) -> ReviewFilter:
 
 def read_review(params: QueryParams) -> ReviewFilter:
     return ReviewFilter.from_text(
-        params.get("money", ""), params.get("bps", ""), params.get("hide_zero") == "1"
+        params.get("money", ""),
+        params.get("bps", ""),
+        params.get("hide_zero") == "1",
+        errors_only=params.get("errors_only") == "1",
     )
 
 
@@ -209,7 +212,7 @@ def review_query(query: str) -> str:
 
 def save_review(request: Request, response: Response, return_id: str, review: ReviewFilter) -> None:
     path = f"/returns/{return_id}"
-    if review.money is None and review.basis_points is None and not review.hide_zero_null:
+    if review == SHOW_ALL:
         response.delete_cookie(
             REVIEW_COOKIE,
             path=path,
@@ -225,6 +228,7 @@ def save_review(request: Request, response: Response, return_id: str, review: Re
                 "money": str(review.money) if review.money is not None else "",
                 "bps": str(review.basis_points) if review.basis_points is not None else "",
                 "hide_zero": "1" if review.hide_zero_null else "",
+                "errors_only": "1" if review.errors_only else "",
             }
         ),
         path=path,

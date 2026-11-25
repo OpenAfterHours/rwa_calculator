@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Final
 
-from rwa_filer.boe.catalogue import SEVERITY_ERROR, SEVERITY_WARNING
+from rwa_filer.boe.catalogue import SEVERITY_WARNING
 
 if TYPE_CHECKING:
     from rwa_filer.boe.engine import Failure, RuleResult
@@ -14,11 +14,12 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ReviewFilter:
-    """Hide proven small warning excesses or reported zeroes in must-be-empty checks."""
+    """Choose which findings to show in a return's working list."""
 
     money: Decimal | None = None
     basis_points: Decimal | None = None
     hide_zero_null: bool = False
+    errors_only: bool = False
 
     def __post_init__(self) -> None:
         for value in (self.money, self.basis_points):
@@ -26,19 +27,25 @@ class ReviewFilter:
                 raise ValueError("Warning materiality must be a finite, non-negative number.")
 
     @classmethod
-    def from_text(cls, money: str, basis_points: str, hide_zero_null: bool) -> ReviewFilter:
+    def from_text(
+        cls, money: str, basis_points: str, hide_zero_null: bool, *, errors_only: bool = False
+    ) -> ReviewFilter:
         try:
             return cls(
                 Decimal(money) if money.strip() else None,
                 Decimal(basis_points) if basis_points.strip() else None,
                 hide_zero_null,
+                errors_only=errors_only,
             )
         except InvalidOperation as exc:
             raise ValueError("Enter a numeric warning materiality.") from exc
 
     @property
     def active(self) -> bool:
-        return bool(self.money or self.basis_points or self.hide_zero_null)
+        return bool(self.money or self.basis_points or self.hide_zero_null or self.errors_only)
+
+    def hides_severity(self, severity: str) -> bool:
+        return self.errors_only and severity == SEVERITY_WARNING
 
     def visible(self, result: RuleResult) -> tuple[Failure, ...]:
         """The recorded occurrences to show, in evaluation order, at effective severity."""
@@ -47,14 +54,16 @@ class ReviewFilter:
         return tuple(f for f in result.failures if not self.hides(result.severity, f))
 
     def hidden_count(self, result: RuleResult) -> int:
-        """Only recorded occurrences can be proven eligible for hiding."""
+        """Severity applies to every occurrence, even if its details were capped."""
+        if self.hides_severity(result.severity):
+            return result.unsatisfied
         if not self.active:
             return 0
         return sum(self.hides(result.severity, f) for f in result.failures)
 
     def hides(self, severity: str, failure: Failure) -> bool:
         """Whether this occurrence is hidden at the rule's effective severity."""
-        if self.hide_zero_null and severity == SEVERITY_ERROR and failure.zero_in_empty_cell:
+        if self.hides_severity(severity) or (self.hide_zero_null and failure.zero_in_empty_cell):
             return True
         if severity != SEVERITY_WARNING or failure.excess is None:
             return False

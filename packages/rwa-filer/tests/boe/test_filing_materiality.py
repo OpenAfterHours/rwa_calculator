@@ -105,5 +105,5 @@ def test_working_list_filters_individual_occurrences_after_gateway_severity(
     warning = replace(numeric, severity="WARNING")
     assert review.visible(warning) == ()
     assert ReviewFilter(money=Decimal("0.01")).visible(warning) == warning.failures
-    assert review.visible(replace(empty, severity="WARNING")) == empty.failures
+    assert review.visible(replace(empty, severity="WARNING")) == review.visible(empty)
     assert empty.unsatisfied == 2 and numeric.status == "FAIL"

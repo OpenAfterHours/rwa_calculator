@@ -5533,3 +5533,22 @@ isolation between open returns, and restoring the flags.
 **Observed red.** Running the two review-filter tests against 0.1.7 produced
 two failures. A plain Rules URL redisplayed the hidden column and saving a
 return-wide preference returned HTTP 404.
+
+## 2026-11-25 — The zero filter kept must-be-empty warnings in the working list
+
+In rwa-filer 0.1.8 the CLI and dashboard kept zero-only occurrences of PRA001
+warning `boe_b0430` after the reviewer selected the zero filter. The engine
+identified the zero correctly, but the shared review filter required Error severity.
+
+**Escape class.** `test-shared-the-assumption`. The materiality test used
+`boe_b1039` and expected the zero to reappear when its severity was set to Warning.
+
+**New gate.** `packages/rwa-filer/tests/test_cli_accuracy.py::test_cli_hides_only_the_reported_zero_for_b0430`
+uses the published rule on sheets 0002 and 0003. Both occurrences must appear in
+the JSON report, and only the penny occurrence in the filtered list.
+`packages/rwa-filer/tests/dash/test_pages.py::test_zero_only_b0430_warning_disappears_from_rules_and_templates`
+checks that applying the filter on Rules also removes the warning from its template cell.
+
+**Observed red.** On 0.1.8 the CLI test found no hidden occurrence and the dashboard
+test found no hidden warning. The severity test also failed when updated to require
+the same visible nonzero occurrence at both severities.

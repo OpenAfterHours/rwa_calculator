@@ -129,11 +129,16 @@ The threshold applies to the excess beyond the published rule's
 rounding allowance. An excess equal to the threshold stays visible. A warning
 without a measurable excess in that unit also stays visible.
 
-**Hide zero-only errors in must-be-empty cells** hides an Error occurrence when
-the rule requires an empty cell and it contains a reported numeric zero. A
-nonzero occurrence of the same rule still appears. Settings follow the open
+**Hide errors and warnings caused solely by zeros in must-be-empty cells**
+applies to both severities. For example, if two cells checked by PRA001 warning
+`boe_b0430` contain `0` and `0.01`, selecting this option hides the occurrence
+for `0` and keeps the one for `0.01` visible. Settings follow the open
 return in this browser, including reloads and links to individual cells.
 Each newly opened return starts with all occurrences visible.
+
+Select **Errors only** to hide every warning in the review lists and template
+highlights. Combine it with the zero filter to hide zero-only errors too.
+Clear **Errors only** to see warnings at your selected materiality again.
 
 The rule lists, template and sheet flag counts, grid highlights, cell details
 and Investigate breakdown use the same visible occurrences. The Investigate

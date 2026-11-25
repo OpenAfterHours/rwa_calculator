@@ -14,6 +14,13 @@ and released independently of `rwa-calc`; its release tags are prefixed
 
 ---
 
+## [0.1.7] - 2026-11-25
+
+### Changed
+- Version bump for PyPI release
+
+---
+
 ## [0.1.6] - 2026-11-23
 
 ### Added

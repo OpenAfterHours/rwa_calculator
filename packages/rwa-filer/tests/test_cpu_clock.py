@@ -10,13 +10,13 @@ twice the time.
 
 from __future__ import annotations
 
+import pytest
+
+import cpu_clock
 from cpu_clock import best_cpu_seconds, clock_step
 
 #: A unit of pure-Python work, far below a Windows tick (tens of microseconds).
 WORK = 2_000
-#: Twice the work should read as twice the time; the band allows for noise, not for a zero.
-MIN_DOUBLING_RATIO = 1.4
-MAX_DOUBLING_RATIO = 2.8
 
 
 def test_the_clock_is_seen_to_step() -> None:
@@ -37,17 +37,26 @@ def test_a_call_shorter_than_one_clock_step_reads_above_zero() -> None:
     assert seconds > 0, f"{WORK} additions read as {seconds}s of CPU"
 
 
-def test_twice_the_work_reads_as_about_twice_the_time() -> None:
-    """The ratio a scaling gate takes is meaningful below one clock step."""
-    # Arrange / Act
-    once = best_cpu_seconds(lambda: _work(WORK), repeats=3)
-    twice = best_cpu_seconds(lambda: _work(2 * WORK), repeats=3)
+@pytest.mark.parametrize("tick", [1 / 65_536, 1 / 64], ids=["fine", "coarse"])
+def test_per_call_time_recovers_known_durations(
+    monkeypatch: pytest.MonkeyPatch, tick: float
+) -> None:
+    """Measure known work both above the sampling floor and below a single clock tick."""
+    elapsed = 0.0
+    duration = 1 / 1024
 
-    # Assert
-    ratio = twice / once
-    assert MIN_DOUBLING_RATIO < ratio < MAX_DOUBLING_RATIO, (
-        f"twice the work read as {ratio:.2f}x the time ({twice:.2e}s against {once:.2e}s)"
-    )
+    def advance(seconds: float) -> None:
+        nonlocal elapsed
+        elapsed += seconds
+
+    # The host's clock is exercised above. Here each read observes only whole ticks.
+    monkeypatch.setattr(cpu_clock, "clock_step", lambda: tick)
+    monkeypatch.setattr(cpu_clock.time, "thread_time", lambda: (elapsed // tick) * tick)
+
+    once = best_cpu_seconds(lambda: advance(duration), repeats=3)
+    twice = best_cpu_seconds(lambda: advance(2 * duration), repeats=3)
+
+    assert (once, twice) == (duration, 2 * duration)
 
 
 def _work(n: int) -> int:

@@ -81,6 +81,31 @@ def test_a_return_compared_with_itself_is_identical(
     assert view.identical and view.cells == ()
 
 
+def test_review_filters_hide_zero_breaks_without_reporting_a_false_fix(
+    client: TestClient, workspace: Workspace, tmp_path: Path, clean_csv: Path
+) -> None:
+    source = tmp_path / "zero.csv"
+    source.write_text("table,sheet,row,column,value\nOF08.01.01.01,0006,0010,0101,0\n")
+    zero = workspace.open(source, HEADER)
+    other = tmp_path / "nonzero.csv"
+    other.write_text("table,sheet,row,column,value\nOF08.01.01.01,0006,0010,0101,1\n")
+    nonzero = workspace.open(other, HEADER)
+    clean = workspace.open(clean_csv, HEADER)
+    base = f"/returns/{zero.return_id}"
+    vs_clean = f"{base}/compare?against={clean.return_id}"
+    assert "boe_b1039" in client.get(vs_clean).text
+
+    client.post(f"{base}/review", data={"hide_zero": "1", "section": "rules"})
+    reviewed = client.get(vs_clean)
+    mixed = client.get(f"{base}/compare?against={nonzero.return_id}")
+
+    assert "boe_b1039" not in reviewed.text
+    assert reviewed.context["view"].blocking_after == len(zero.validation.blocking) > 0
+    view = mixed.context["view"]
+    assert "boe_b1039" in view.shared_breaks
+    assert all(rule.rule_id != "boe_b1039" for rule in (*view.fixed, *view.broken))
+
+
 def test_another_version_is_opened_and_compared_from_the_page(
     client: TestClient, broken: OpenedReturn, clean_csv: Path
 ) -> None:

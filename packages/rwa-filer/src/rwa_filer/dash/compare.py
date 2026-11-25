@@ -30,7 +30,7 @@ References:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Final
 
 import polars as pl
@@ -38,6 +38,7 @@ import polars as pl
 from rwa_filer.boe.engine import STATUS_FAIL
 from rwa_filer.dash.context import format_count
 from rwa_filer.dash.views import rule_label
+from rwa_filer.validate.review import SHOW_ALL, ReviewFilter
 from rwa_filer.workflow.compare import compare_returns
 from rwa_filer.workflow.diff import CHANGE_ADDED, CHANGE_CHANGED, CHANGE_REMOVED, diff_returns
 from rwa_filer.workflow.explain import (
@@ -46,6 +47,8 @@ from rwa_filer.workflow.explain import (
     CATEGORY_SAME,
     CATEGORY_SCOPE,
     CATEGORY_ZERO_OR_BLANK,
+    KIND_RULE_ONLY,
+    KIND_UNEXPECTED_ZERO,
     POINTS_AT_INPUTS,
     SIDE_BASELINE,
     SIDE_CANDIDATE,
@@ -171,6 +174,7 @@ class ComparePage:
     fixed: tuple[RuleChange, ...]
     broken: tuple[RuleChange, ...]
     still_broken: int
+    shared_breaks: tuple[str, ...]
     blocking_before: int
     blocking_after: int
     comparison: ReturnComparison
@@ -195,6 +199,8 @@ def compare_page(  # noqa: PLR0913 - the two returns and every filter of the pag
     category: str = "",
     finding: int = 0,
     comparison: ReturnComparison | None = None,
+    review: ReviewFilter = SHOW_ALL,
+    review_currency: str | None = None,
 ) -> ComparePage:
     """What changed from ``earlier`` to ``later``, why, cell by cell and rule by rule.
 
@@ -222,6 +228,12 @@ def compare_page(  # noqa: PLR0913 - the two returns and every filter of the pag
     window = shown.slice((page - 1) * CHANGES_PER_PAGE, CHANGES_PER_PAGE)
     before_breaks = _broken(earlier)
     after_breaks = _broken(later)
+    currency = review_currency or later.ret.header.currency
+    visible_before = _broken(earlier, review, currency) if review.active else before_breaks
+    visible_after = _broken(later, review, currency) if review.active else after_breaks
+    hidden_rules = (before_breaks.keys() | after_breaks.keys()) - (
+        visible_before.keys() | visible_after.keys()
+    )
     info = later.pack.info
     return ComparePage(
         earlier=earlier,
@@ -237,13 +249,22 @@ def compare_page(  # noqa: PLR0913 - the two returns and every filter of the pag
         table=table,
         page=page,
         pages=pages,
-        fixed=_rule_changes(info, before_breaks, set(after_breaks)),
-        broken=_rule_changes(info, after_breaks, set(before_breaks)),
-        still_broken=len(set(before_breaks) & set(after_breaks)),
+        fixed=_rule_changes(info, visible_before, set(after_breaks)),
+        broken=_rule_changes(info, visible_after, set(before_breaks)),
+        still_broken=len(
+            before_breaks.keys()
+            & after_breaks.keys()
+            & (visible_before.keys() | visible_after.keys())
+        ),
         blocking_before=len(earlier.validation.blocking),
+        shared_breaks=tuple(rule for rule in comparison.shared_breaks if rule not in hidden_rules),
         blocking_after=len(later.validation.blocking),
         comparison=comparison,
-        findings=tuple(_finding(item, comparison, info) for item in comparison.findings),
+        findings=tuple(
+            finding_view
+            for item in comparison.findings
+            if (finding_view := _finding(item, comparison, info, hidden_rules)) is not None
+        ),
         category=category if category in CATEGORY_LABELS else "",
         finding=finding,
     )
@@ -276,19 +297,33 @@ def _with_categories(changes: pl.DataFrame, comparison: ReturnComparison) -> pl.
     return changes.join(found, on=coordinates, how="left", nulls_equal=True)
 
 
-def _finding(item: Discrepancy, comparison: ReturnComparison, info: PackInfo) -> FindingView:
+def _finding(
+    item: Discrepancy, comparison: ReturnComparison, info: PackInfo, hidden_rules: set[str]
+) -> FindingView | None:
     names = comparison.names
     points = {
         SIDE_BASELINE: names.baseline,
         SIDE_CANDIDATE: names.candidate,
         POINTS_AT_INPUTS: "the inputs",
     }.get(item.points_at, "neither return")
+    rules = tuple(rule for rule in item.rules if rule.rule_id not in hidden_rules)
+    title, detail = item.title, item.detail
+    if len(rules) != len(item.rules):
+        # The original prose names all the rules. Keep cell differences available
+        # even when the reviewer has hidden every break cited in the explanation.
+        detail = "Review filters hide some of the rule breaks behind this finding."
+        if item.kind == KIND_RULE_ONLY:
+            if not rules:
+                return None
+            title = f"{len(rules)} visible rule{'s break' if len(rules) != 1 else ' breaks'} in {points} only"
+        elif item.kind == KIND_UNEXPECTED_ZERO:
+            title = f"Zero reported in {points} where the other return leaves a cell empty"
     return FindingView(
         number=item.number,
         points_at=points,
         chip=_POINTS_CHIP.get(item.points_at, "chip-ne"),
-        title=item.title,
-        detail=item.detail,
+        title=title,
+        detail=detail,
         cells=len(item.cells),
         rules=tuple(
             RuleStandingView(
@@ -297,7 +332,7 @@ def _finding(item: Discrepancy, comparison: ReturnComparison, info: PackInfo) ->
                 earlier=rule.baseline,
                 later=rule.candidate,
             )
-            for rule in item.rules
+            for rule in rules
         ),
     )
 
@@ -332,13 +367,17 @@ def _signed(delta: float) -> str:
     return f"+{shown}" if delta > 0 else (f"−{shown}" if delta < 0 else "0")
 
 
-def _broken(opened: OpenedReturn) -> dict[str, str]:
+def _broken(
+    opened: OpenedReturn, review: ReviewFilter = SHOW_ALL, currency: str | None = None
+) -> dict[str, str]:
     """The rules a version breaks, with their severity."""
+    if review.money is not None and opened.ret.header.currency != currency:
+        review = replace(review, money=None)
     report = opened.validation.report
     return {
         result.rule_id: result.severity
         for result in (report.results if report else ())
-        if result.status == STATUS_FAIL
+        if result.status == STATUS_FAIL and result.unsatisfied > review.hidden_count(result)
     }
 
 

@@ -24,13 +24,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, cast
 from urllib.parse import urlencode
 
+from starlette.datastructures import QueryParams
 from starlette.exceptions import HTTPException
 from starlette.templating import Jinja2Templates
 
 from rwa_filer import __version__
+from rwa_filer.boe.engine import STATUS_FAIL
 from rwa_filer.dash.referee_jobs import JobBoard
+from rwa_filer.dash.security import TOKEN_PARAMETER, served_securely
 from rwa_filer.dash.tasks import TaskBoard
 from rwa_filer.release import shipped_releases
+from rwa_filer.validate.review import SHOW_ALL, ReviewFilter
 
 if TYPE_CHECKING:
     from datetime import date, datetime
@@ -44,6 +48,8 @@ TEMPLATES_DIR: Final = Path(__file__).resolve().parent / "templates"
 STATIC_DIR: Final = Path(__file__).resolve().parent / "static"
 
 THEME_COOKIE: Final = "rwa_filer_theme"
+REVIEW_COOKIE: Final = "rwa_filer_review"
+REVIEW_KEYS: Final = ("money", "bps", "hide_zero")
 THEMES: Final = ("dark", "light")
 #: The look a session starts in: the dark slate of ``rwa-ui`` and the docs.
 DEFAULT_THEME: Final = "dark"
@@ -110,6 +116,7 @@ class DashContext:
         name: str,
         *,
         working: WorkingReturn | None = None,
+        review: ReviewFilter | None = None,
         status_code: int = 200,
         **context: Any,
     ) -> Response:
@@ -119,6 +126,9 @@ class DashContext:
         ``current`` — the return with its drafted overrides applied — as
         ``current``, and says when that differs from the file as opened.
         """
+        if review is None:
+            review = review_of(request) if working else SHOW_ALL
+        report = working.current.validation.report if working else None
         values = {
             "theme": theme_of(request),
             "opened_returns": self.workspace.returns(),
@@ -126,6 +136,12 @@ class DashContext:
             "shipped_releases": shipped_releases(),
             "current": working.current if working else None,
             "working": working,
+            "review": review,
+            "review_query": review_query(request.url.query),
+            "visible_rule_count": sum(
+                r.status == STATUS_FAIL and r.unsatisfied > review.hidden_count(r)
+                for r in (report.results if report else ())
+            ),
             "section": "",
             **context,
         }
@@ -164,6 +180,58 @@ def theme_of(request: Request) -> str:
     """The look the person chose, or the default."""
     chosen = request.cookies.get(THEME_COOKIE, DEFAULT_THEME)
     return chosen if chosen in THEMES else DEFAULT_THEME
+
+
+def review_of(request: Request) -> ReviewFilter:
+    """This browser's saved settings. The cookie path scopes them to one open return."""
+    try:
+        return read_review(QueryParams(request.cookies.get(REVIEW_COOKIE, "")))
+    except ValueError:
+        return SHOW_ALL
+
+
+def read_review(params: QueryParams) -> ReviewFilter:
+    return ReviewFilter.from_text(
+        params.get("money", ""), params.get("bps", ""), params.get("hide_zero") == "1"
+    )
+
+
+def review_query(query: str) -> str:
+    """Preserve tab-local navigation when saving a preference, including repeated fields."""
+    return urlencode(
+        [
+            (k, v)
+            for k, v in QueryParams(query).multi_items()
+            if k not in REVIEW_KEYS and k != TOKEN_PARAMETER
+        ]
+    )
+
+
+def save_review(request: Request, response: Response, return_id: str, review: ReviewFilter) -> None:
+    path = f"/returns/{return_id}"
+    if review.money is None and review.basis_points is None and not review.hide_zero_null:
+        response.delete_cookie(
+            REVIEW_COOKIE,
+            path=path,
+            httponly=True,
+            secure=served_securely(request),
+            samesite="strict",
+        )
+        return
+    response.set_cookie(
+        REVIEW_COOKIE,
+        urlencode(
+            {
+                "money": str(review.money) if review.money is not None else "",
+                "bps": str(review.basis_points) if review.basis_points is not None else "",
+                "hide_zero": "1" if review.hide_zero_null else "",
+            }
+        ),
+        path=path,
+        httponly=True,
+        secure=served_securely(request),
+        samesite="strict",
+    )
 
 
 def link(path: str, **params: object) -> str:

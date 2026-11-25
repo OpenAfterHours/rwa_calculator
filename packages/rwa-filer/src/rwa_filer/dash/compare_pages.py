@@ -8,8 +8,8 @@ Key responsibilities:
 - Offer the other returns opened this session to compare against, or open a
   new one — an earlier filing, a resubmission — through the same form as the
   Open page, validated as a task with its progress shown as it is there.
-- Draw the comparison with every filter in the address, earlier and later
-  swappable. The comparison itself is worked out once per pair, by the
+- Draw the comparison using the open return's review settings, with the two
+  versions swappable. The comparison itself is worked out once per pair, by the
   workspace, so filtering never re-evaluates the rules.
 - Work out a pair's first comparison as a dashboard task, as opening a return
   is: every rule is traced on both returns, which takes seconds on a large one.
@@ -28,6 +28,7 @@ from starlette.responses import RedirectResponse
 from starlette.routing import Route
 
 from rwa_filer.dash.compare import compare_page
+from rwa_filer.dash.context import review_of
 from rwa_filer.dash.forms import form_values, page_number, read_open_form
 from rwa_filer.dash.pages import OPENING_PHASES
 from rwa_filer.dash.task_pages import follow, outcome
@@ -95,6 +96,8 @@ class ComparePages:
             category=query.get("category", ""),
             finding=page_number(query.get("finding")) if query.get("finding") else 0,
             comparison=workspace.comparison(earlier, later),
+            review=review_of(request),
+            review_currency=opened.ret.header.currency,
         )
         return self.context.render(
             request,

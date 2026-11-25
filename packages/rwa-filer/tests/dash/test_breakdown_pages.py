@@ -133,6 +133,31 @@ def test_investigate_works_the_attribution_out_once(
     assert workspace.kept_attribution(working, "business_unit") is first
 
 
+def test_investigate_filters_mixed_occurrences_and_keeps_the_full_attribution(
+    client: TestClient, workspace: Workspace, tmp_path: Path
+) -> None:
+    source = tmp_path / "mixed-detail.csv"
+    source.write_text(
+        "table,sheet,row,column,value,team\n"
+        "OF08.01.01.01,0006,0010,0101,0,Loans\n"
+        "OF08.01.01.01,0006,0010,0102,1,Loans\n"
+    )
+    opened = workspace.open(source, HEADER_FIELDS, detail=DetailSpec(breakdown=("team",)))
+    base = f"/returns/{opened.return_id}"
+    original = client.get(f"{base}/investigate.csv").text
+    assert len([line for line in original.splitlines() if "boe_b1039" in line]) == 2
+    working = workspace.working(opened)
+    kept = workspace.kept_attribution(working, "team")
+
+    client.post(f"{base}/review", data={"hide_zero": "1", "section": "investigate"})
+    filtered = client.get(f"{base}/investigate.csv").text
+    (nonzero,) = [line for line in filtered.splitlines() if "boe_b1039" in line]
+    assert "0102" in nonzero
+    assert workspace.kept_attribution(working, "team") is kept
+    client.post(f"{base}/review", data={"reset": "1", "section": "investigate"})
+    assert client.get(f"{base}/investigate.csv").text == original
+
+
 def test_investigate_runs_behind_the_progress_page_when_it_takes_a_while(
     workspace: Workspace, broken_down: OpenedReturn
 ) -> None:

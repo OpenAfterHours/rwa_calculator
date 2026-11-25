@@ -105,6 +105,7 @@ class TemplateSummary:
     cells: int
     passed: int
     failed: int
+    visible_failed: int
     not_evaluated: int
 
     @property
@@ -231,12 +232,12 @@ class RulesPage:
     hidden_warnings: int
 
 
-def overview(opened: OpenedReturn) -> Overview:
+def overview(opened: OpenedReturn, *, review: ReviewFilter = SHOW_ALL) -> Overview:
     """The overview of one validated return."""
     validation = opened.validation
     report = validation.report
     results = report.results if report else ()
-    rows = [_row(result, opened.pack, report) for result in results]
+    rows = [_row(result, opened.pack, report, review) for result in results]
     breaks = sorted(
         (row for row in rows if row.status == STATUS_FAIL),
         key=lambda row: (not row.is_error, row.rule_id),
@@ -261,10 +262,10 @@ def overview(opened: OpenedReturn) -> Overview:
             (reason, count, REASON_TEXT.get(reason, reason))
             for reason, count in (report.not_evaluated_reasons() if report else {}).items()
         ),
-        templates=_templates(opened, results),
+        templates=_templates(opened, rows),
         missing=_missing(opened.pack, missing),
         missing_rules=len({rule_id for item in missing for rule_id in item.rules}),
-        breaks=tuple(breaks[:BREAKS_SHOWN]),
+        breaks=tuple(row for row in breaks if row.unsatisfied > row.hidden)[:BREAKS_SHOWN],
         errors=sum(row.is_error for row in breaks),
         warnings=sum(not row.is_error for row in breaks),
     )
@@ -285,7 +286,7 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
     report = opened.validation.report
     results = report.results if report else ()
     status = status if status in STATUSES else STATUS_FAIL
-    rows = [_row(result, opened.pack, report) for result in results]
+    rows = [_row(result, opened.pack, report, review) for result in results]
     counts = Counter(row.status for row in rows)
     needle = query.strip().lower()
     matched = [
@@ -296,22 +297,11 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
         and (not template or template in row.templates)
         and (not needle or needle in f"{row.rule_id} {row.label}".lower())
     ]
-    visible = {}
     hidden_errors = hidden_warnings = 0
     if status == STATUS_FAIL and review.active:
-        by_rule = {item.rule_id: item for item in results}
-        kept = []
-        for row in matched:
-            result = by_rule[row.rule_id]
-            failures = visible[row.rule_id] = review.visible(result)
-            hidden = len(result.failures) - len(failures)
-            if row.is_error:
-                hidden_errors += hidden
-            else:
-                hidden_warnings += hidden
-            if hidden < row.unsatisfied:
-                kept.append(replace(row, hidden=hidden))
-        matched = kept
+        hidden_errors = sum(row.hidden for row in matched if row.is_error)
+        hidden_warnings = sum(row.hidden for row in matched if not row.is_error)
+        matched = [row for row in matched if row.unsatisfied > row.hidden]
     if status == STATUS_FAIL:
         matched.sort(key=lambda row: (not row.is_error, row.rule_id))
     pages = max(1, math.ceil(len(matched) / RULES_PER_PAGE))
@@ -322,9 +312,7 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
         picked = next((row for row in rows if row.rule_id == rule_id), None)
     if picked is None and shown:
         picked = shown[0]
-    detail = _detail(opened, picked, results) if picked else None
-    if detail and detail.row.rule_id in visible:
-        detail = replace(detail, failures=visible[detail.row.rule_id])
+    detail = _detail(opened, picked, results, review) if picked else None
     return RulesPage(
         review=review,
         hidden_errors=hidden_errors,
@@ -343,7 +331,9 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
     )
 
 
-def rule_detail(opened: OpenedReturn, rule_id: str) -> RuleDetail | None:
+def rule_detail(
+    opened: OpenedReturn, rule_id: str, review: ReviewFilter = SHOW_ALL
+) -> RuleDetail | None:
     """One rule of the return in full, or ``None`` when the report holds no result for it.
 
     In full includes every break the validation recorded — all of them, in the
@@ -352,7 +342,11 @@ def rule_detail(opened: OpenedReturn, rule_id: str) -> RuleDetail | None:
     report = opened.validation.report
     results = report.results if report else ()
     result = next((item for item in results if item.rule_id == rule_id), None)
-    return _detail(opened, _row(result, opened.pack, report), results) if result else None
+    return (
+        _detail(opened, _row(result, opened.pack, report, review), results, review)
+        if result
+        else None
+    )
 
 
 def rule_label(info: PackInfo, rule_id: str) -> str:
@@ -385,7 +379,9 @@ def title_case(title: str) -> str:
 # =============================================================================
 
 
-def _row(result: RuleResult, pack: TaxonomyPack, report: RuleReport | None = None) -> RuleRow:
+def _row(
+    result: RuleResult, pack: TaxonomyPack, report: RuleReport | None, review: ReviewFilter
+) -> RuleRow:
     return RuleRow(
         rule_id=result.rule_id,
         severity=result.severity,
@@ -402,13 +398,16 @@ def _row(result: RuleResult, pack: TaxonomyPack, report: RuleReport | None = Non
         ),
         satisfied=result.satisfied,
         unsatisfied=result.unsatisfied,
+        hidden=review.hidden_count(result) if result.status == STATUS_FAIL else 0,
         reason=result.reason,
         deny=result.deny.describe() if result.deny is not None else "",
         issues=report.notes_for(result.rule_id) if report is not None else (),
     )
 
 
-def _detail(opened: OpenedReturn, row: RuleRow, results: tuple[RuleResult, ...]) -> RuleDetail:
+def _detail(
+    opened: OpenedReturn, row: RuleRow, results: tuple[RuleResult, ...], review: ReviewFilter
+) -> RuleDetail:
     result = next(item for item in results if item.rule_id == row.rule_id)
     rule = _rule(opened.release.version, opened.pack.info.module, row.rule_id)
     return RuleDetail(
@@ -417,7 +416,7 @@ def _detail(opened: OpenedReturn, row: RuleRow, results: tuple[RuleResult, ...])
         scope=rule.scope if rule else None,
         detail=result.detail,
         reason_text=REASON_TEXT.get(result.reason, result.reason),
-        failures=result.failures,
+        failures=review.visible(result) if row.status == STATUS_FAIL else result.failures,
         published=published_finding(result.formula) if result.formula is not None else "",
         issues=tuple(
             IssueCallout(note=note, issue=issue)
@@ -446,15 +445,16 @@ def _rules_by_id(version: str, module: str) -> dict[str, Rule]:
     return {rule.rule_id: rule for rule in rulebook.rules} if rulebook is not None else {}
 
 
-def _templates(
-    opened: OpenedReturn, results: tuple[RuleResult, ...]
-) -> tuple[TemplateSummary, ...]:
+def _templates(opened: OpenedReturn, rows: list[RuleRow]) -> tuple[TemplateSummary, ...]:
     pack = opened.pack
     report = opened.validation.report
     statuses: dict[str, Counter[str]] = {}
-    for result in results:
-        for code in {pack.tables[t].filing_indicator for t in result.tables if t in pack.tables}:
-            statuses.setdefault(code, Counter())[result.status] += 1
+    visible_failed: Counter[str] = Counter()
+    for row in rows:
+        for code in row.templates:
+            statuses.setdefault(code, Counter())[row.status] += 1
+            if row.status == STATUS_FAIL and row.unsatisfied > row.hidden:
+                visible_failed[code] += 1
     facts = opened.ret.facts
     tables_by_indicator: dict[str, list[str]] = {}
     cells: Counter[str] = Counter()
@@ -476,6 +476,7 @@ def _templates(
                 cells=cells.get(code, 0),
                 passed=counts[STATUS_PASS],
                 failed=counts[STATUS_FAIL],
+                visible_failed=visible_failed[code],
                 not_evaluated=counts[STATUS_NOT_EVALUATED],
             )
         )

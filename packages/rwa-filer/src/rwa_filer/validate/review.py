@@ -42,9 +42,18 @@ class ReviewFilter:
 
     def visible(self, result: RuleResult) -> tuple[Failure, ...]:
         """The recorded occurrences to show, in evaluation order, at effective severity."""
-        return tuple(f for f in result.failures if not self._hidden(result.severity, f))
+        if not self.active:
+            return result.failures
+        return tuple(f for f in result.failures if not self.hides(result.severity, f))
 
-    def _hidden(self, severity: str, failure: Failure) -> bool:
+    def hidden_count(self, result: RuleResult) -> int:
+        """Only recorded occurrences can be proven eligible for hiding."""
+        if not self.active:
+            return 0
+        return sum(self.hides(result.severity, f) for f in result.failures)
+
+    def hides(self, severity: str, failure: Failure) -> bool:
+        """Whether this occurrence is hidden at the rule's effective severity."""
         if self.hide_zero_null and severity == SEVERITY_ERROR and failure.zero_in_empty_cell:
             return True
         if severity != SEVERITY_WARNING or failure.excess is None:

@@ -38,6 +38,7 @@ from rwa_filer.boe.engine import STATUS_FAIL, STATUS_NOT_EVALUATED, STATUS_PASS
 from rwa_filer.dash.views import REASON_TEXT, rule_label
 from rwa_filer.dash.workspace import FilingRecord
 from rwa_filer.filing import BLOCKED_BY_STRUCTURE, build_filing
+from rwa_filer.validate.review import SHOW_ALL, ReviewFilter
 from rwa_filer.workflow.acts import ledger_beside, ledger_for_instance, record_build, verify_filing
 from rwa_filer.workflow.adjustments import Adjustment, apply_adjustments
 from rwa_filer.workflow.ledger import read_ledger, verify_ledger
@@ -294,7 +295,11 @@ def build_package(
 
 
 def filing_page(
-    workspace: Workspace, working: WorkingReturn, *, verify: bool = False
+    workspace: Workspace,
+    working: WorkingReturn,
+    *,
+    verify: bool = False,
+    review: ReviewFilter = SHOW_ALL,
 ) -> FilingPage:
     """The Build & sign off page for ``working``, with what its drafted overrides change."""
     opened = working.opened
@@ -303,7 +308,7 @@ def filing_page(
     return FilingPage(
         drafts=working.applied,
         draft_problem=working.problem,
-        effect=override_effect(working),
+        effect=override_effect(working, review),
         latest=latest,
         builds=len(builds),
         default_directory=default_directory(workspace, opened),
@@ -311,7 +316,9 @@ def filing_page(
     )
 
 
-def override_effect(working: WorkingReturn) -> OverrideEffect | None:
+def override_effect(
+    working: WorkingReturn, review: ReviewFilter = SHOW_ALL
+) -> OverrideEffect | None:
     """What the drafted overrides change, or ``None`` while none is applied.
 
     A broken rule the overrides leave nothing to read is ``stopped``, never
@@ -332,6 +339,9 @@ def override_effect(working: WorkingReturn) -> OverrideEffect | None:
         change = _change(held, holds)
         if change is None:
             no_longer_run += held == STATUS_PASS and holds == STATUS_NOT_EVALUATED
+            continue
+        broken = now[rule_id] if change == CHANGE_BROKEN else was[rule_id]
+        if review.active and review.hidden_count(broken) == broken.unsatisfied:
             continue
         effects[change].append(
             RuleEffect(

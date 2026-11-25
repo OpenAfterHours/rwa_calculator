@@ -32,6 +32,7 @@ from starlette.exceptions import HTTPException
 from starlette.responses import FileResponse, RedirectResponse
 from starlette.routing import Route
 
+from rwa_filer.dash.context import review_of
 from rwa_filer.dash.filing import (
     FILE_KINDS,
     BuildOptions,
@@ -237,7 +238,9 @@ class FilingPages:
         verify: bool = False,
         status_code: int = 200,
     ) -> Response:
-        view = filing_page(self.context.workspace, working, verify=verify)
+        view = filing_page(
+            self.context.workspace, working, verify=verify, review=review_of(request)
+        )
         latest = view.latest
         return self.context.render(
             request,

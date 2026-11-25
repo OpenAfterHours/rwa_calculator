@@ -38,6 +38,7 @@ import polars as pl
 from rwa_filer.boe.catalogue import SEVERITY_ERROR
 from rwa_filer.boe.engine import STATUS_FAIL
 from rwa_filer.dash.views import rule_detail, title_case
+from rwa_filer.validate.review import SHOW_ALL, ReviewFilter
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -178,6 +179,7 @@ def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
     row: str = "",
     column: str = "",
     focus: str = "",
+    review: ReviewFilter = SHOW_ALL,
 ) -> TemplateGrid | None:
     """The grid for ``table`` (default: the first with a broken rule), or ``None``.
 
@@ -189,7 +191,13 @@ def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
     opened = working.opened
     drafts: Sequence[Adjustment] = working.drafts
     pack = opened.pack
-    marks = failure_marks(working.current.validation)
+    marks = failure_marks(working.current.validation, review)
+    if (
+        focus
+        and review.active
+        and not any(m.rule_id == focus for group in marks.values() for m in group)
+    ):
+        focus = ""
     facts = opened.ret.facts.filter(pl.col("table").is_in(list(pack.tables)))
     codes = sorted(set(facts["table"].to_list()))
     if not codes:
@@ -236,7 +244,7 @@ def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
         picked = min(page_marks, key=lambda place: _order(rows, columns, place))
     picked_rules = (
         _cell_rules(
-            working.current, (table, page.sheet, page.open_key, *picked), page_marks[picked]
+            working.current, (table, page.sheet, page.open_key, *picked), page_marks[picked], review
         )
         if picked in page_marks
         else ()
@@ -283,6 +291,7 @@ def template_grid(  # noqa: PLR0913 - one keyword per coordinate the page takes
 
 def failure_marks(
     validation: ReturnValidation,
+    review: ReviewFilter = SHOW_ALL,
 ) -> dict[tuple[str, str | None, str | None, str, str], tuple[Mark, ...]]:
     """Every cell a broken rule read, with the rules that read it.
 
@@ -294,7 +303,7 @@ def failure_marks(
     for result in report.results if report else ():
         if result.status != STATUS_FAIL:
             continue
-        for failure in result.failures:
+        for failure in review.visible(result):
             for address in failure.addresses:
                 place = (
                     address.table,
@@ -431,7 +440,7 @@ def _override_text(adjustment: Adjustment | None, data_type: str) -> str | None:
 
 
 def _cell_rules(
-    checked: OpenedReturn, place: _Address, marks: tuple[Mark, ...]
+    checked: OpenedReturn, place: _Address, marks: tuple[Mark, ...], review: ReviewFilter
 ) -> tuple[CellRule, ...]:
     """Each rule marking the cell at ``place``, with only the breaks that read it.
 
@@ -440,7 +449,7 @@ def _cell_rules(
     """
     explained = []
     for mark in marks:
-        detail = rule_detail(checked, mark.rule_id)
+        detail = rule_detail(checked, mark.rule_id, review)
         if detail is None:
             continue
         reading = tuple(

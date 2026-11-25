@@ -5515,3 +5515,21 @@ the Bank's v4.1.1 formula evaluated with Arelle 2.47.5 and Filing Manual §2.18.
 and one pass. Both one-penny boundaries failed, the writer returned 0 instead
 of 0.004, and both inputs at decimals -6 produced no blocking accuracy finding.
 The two-penny break was correctly identified.
+
+## 2026-11-25 — RWA Filer showed hidden rule occurrences again on Templates
+
+In 0.1.7 the Rules tab kept warning thresholds and the zero-only error setting
+in its own URL. Following the Templates link rebuilt the grid from every
+failure, so a cell the reviewer had just hidden was flagged again.
+
+**Escape class.** `path-never-exercised`. Dashboard tests exercised the Rules
+filter and the template grid independently. They never followed one return
+through both tabs with a mix of zero and nonzero failures under the same rule.
+
+**New gate.** `packages/rwa-filer/tests/dash/test_pages.py::test_review_settings_follow_the_return_through_tabs_and_reset`
+covers that journey, a warning below materiality, the complete filing evidence,
+isolation between open returns, and restoring the flags.
+
+**Observed red.** Running the two review-filter tests against 0.1.7 produced
+two failures. A plain Rules URL redisplayed the hidden column and saving a
+return-wide preference returned HTTP 404.

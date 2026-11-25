@@ -54,7 +54,7 @@
 {% else %}
 
 <div class="tiles">
-  <div class="tile"><div class="label"><span class="swatch" style="background: var({{ '--fail' if view.broken else '--pass' }})"></span>Breaks in the return</div><div class="value">{{ view.broken | count }}</div><div class="sub">{{ view.error_rules }} Error rule{{ "s" if view.error_rules != 1 }} · {{ view.warning_rules }} Warning rule{{ "s" if view.warning_rules != 1 }}</div></div>
+  <div class="tile"><div class="label"><span class="swatch" style="background: var({{ '--fail' if view.broken else '--pass' }})"></span>{{ "Visible breaks in the return" if review.active else "Breaks in the return" }}</div><div class="value">{{ view.broken | count }}</div><div class="sub">{{ view.error_rules }} Error rule{{ "s" if view.error_rules != 1 }} · {{ view.warning_rules }} Warning rule{{ "s" if view.warning_rules != 1 }}</div></div>
   <div class="tile"><div class="label">Traced to one {{ view.dimension }}</div><div class="value">{{ view.traced | count }} of {{ view.broken | count }}</div><div class="sub">break on one member's figures alone</div></div>
   <div class="tile"><div class="label">Members behind them</div><div class="value">{{ view.breaking | length }} of {{ view.members }}</div><div class="sub">{{ view.breaking[:3] | join(" · ") }}{% if view.breaking | length > 3 %} and {{ view.breaking | length - 3 }} more{% endif %}</div></div>
   <div class="tile"><div class="label">Hidden by the total</div><div class="value">{{ view.hidden_count | count }}</div><div class="sub">hold in the return, break inside a member</div></div>
@@ -86,9 +86,9 @@
       </tbody>
     </table>
   </div>
-  <p class="small muted" style="margin: 0">A dash means the member meets the rule on its own rows, or has no figure in the cells it reads.{% if view.clean %} Meet every broken rule on their own figures: {{ view.clean[:12] | join(", ") }}{% if view.clean | length > 12 %} and {{ view.clean | length - 12 }} more{% endif %}.{% endif %}</p>
+  <p class="small muted" style="margin: 0">A dash means the member meets the rule on its own rows, or has no figure in the cells it reads.{% if view.clean %} Meet every {{ "visible " if review.active }}broken rule on their own figures: {{ view.clean[:12] | join(", ") }}{% if view.clean | length > 12 %} and {{ view.clean | length - 12 }} more{% endif %}.{% endif %}</p>
   {% else %}
-  <p class="muted" style="margin: 0">No rule breaks in this return.</p>
+  <p class="muted" style="margin: 0">{{ "No return breaks match the review filters." if review.active else "No rule breaks in this return." }}</p>
   {% endif %}
 </section>
 

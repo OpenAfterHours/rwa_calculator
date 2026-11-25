@@ -14,6 +14,7 @@ established against Arelle, on the Bank's own sample, in
 
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 
 import polars as pl
@@ -38,6 +39,7 @@ from rwa_filer.boe.engine import (
 )
 from rwa_filer.model import DECIMALS_EXACT, CanonicalReturn
 from rwa_filer.taxonomy.pack import TaxonomyPack
+from rwa_filer.validate.review import ReviewFilter
 from rwa_filer.xbrl.reader import read_instance
 from rwa_filer.xbrl.writer import write_instance
 
@@ -1196,3 +1198,48 @@ def test_severity_is_the_modules(pack: TaxonomyPack) -> None:
     soft = rule("soft", TOTAL, tables=(T01,), severities={"TST001": "WARNING"})
 
     assert run(pack, soft, t01("0010", "0010", 1)).severity == "WARNING"
+
+
+def test_currency_and_basis_point_thresholds_use_the_comparisons_own_unit(
+    pack: TaxonomyPack,
+) -> None:
+    rate = ref(T01, "0010", "0020")
+    money = ref(T01, "0010", "0010")
+    missing = ref(T01, "0020", "0010", dv="emptySequence()")
+    conditions = [
+        f"{rate} <= 0",
+        f"{money} / {money} <= 0",
+        f"not(isNull({missing})) and {money} = 0",
+        f"if {money} > 0 then {rate} <= 0 else true()",
+    ]
+    rules = [
+        rule(str(i), expression, tables=(T01,), severities={pack.info.module: "WARNING"})
+        for i, expression in enumerate(conditions)
+    ]
+    results = evaluate_rules(
+        ret(t01("0010", "0020", 0.0001), t01("0010", "0010", 10.0)), pack, rules
+    )
+
+    assert all(r.unsatisfied for r in results)
+    for setting, shown in [
+        (ReviewFilter(money=Decimal(100)), [1, 1, 1, 1]),
+        (ReviewFilter(basis_points=Decimal("1")), [1, 1, 1, 1]),
+        (ReviewFilter(basis_points=Decimal("1.01"), hide_zero_null=True), [0, 1, 1, 0]),
+    ]:
+        assert [len(setting.visible(r)) for r in results] == shown
+
+
+def test_conditional_empty_cells_in_a_compound_rule_only_hide_the_zero_cause(
+    pack: TaxonomyPack,
+) -> None:
+    switch = ref(T01, "0010", "0010")
+    candidate = ref(T01, "0020", "0010", dv="emptySequence()")
+    expression = (
+        f"({switch} = 1 and isNull({candidate})) or ({switch} = 2 and not(isNull({candidate})))"
+    )
+    check = rule("conditional_empty", expression, tables=(T01,))
+    review = ReviewFilter(hide_zero_null=True)
+    for control, value, hidden in [(1.0, 0.0, True), (1.0, 1.0, False), (3.0, 0.0, False)]:
+        result = run(pack, check, t01("0010", "0010", control), t01("0020", "0010", value))
+        assert result.unsatisfied == 1
+        assert (len(review.visible(result)) == 0) == hidden

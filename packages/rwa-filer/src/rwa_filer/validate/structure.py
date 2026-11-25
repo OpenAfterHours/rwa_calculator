@@ -92,6 +92,9 @@ FINDING_INDICATOR_INVALID: Final = "STR010"
 #: against next year's rules, say), so it does not block; the gateway accepts a
 #: filing only against the release in force for its date.
 FINDING_REFERENCE_DATE_OUTSIDE_RELEASE: Final = "STR011"
+#: A monetary fact claims less accuracy than the Banking Filing Manual permits.
+FINDING_MONETARY_ACCURACY: Final = "STR012"
+
 
 STRUCTURE_REFERENCE: Final = (
     "BoE XBRL Filing Manual; Bank of England Banking Taxonomy (reportable cells)"
@@ -117,11 +120,13 @@ _BOOLEANS: Final[frozenset[str]] = frozenset({"true", "false"})
 # =============================================================================
 
 
-def check_structure(ret: CanonicalReturn, pack: TaxonomyPack) -> list[Finding]:
+def check_structure(
+    ret: CanonicalReturn, pack: TaxonomyPack, *, monetary_decimals: int = -3
+) -> list[Finding]:
     """Check ``ret`` against ``pack``'s tables, cells and types.
 
     Returns:
-        ``STR001``–``STR010`` findings, header problems first. Empty when the
+        Blocking structure findings, header problems first. Empty when the
         return is structurally something the module accepts. Never raises for a
         condition in the data.
     """
@@ -156,7 +161,7 @@ def check_structure(ret: CanonicalReturn, pack: TaxonomyPack) -> list[Finding]:
     placed = resolved.filter(~pl.col(_FACT_INDEX).is_in(misplaced))
     findings.extend(_cell_findings(placed))
     findings.extend(_row_key_findings(placed, pack))
-    findings.extend(_type_findings(resolved, pack))
+    findings.extend(_type_findings(resolved, pack, monetary_decimals))
     findings.extend(_inconsistent_datapoints(resolved, pack))
     findings.extend(_indicator_findings(ret, known, pack))
     logger.info(
@@ -167,6 +172,11 @@ def check_structure(ret: CanonicalReturn, pack: TaxonomyPack) -> list[Finding]:
         len(findings),
     )
     return findings
+
+
+def minimum_monetary_decimals(module: str) -> int:
+    """Banking monetary accuracy, Filing Manual §2.18 (Funding Plans exception)."""
+    return -6 if module == "LIQ001" else -3
 
 
 def resolve_datapoints(ret: CanonicalReturn, pack: TaxonomyPack) -> pl.DataFrame:
@@ -701,7 +711,9 @@ def _key_expectation(table: Table) -> str:
     return " and ".join(parts)
 
 
-def _type_findings(resolved: pl.DataFrame, pack: TaxonomyPack) -> list[Finding]:
+def _type_findings(
+    resolved: pl.DataFrame, pack: TaxonomyPack, monetary_decimals: int
+) -> list[Finding]:
     """A value that is not of its metric's type."""
     mapped = resolved.filter(pl.col("datapoint").is_not_null())
     if mapped.is_empty():
@@ -720,7 +732,23 @@ def _type_findings(resolved: pl.DataFrame, pack: TaxonomyPack) -> list[Finding]:
         | ((pl.col("data_type") == "boolean") & ~text.str.to_lowercase().is_in(sorted(_BOOLEANS)))
         | ((pl.col("data_type") == "date") & ~text.map_elements(_is_iso_date, pl.Boolean))
     )
-    return _roll_up(
+    minimum = minimum_monetary_decimals(pack.info.module)
+    coarse = typed.filter(
+        (pl.col("data_type") == "monetary")
+        & (pl.col("decimals") < minimum).fill_null(monetary_decimals < minimum)
+    )
+    accuracy = _roll_up(
+        coarse,
+        FINDING_MONETARY_ACCURACY,
+        lambda table, count: (
+            f"{count} monetary fact(s) of {table} state fewer than {minimum} decimals."
+        ),
+        expected=f"monetary decimals of at least {minimum} (Filing Manual §2.18)",
+        detail=lambda row: (
+            f"decimals={row['decimals'] if row['decimals'] is not None else monetary_decimals}"
+        ),
+    )
+    return accuracy + _roll_up(
         typed.filter(wrong),
         FINDING_VALUE_TYPE,
         lambda table, count: (

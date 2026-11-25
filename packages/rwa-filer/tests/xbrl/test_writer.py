@@ -382,7 +382,7 @@ def test_numbers_carry_decimals_and_a_unit_and_text_carries_neither(pack: Taxono
         "contextRef": "c1",
         "decimals": "-3",
         "unitRef": "uGBP",
-        "text": "1234567.89",
+        "text": "1234567.891",
     }
     assert by_metric["pi1"].attrib | {"text": by_metric["pi1"].text} == {
         "contextRef": "c1",

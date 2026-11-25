@@ -58,6 +58,7 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import date
+from decimal import Decimal
 from functools import cache
 from itertools import groupby
 from pathlib import Path
@@ -318,7 +319,7 @@ def _write(value: object, out: list[str]) -> None:  # noqa: C901, PLR0912 - one 
     kind = type(value)
     if kind is str:
         out.append(json.dumps(value))
-    elif value is None or kind is bool or kind is int or kind is float:
+    elif value is None or kind is bool or kind is int or kind is float or kind is Decimal:
         out.append(repr(value))
     elif kind is tuple or kind is list:
         opening, closing = ("(", ")") if kind is tuple else ("[", "]")

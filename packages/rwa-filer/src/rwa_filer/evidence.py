@@ -56,7 +56,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import IO, TYPE_CHECKING, Any, Final
 
-from rwa_filer.boe.engine import _LeanTrace
+from rwa_filer.boe.engine import MAX_FAILURES, _LeanTrace
 from rwa_filer.validate.identity import identity_record, source_identity
 from rwa_filer.validate.issue_labels import evaluation_issues
 from rwa_filer.validate.report import (
@@ -238,6 +238,7 @@ def collect_evidence(  # noqa: PLR0913 - validate_return's arguments
     source: SourceIdentity | None = None,
     submission_date: date | None = None,
     progress: ProgressCallback | None = None,
+    max_failures: int | None = MAX_FAILURES,
 ) -> Evidence:
     """Validate ``ret`` as ``validate_return`` does, keeping everything it executed.
 
@@ -250,6 +251,7 @@ def collect_evidence(  # noqa: PLR0913 - validate_return's arguments
     validation, trace = trace_return(
         ret,
         pack,
+        max_failures=max_failures,
         rulebook=rulebook,
         release=release,
         taxonomy=taxonomy,

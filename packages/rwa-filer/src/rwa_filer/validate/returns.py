@@ -572,7 +572,11 @@ def _validate(  # noqa: PLR0913 - validate_return's arguments, resolved
 ) -> tuple[ReturnValidation, RuleTrace | None]:
     pack = chosen.pack
     notify(progress, Progress(PHASE_STRUCTURE, subject=chosen.version))
-    structure = (*source_findings, *check_structure(ret, pack))
+    effective = accuracy or Accuracy()
+    structure = (
+        *source_findings,
+        *check_structure(ret, pack, monetary_decimals=effective.monetary_decimals),
+    )
     if structure:
         # Told now, not with the report: the rules take most of the run, and a
         # return the taxonomy does not accept is worth hearing about first.
@@ -584,7 +588,6 @@ def _validate(  # noqa: PLR0913 - validate_return's arguments, resolved
         )
     release_findings = tuple(check_reference_date(ret, pack))
     module = pack.info.module
-    effective = accuracy or Accuracy()
     given = accuracy is not None
     rulebook = chosen.rulebook
     if rulebook is None:

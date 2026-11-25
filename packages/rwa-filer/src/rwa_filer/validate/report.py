@@ -58,6 +58,7 @@ from rwa_filer.validate.returns import (
     INCOMPLETE_RULES_TABLE_NOT_IN_TAXONOMY,
     INCOMPLETE_RULES_UNSUPPORTED,
 )
+from rwa_filer.validate.review import SHOW_ALL, ReviewFilter
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -249,7 +250,9 @@ def finding_record(finding: Finding) -> dict[str, Any]:
     }
 
 
-def render_text(ret: CanonicalReturn, validation: ReturnValidation) -> str:
+def render_text(
+    ret: CanonicalReturn, validation: ReturnValidation, *, review: ReviewFilter = SHOW_ALL
+) -> str:
     """The report as plain text: the verdict, the counts, then every finding."""
     info = validation.pack.info
     header = ret.header
@@ -286,16 +289,47 @@ def render_text(ret: CanonicalReturn, validation: ReturnValidation) -> str:
         lines.extend(_issue_lines(validation))
     if validation.findings:
         lines.append("")
-        lines.extend(
-            f"[{finding.code}] {finding.severity}: {finding.message}"
-            for finding in validation.findings
-        )
+        lines.extend(_working_list(validation, review))
     lines.append("")
     lines.append(
         "The regulator's own validation on upload is authoritative; a clean result here "
         "is evidence the return is well-formed, not a guarantee of acceptance."
     )
     return "\n".join(lines)
+
+
+def _working_list(validation: ReturnValidation, review: ReviewFilter) -> list[str]:
+    results = (
+        {r.rule_id: r for r in validation.report.results}
+        if validation.report and review.active
+        else {}
+    )
+    hidden_errors = hidden_warnings = 0
+    lines = []
+    for finding in validation.findings:
+        result = results.get(finding.subject)
+        prefix = f"[{finding.code}] {finding.severity}"
+        if result is None or result.status != STATUS_FAIL:
+            lines.append(f"{prefix}: {finding.message}")
+            continue
+        visible = review.visible(result)
+        hidden = len(result.failures) - len(visible)
+        if finding.is_blocking:
+            hidden_errors += hidden
+        else:
+            hidden_warnings += hidden
+        if not hidden:
+            lines.append(f"{prefix}: {finding.message}")
+        elif hidden < result.unsatisfied:
+            lines.append(
+                f"{prefix}: {result.rule_id} has {result.unsatisfied} failing evaluations, {hidden} hidden."
+            )
+            lines.extend(f"  {f.place} {'; '.join(f.cells)}" for f in visible)
+    if review.active:
+        lines.append(
+            f"{hidden_errors} error occurrence(s) and {hidden_warnings} warning occurrence(s) hidden by review filters."
+        )
+    return lines
 
 
 def _deny_lines(validation: ReturnValidation) -> list[str]:

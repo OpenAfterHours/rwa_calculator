@@ -655,3 +655,21 @@ def test_the_reference_page_marks_the_rules_a_known_issue_names(client: TestClie
 
     assert "Known issue PI-23" in page
     assert "Open question PI-06" in question
+
+
+def test_mixed_zero_breaks_on_the_rules_page(client: TestClient, tmp_path: Path) -> None:
+    source = tmp_path / "mixed.csv"
+    source.write_text(
+        "table,sheet,row,column,value\nOF08.01.01.01,0006,0010,0101,0\n"
+        "OF08.01.01.01,0006,0010,0102,1\n"
+    )
+    url = _open(client, source, **HEADER_FORM) + "/rules"
+    response = client.get(
+        url, params={"hide_zero": "1", "q": "boe_b1039", "rule": "boe_b1039", "money": "10"}
+    )
+    assert response.status_code == 200
+    assert "1 error occurrence(s) and 0 warning occurrence(s) hidden" in response.text
+    assert 'name="money"' in response.text and "Show all occurrences" in response.text
+    assert "column of v0 0102" in response.text and "column of v0 0101" not in response.text
+    assert "column of v0 0101" in client.get(url, params={"rule": "boe_b1039"}).text
+    assert client.get(url, params={"money": "NaN"}).status_code == 400

@@ -35,14 +35,13 @@ validation, on the same return and pack, so it calls the second step alone
 (``_write_checked``): one structure check per build, not two.
 
 Numbers
-- A monetary value is written as known, to the penny, in units of the reporting
+- A monetary value is written as known, in units of the reporting
   currency with no scaling. ``decimals`` states its accuracy, and defaults to
   ``-3`` — accurate to thousands, the convention of the Bank's own sample
   instances. Stating LESS accuracy than a value has is always true; stating
   more makes the regulator's interval arithmetic hold figures to a precision
   the source may not have.
-- A percentage is a decimal fraction (9.31% is ``0.0931``), written to six
-  places with ``decimals`` at least 4.
+- A percentage is a decimal fraction (9.31% is ``0.0931``), written with ``decimals`` at least 4.
 - An integer is written whole, with ``decimals="0"``.
 
 References:
@@ -119,8 +118,6 @@ TYPE_DECIMAL: Final = "decimal"
 TYPE_ENUMERATION: Final = "enumeration"
 TYPE_BOOLEAN: Final = "boolean"
 
-#: Decimal places a value of each numeric type is written to.
-_PLACES: Final = {TYPE_MONETARY: 2, TYPE_PERCENTAGE: 6, TYPE_DECIMAL: 6, TYPE_INTEGER: 0}
 
 #: The least ``decimals`` the Filing Manual accepts on a percentage.
 MIN_PERCENTAGE_DECIMALS: Final = 4
@@ -210,7 +207,7 @@ def write_instance(
     """
     options = options or InstanceOptions()
     pack = choose_release(ret.header.module, pack=pack, taxonomy=taxonomy, today=today).pack
-    findings = check_structure(ret, pack)
+    findings = check_structure(ret, pack, monetary_decimals=options.monetary_decimals)
     if findings:
         raise UnwritableReturnError(
             f"The return has {len(findings)} structure finding(s) and cannot be written; "
@@ -258,15 +255,18 @@ def _write_checked(ret: CanonicalReturn, pack: TaxonomyPack, options: InstanceOp
     )
 
 
-def lexical(value: float, places: int) -> str:
+def lexical(value: float, places: int | None = None) -> str:
     """``value`` as XBRL writes a decimal: fixed notation, no exponent, no padding.
 
-    Rounded half-to-even to ``places`` decimal places — the rounding XBRL 2.1
+    Preserve the reported value by default. When requested, round half-to-even
+    to ``places`` decimal places — the rounding XBRL 2.1
     requires of a number that is rounded at all — with insignificant trailing
     zeros dropped, and never ``-0``.
     """
-    quantum = Decimal(1).scaleb(-places)
-    text = format(Decimal(repr(value)).quantize(quantum, rounding=ROUND_HALF_EVEN), "f")
+    number = Decimal(repr(value))
+    if places is not None:
+        number = number.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_EVEN)
+    text = format(number, "f")
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     return "0" if text in ("-0", "") else text
@@ -468,7 +468,7 @@ class _Document:
             if fact.value is None:
                 raise UnwritableReturnError(f"{fact.metric} is numeric and has no value")
             unit, decimals = self._unit_and_decimals(metric.data_type, fact.decimals)
-            body = lexical(fact.value, _PLACES.get(metric.data_type, 6))
+            body = lexical(fact.value)
             stated = "INF" if decimals >= DECIMALS_EXACT else str(decimals)
             attributes = f'contextRef="{context}" decimals="{stated}" unitRef="{unit}"'
         else:

@@ -257,8 +257,6 @@ class Failure:
     zero_in_empty_cell: bool = False
     excess: Decimal | None = None
     unit: str | None = None
-    #: The trace's exact evaluation coordinates, before formatting the place for display.
-    axes: tuple[tuple[str, str], ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -1166,7 +1164,7 @@ class _Evaluation:
                 continue
             unsatisfied += 1
             if max_failures is None or len(failures) < max_failures:
-                failures.append(self._failure(env))
+                failures.append(self._failure(dict(env)))
         return satisfied, failures, unsatisfied
 
     def _verdict(self, env: _Env, seen: set[tuple[object, ...]]) -> bool | None:
@@ -1768,8 +1766,7 @@ class _Evaluation:
 
     # -- reporting -----------------------------------------------------------
 
-    def _failure(self, axes: _Env) -> Failure:
-        env = dict(axes)
+    def _failure(self, env: Mapping[str, str]) -> Failure:
         cells: list[str] = []
         addresses: dict[CellAddress, None] = {}
         seen: set[int] = set()
@@ -1793,15 +1790,15 @@ class _Evaluation:
                 cells.append(f"{label} = {_show(selector.data.cells[key])}")
             else:
                 cells.append(f"{label} not reported")
+        place = ", ".join(
+            f"{_axis_label(axis)} {local_name(value)}" for axis, value in sorted(env.items())
+        )
         zero, excess, unit = self._failure_measure(env)
         return Failure(
             zero_in_empty_cell=zero,
             excess=excess,
             unit=unit,
-            place=", ".join(
-                f"{_axis_label(axis)} {local_name(value)}" for axis, value in sorted(axes)
-            ),
-            axes=axes,
+            place=place,
             cells=tuple(cells[:8]),
             addresses=tuple(addresses)[:MAX_ADDRESSES],
         )

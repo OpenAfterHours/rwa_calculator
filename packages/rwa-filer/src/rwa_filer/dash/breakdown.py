@@ -29,6 +29,8 @@ import csv
 import io
 import math
 from dataclasses import dataclass, replace
+from itertools import groupby
+from operator import attrgetter
 from typing import TYPE_CHECKING, Final
 
 import polars as pl
@@ -343,17 +345,22 @@ def reviewed_attribution(
     report = opened.validation.report
     if not review.active or report is None:
         return attribution
+    # Validation and attribution both record failures in engine evaluation order
+    # within each rule. Two places can have the same display label.
     hidden = {
-        (result.rule_id, failure.axes)
+        (result.rule_id, index)
         for result in report.results
         if result.status == STATUS_FAIL
-        for failure in result.failures
+        for index, failure in enumerate(result.failures)
         if review.hides(result.severity, failure)
     }
     return replace(
         attribution,
         broken=tuple(
-            item for item in attribution.broken if (item.rule_id, item.place) not in hidden
+            item
+            for rule_id, occurrences in groupby(attribution.broken, key=attrgetter("rule_id"))
+            for index, item in enumerate(occurrences)
+            if (rule_id, index) not in hidden
         ),
     )
 

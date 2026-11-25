@@ -72,6 +72,7 @@ import logging
 import math
 import re
 from dataclasses import dataclass, field
+from decimal import Context, Decimal, DecimalException, localcontext
 from typing import TYPE_CHECKING, Final
 
 import polars as pl
@@ -102,6 +103,7 @@ from rwa_filer.validate.structure import (
     filing_indicators,
     key_text,
     local_name,
+    minimum_monetary_decimals,
     resolve_datapoints,
 )
 
@@ -120,6 +122,9 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Constants
 # =============================================================================
+
+# A library caller's thread-local decimal settings must not change filing verdicts.
+_RULE_CONTEXT: Final = Context(prec=28)
 
 STATUS_PASS: Final = "PASS"
 STATUS_FAIL: Final = "FAIL"
@@ -248,6 +253,10 @@ class Failure:
     place: str
     cells: tuple[str, ...]
     addresses: tuple[CellAddress, ...] = ()
+    #: Display-only classification of the failed assertion at this place.
+    zero_in_empty_cell: bool = False
+    excess: Decimal | None = None
+    unit: str | None = None
 
 
 @dataclass(frozen=True)
@@ -637,8 +646,10 @@ class _LeanTrace(RuleTrace):
 class _Amount:
     """A number with its rounding allowance."""
 
-    value: float
-    allowance: float = 0.0
+    value: Decimal
+    allowance: Decimal = Decimal(0)
+    #: Monetary / percentage / other metric type, literal, or unknown.
+    unit: str | None = None
 
 
 #: A cell's key in a table: (sheet code, open-axis member, row, column).
@@ -739,10 +750,11 @@ class _Store:
             for (sheet, member, row_id), values in holder.row_keys.items():
                 holder.rows_by_key[(sheet, member, tuple(sorted(values.items())))] = row_id
 
+        minimum = minimum_monetary_decimals(pack.info.module)
         for row in data.iter_rows(named=True):
             table = pack.tables[row["table"]]
             number = row["datapoint"]
-            value = _typed(row, types[number], enumerations[number], accuracy)
+            value = _typed(row, types[number], enumerations[number], accuracy, minimum)
             if value is None:
                 continue
             key = (row["sheet"], self._member(table, row["open_key"]), row["row"], row["column"])
@@ -771,7 +783,14 @@ class _Store:
         if isinstance(value, _Amount):
             decimals, source = effective_decimals(data.decimals.get(key), data_type, self.accuracy)
             return CellFact(
-                address, point, metric, data_type, value.value, decimals, source, value.allowance
+                address,
+                point,
+                metric,
+                data_type,
+                float(value.value),
+                decimals,
+                source,
+                float(value.allowance),
             )
         shown = value if isinstance(value, (str, bool)) else None
         return CellFact(address, point, metric, data_type, shown, None, "", 0.0)
@@ -890,14 +909,21 @@ def _shown_in_every_reported_table(
 
 
 def _typed(
-    row: Mapping[str, object], data_type: str, enumeration: Sequence[str], accuracy: Accuracy
+    row: Mapping[str, object],
+    data_type: str,
+    enumeration: Sequence[str],
+    accuracy: Accuracy,
+    minimum: int,
 ) -> object | None:
     """A fact as the value the rule language sees: a number, a boolean or text."""
     if data_type in _NUMERIC_TYPES:
         value = row["value"]
         if not isinstance(value, (int, float)):
             return None
-        return _Amount(float(value), _allowance(row["decimals"], data_type, accuracy))
+        decimals, _ = effective_decimals(row["decimals"], data_type, accuracy)
+        if data_type == "monetary" and decimals < minimum:
+            return None  # STR012 identifies the unusable fact.
+        return _Amount(Decimal(str(value)), _allowance(decimals), data_type)
     text = row["text_value"]
     if not isinstance(text, str):
         return None
@@ -908,12 +934,11 @@ def _typed(
     return text
 
 
-def _allowance(decimals: object, data_type: str, accuracy: Accuracy) -> float:
+def _allowance(effective: int) -> Decimal:
     """``10^(-decimals) / 2`` — zero for a figure stated to be exact."""
-    effective, _source = effective_decimals(decimals, data_type, accuracy)
     if effective >= DECIMALS_EXACT:
-        return 0.0
-    return 10.0 ** (-effective) / 2.0
+        return Decimal(0)
+    return Decimal((0, (5,), -effective - 1))
 
 
 # =============================================================================
@@ -1004,11 +1029,16 @@ def _evaluate_rule(  # noqa: PLR0913 - the rule, where it runs, and what to keep
 
     try:
         evaluation = _Evaluation(rule, store, cells)
-        satisfied, failures, unsatisfied = evaluation.run(
-            trace, max_failures, comparisons=comparisons
-        )
+        with localcontext(_RULE_CONTEXT):
+            satisfied, failures, unsatisfied = evaluation.run(
+                trace, max_failures, comparisons=comparisons
+            )
     except _Unsupported as unsupported:
         return not_evaluated(REASON_UNSUPPORTED, str(unsupported))
+    except DecimalException as error:
+        return not_evaluated(
+            REASON_UNSUPPORTED, f"Numeric evaluation failed: {type(error).__name__}"
+        )
     except GrammarError as error:
         return not_evaluated(REASON_UNSUPPORTED, str(error))
 
@@ -1052,6 +1082,7 @@ class _Evaluation:
         #: if asked again — two threads filling an unlocked cache did — whose
         #: nodes no selector is keyed by.
         self._tree = rule.tree
+        self._has_null_test = "isnull" in rule.expression.lower()
         self._where = rule.where_tree
         joins = rule.joins
         #: Tracing only: the reported cells read so far, and the comparisons
@@ -1599,7 +1630,7 @@ class _Evaluation:
 
     def _value(self, node: Node, env: Mapping[str, str]) -> object:  # noqa: C901, PLR0911, PLR0912
         if isinstance(node, Number):
-            return _Amount(node.value)
+            return _Amount(Decimal(str(node.value)), unit="literal")
         if isinstance(node, Text):
             return node.value
         if isinstance(node, Member):
@@ -1608,7 +1639,11 @@ class _Evaluation:
             return self._read(node, env)
         if isinstance(node, Negate):
             operand = _amount(self._value(node.operand, env))
-            return None if operand is None else _Amount(-operand.value, operand.allowance)
+            return (
+                None
+                if operand is None
+                else _Amount(-operand.value, operand.allowance, operand.unit)
+            )
         if isinstance(node, Logical):
             if node.operator == "and":
                 return all(self._value(operand, env) is True for operand in node.operands)
@@ -1640,7 +1675,7 @@ class _Evaluation:
         if name == "false":
             return False
         if name == "eulerconst":
-            return _Amount(math.e)
+            return _Amount(Decimal(str(math.e)), unit="literal")
         if name == "dim":
             return self._dimension_of(arguments, env)
         values = [self._value(argument, env) for argument in arguments]
@@ -1652,13 +1687,23 @@ class _Evaluation:
         if name in ("isum", "sum"):
             items = [_amount(item) for item in _sequence(values[0])]
             present = [item for item in items if item is not None]
-            allowance = math.fsum(item.allowance for item in present) if name == "isum" else 0.0
-            return _Amount(math.fsum(item.value for item in present), allowance)
+            allowance = (
+                sum((item.allowance for item in present), Decimal(0))
+                if name == "isum"
+                else Decimal(0)
+            )
+            units = {item.unit for item in present}
+            unit = units.pop() if len(units) == 1 else None
+            return _Amount(sum((item.value for item in present), Decimal(0)), allowance, unit)
         if name in ("iabs", "abs"):
             operand = _amount(values[0])
             if operand is None:
                 return None
-            return _Amount(abs(operand.value), operand.allowance if name == "iabs" else 0.0)
+            return _Amount(
+                abs(operand.value),
+                operand.allowance if name == "iabs" else Decimal(0),
+                operand.unit,
+            )
         # Plain ``max`` / ``min`` are deliberately read as ``imax`` / ``imin``, the
         # chosen fact keeping its allowance, and that reading is UNMEASURED: no
         # packaged rule calls them, so Arelle cannot be asked through a Bank
@@ -1676,7 +1721,7 @@ class _Evaluation:
             pick = max if name in ("imax", "max") else min
             return pick(items, key=lambda item: item.value)
         if name == "count":
-            return _Amount(float(len(_sequence(values[0]))))
+            return _Amount(Decimal(len(_sequence(values[0]))), unit="integer")
         if name == "isnull":
             return _is_empty(values[0])
         if name == "not":
@@ -1687,7 +1732,9 @@ class _Evaluation:
                 return False
             return re.search(pattern, subject) is not None
         if name == "stringlength":
-            return _Amount(float(len(values[0]) if isinstance(values[0], str) else 0))
+            return _Amount(
+                Decimal(len(values[0]) if isinstance(values[0], str) else 0), unit="integer"
+            )
         if name == "exp":
             base, numerator, denominator = (_amount(value) for value in values)
             if base is None or numerator is None or denominator is None:
@@ -1695,9 +1742,7 @@ class _Evaluation:
             return _Amount(base.value ** (numerator.value / denominator.value))
         if name == "log":
             operand = _amount(values[0])
-            return (
-                None if operand is None or operand.value <= 0 else _Amount(math.log(operand.value))
-            )
+            return None if operand is None or operand.value <= 0 else _Amount(operand.value.ln())
         raise _Unsupported(f"function {name}()")
 
     def _dimension_of(self, arguments: tuple[Node, ...], env: Mapping[str, str]) -> object:
@@ -1736,7 +1781,9 @@ class _Evaluation:
                 keys = self._keys_at(selector, env)
                 values = [selector.data.cells[key] for key in keys]
                 amounts = [item.value for value in values if (item := _amount(value)) is not None]
-                cells.append(f"{label} = {len(values)} cell(s), sum {_number(math.fsum(amounts))}")
+                cells.append(
+                    f"{label} = {len(values)} cell(s), sum {_number(sum(amounts, Decimal(0)))}"
+                )
                 continue
             key = self._cell(selector, env)
             if key is not None and key in selector.data.cells:
@@ -1746,11 +1793,69 @@ class _Evaluation:
         place = ", ".join(
             f"{_axis_label(axis)} {local_name(value)}" for axis, value in sorted(env.items())
         )
+        zero, excess, unit = self._failure_measure(env)
         return Failure(
+            zero_in_empty_cell=zero,
+            excess=excess,
+            unit=unit,
             place=place,
             cells=tuple(cells[:8]),
             addresses=tuple(addresses)[:MAX_ADDRESSES],
         )
+
+    def _failure_measure(self, env: Mapping[str, str]) -> tuple[bool, Decimal | None, str | None]:
+        """Classify the failing assertion. Guards and unrelated zero-valued cells do not count."""
+        node = self._tree
+        while isinstance(node, Conditional):
+            branch = node.then if self._value(node.condition, env) is True else node.otherwise
+            if branch is None:
+                return False, None, None
+            node = branch
+        if isinstance(node, (Logical, Call)) and self._has_null_test:
+            # A compound assertion may short-circuit before reading a later branch.
+            # If that branch cannot be evaluated, keep the original failure visible.
+            try:
+                return self._holds_with_empty_zeroes(node, env), None, None
+            except (_NotBound, ArithmeticError):
+                return False, None, None
+        if isinstance(node, Binary) and node.is_comparison:
+            values = self._operands if node is self._tree else None
+            lhs, rhs = values or (self._value(node.left, env), self._value(node.right, env))
+            left, right = _amount(lhs), _amount(rhs)
+            if left is not None and right is not None:
+                tolerance = left.allowance + right.allowance if node.interval else Decimal(0)
+                return (
+                    False,
+                    _excess(node.operator, left.value - right.value, tolerance),
+                    _common_unit(left, right),
+                )
+        return False, None, None
+
+    def _holds_with_empty_zeroes(self, node: Node, env: Mapping[str, str]) -> bool:
+        """Would satisfying only positive must-be-empty tests over reported zeroes suffice?"""
+        if isinstance(node, Logical):
+            holds = (self._holds_with_empty_zeroes(child, env) for child in node.operands)
+            return all(holds) if node.operator == "and" else any(holds)
+        if isinstance(node, Conditional):
+            branch = node.then if self._value(node.condition, env) is True else node.otherwise
+            return branch is None or self._holds_with_empty_zeroes(branch, env)
+        if (
+            isinstance(node, Call)
+            and node.name == "isnull"
+            and isinstance(ref := node.arguments[0], Reference)
+        ):
+            selector = self._selectors[id(ref)]
+            keys = self._keys_at(selector, env) if ref.sequence else [self._cell(selector, env)]
+            if keys and all(
+                key is not None
+                and key in self._accepting(selector)
+                and isinstance(value := selector.data.cells[key], _Amount)
+                and value.value == 0
+                for key in keys
+            ):
+                return True
+        # Guards, negations, arithmetic and every other predicate keep their actual value.
+        return self._value(node, env) is True
 
     def _traced(
         self, env: _Env, *, holds: bool, comparisons: tuple[Comparison, ...] = ()
@@ -1802,9 +1907,11 @@ class _Evaluation:
         difference = excess = None
         tolerance = 0.0
         if isinstance(first, _Amount) and isinstance(second, _Amount):
-            difference = first.value - second.value
-            tolerance = first.allowance + second.allowance if node.interval else 0.0
-            excess = _excess(node.operator, difference, tolerance)
+            delta = first.value - second.value
+            allowed = first.allowance + second.allowance if node.interval else Decimal(0)
+            beyond = _excess(node.operator, delta, allowed)
+            difference, tolerance = float(delta), float(allowed)
+            excess = float(beyond) if beyond is not None else None
         return Comparison(
             operator=node.operator,
             interval=node.interval,
@@ -1836,8 +1943,8 @@ class _Evaluation:
                 cell = None if key is None else _address(selector.data, key, reported=False)
                 defaulted.append(_defaulted(reference, cell))
         if isinstance(value, _Amount):
-            shown: float | str | bool | None = value.value
-            allowance = value.allowance
+            shown: float | str | bool | None = float(value.value)
+            allowance = float(value.allowance)
         else:
             shown = value if isinstance(value, (str, bool)) else None
             allowance = 0.0
@@ -2049,7 +2156,7 @@ def _key_aliases(joins: Sequence[JoinKey | JoinEquality]) -> dict[tuple[str, str
 
 def _default(default: Default) -> object:
     if default.kind == DEFAULT_ZERO:
-        return _Amount(0.0)
+        return _Amount(Decimal(0))
     if default.kind == DEFAULT_EMPTY:
         return None
     if default.kind == DEFAULT_FALSE:
@@ -2079,7 +2186,7 @@ def _amount(value: object) -> _Amount | None:
 def _figure(value: object) -> float | None:
     """A value as a number, or ``None`` where it is not one (``Evaluation.left_value``)."""
     amount = _amount(value)
-    return None if amount is None else amount.value
+    return None if amount is None else float(amount.value)
 
 
 def _arithmetic(
@@ -2089,22 +2196,37 @@ def _arithmetic(
     if left is None or right is None:
         return None
     a, b = left.value, right.value
-    da, db = (left.allowance, right.allowance) if interval else (0.0, 0.0)
+    da, db = (left.allowance, right.allowance) if interval else (Decimal(0), Decimal(0))
     if operator == "+":
-        return _Amount(a + b, da + db)
+        return _Amount(a + b, da + db, _common_unit(left, right))
     if operator == "-":
-        return _Amount(a - b, da + db)
+        return _Amount(a - b, da + db, _common_unit(left, right))
     if operator == "*":
-        return _Amount(a * b, abs(a * db) + abs(b * da) + da * db)
+        unit = (
+            left.unit
+            if right.unit in ("literal", "percentage")
+            else (right.unit if left.unit in ("literal", "percentage") else None)
+        )
+        return _Amount(a * b, abs(a * db) + abs(b * da) + da * db, unit)
     if b == 0:
         raise ZeroDivisionError
     quotient = a / b
+    unit = left.unit if right.unit in ("literal", "percentage") else None
     if not interval or (da == 0 and db == 0):
-        return _Amount(quotient)
+        return _Amount(quotient, unit=unit)
     corners = [
         (a + sa * da) / (b + sb * db) for sa in (-1, 1) for sb in (-1, 1) if b + sb * db != 0
     ]
-    return _Amount(quotient, max((abs(corner - quotient) for corner in corners), default=0.0))
+    return _Amount(
+        quotient, max((abs(corner - quotient) for corner in corners), default=Decimal(0)), unit
+    )
+
+
+def _common_unit(left: _Amount, right: _Amount) -> str | None:
+    """Units of a sum or comparison. A literal takes its counterpart's unit."""
+    if left.unit == right.unit or right.unit == "literal":
+        return left.unit
+    return right.unit if left.unit == "literal" else None
 
 
 def _compare(operator: str, left: object, right: object, interval: bool) -> bool:  # noqa: PLR0911
@@ -2117,7 +2239,7 @@ def _compare(operator: str, left: object, right: object, interval: bool) -> bool
         return False
     if isinstance(left, _Amount) and isinstance(right, _Amount):
         difference = left.value - right.value
-        allowance = left.allowance + right.allowance if interval else 0.0
+        allowance = left.allowance + right.allowance if interval else Decimal(0)
         if operator == "=":
             return abs(difference) <= allowance
         if operator == "!=":
@@ -2154,14 +2276,14 @@ def _single(value: object) -> object:
     return value
 
 
-def _excess(operator: str, difference: float, tolerance: float) -> float | None:
+def _excess(operator: str, difference: Decimal, tolerance: Decimal) -> Decimal | None:
     """How far ``difference`` is beyond the bound ``operator`` sets; see ``Comparison``."""
     if operator == "=":
-        return max(0.0, abs(difference) - tolerance)
+        return max(Decimal(0), abs(difference) - tolerance)
     if operator in ("<=", "<"):
-        return max(0.0, difference - tolerance)
+        return max(Decimal(0), difference - tolerance)
     if operator in (">=", ">"):
-        return max(0.0, -tolerance - difference)
+        return max(Decimal(0), -tolerance - difference)
     return None
 
 
@@ -2209,5 +2331,8 @@ def _show(value: object) -> str:
     return _number(value.value) if isinstance(value, _Amount) else str(value)
 
 
-def _number(value: float) -> str:
-    return f"{value:,.6f}".rstrip("0").rstrip(".")
+def _number(value: Decimal) -> str:
+    shown = f"{value:,.6f}".rstrip("0").rstrip(".")
+    if value and shown in {"0", "-0"}:
+        return format(value, "f")
+    return shown

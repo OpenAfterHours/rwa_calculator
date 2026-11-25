@@ -68,6 +68,11 @@ uvx rwa-filer@latest validate return.parquet --monetary-decimals 0 \
     --evidence evidence.jsonl.gz --require-complete \
     --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
 
+# Review warnings above a currency or basis-point threshold and hide zero-only
+# must-be-empty occurrences. The JSON report includes all failures.
+rwa-filer validate return.xbrl --warning-materiality 10 --warning-materiality-bps 1 \
+    --hide-zero-null-errors --report full-report.json
+
 # Validate it and write the XBRL submission file, with a manifest
 uvx rwa-filer@latest build return.parquet --out filing/ \
     --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001

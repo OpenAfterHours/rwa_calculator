@@ -43,6 +43,7 @@ from rwa_filer.dash.task_pages import follow
 from rwa_filer.dash.views import overview, rules_page
 from rwa_filer.progress import PHASE_READING, PHASE_RULES, PHASE_STRUCTURE
 from rwa_filer.release import release_packs, shipped_releases
+from rwa_filer.validate.review import ReviewFilter
 from rwa_filer.workflow.attribution import attribute
 
 if TYPE_CHECKING:
@@ -167,12 +168,26 @@ class ReturnPages:
         """The rules, filtered as the address says, with one picked in full."""
         working = self.context.working(request)
         query = request.query_params
+        try:
+            review = ReviewFilter.from_text(
+                query.get("money", ""), query.get("bps", ""), query.get("hide_zero") == "1"
+            )
+        except ValueError as exc:
+            return self.context.render(
+                request,
+                "error.html",
+                working=working,
+                status_code=400,
+                title="Invalid review filter",
+                message=str(exc),
+            )
         view = rules_page(
             working.current,
             status=query.get("status", STATUS_FAIL),
             severity=query.get("severity", ""),
             query=query.get("q", ""),
             template=query.get("template", ""),
+            review=review,
             rule_id=query.get("rule", ""),
             page=page_number(query.get("page")),
         )

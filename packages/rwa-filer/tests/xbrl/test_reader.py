@@ -155,13 +155,13 @@ def test_decimals_and_filing_indicators_survive_the_round_trip(pack: TaxonomyPac
 
     # Act
     reading = read_instance(
-        write_instance(declared, pack, options=InstanceOptions(monetary_decimals=-6)).content,
+        write_instance(declared, pack, options=InstanceOptions(monetary_decimals=-2)).content,
         pack=pack,
     )
 
     # Assert
     assert reading.ret.indicators == {"T01.00.01": True, "T02.00.01": False}
-    assert reading.ret.facts.sort("row")["decimals"].to_list() == [2, -6]
+    assert reading.ret.facts.sort("row")["decimals"].to_list() == [2, -2]
 
 
 def test_a_data_point_shown_in_two_reported_tables_is_placed_in_both(pack: TaxonomyPack) -> None:

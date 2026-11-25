@@ -254,8 +254,9 @@ Nine things follow from that, and each changes verdicts.
   is not run where that cell is missing.
 - **Comparisons allow for rounding, by the accuracy each figure states.** A
   figure stated to thousands may be off by up to 500, and a rule comparing two
-  such figures allows for both. A figure stated to the penny gets no such
-  allowance. The accuracy is the fact's `decimals`, or the default for its type.
+  such figures allows for both. A figure stated to the penny contributes half a penny. An interval
+  equality between two such figures accepts a one-penny difference, including
+  the boundary. A point comparison has zero rounding allowance. The accuracy is the fact's `decimals`, or the default for its type.
   A total written `isum(...)` allows for every figure it adds. One written
   `sum(...)` allows for none of them: its formula uses XPath's own `sum`, whose
   result is a plain number, not a reported figure. The same is true of `abs`
@@ -1226,6 +1227,7 @@ structure findings (in `release_findings`) and never blocks.
 | `STR009` | The return carries no facts. |
 | `STR010` | The return declares its filing indicators, and one of them is not a template of the module, or a fact sits in a template not declared as reported. |
 | `STR011` | Warning. The return's reference date is outside the dates the chosen taxonomy release gives its module. The return is checked against that release; to file it, choose the release in force on its date. |
+| `STR012` | A monetary fact states fewer decimals than the module permits, either in its own accuracy or in the run default. The affected cells block filing, including a forced build. |
 
 Each fact is reported once, against its root cause. A fact in an unknown table
 is `STR001` only; it is not also reported as an unknown cell.

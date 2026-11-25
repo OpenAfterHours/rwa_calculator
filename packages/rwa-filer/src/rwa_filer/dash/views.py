@@ -51,6 +51,7 @@ from rwa_filer.release import release_rulebook
 from rwa_filer.validate.checker import FINDING_COVERAGE_INSUFFICIENT
 from rwa_filer.validate.execution import published_finding
 from rwa_filer.validate.report import status_line
+from rwa_filer.validate.review import SHOW_ALL, ReviewFilter
 
 if TYPE_CHECKING:
     from rwa_filer.boe.catalogue import Rule
@@ -138,6 +139,7 @@ class RuleRow:
     deny: str = ""
     #: The known issues with the published rule that label its result.
     issues: tuple[IssueNote, ...] = ()
+    hidden: int = 0
 
     @property
     def is_error(self) -> bool:
@@ -224,6 +226,9 @@ class RulesPage:
     page: int
     pages: int
     selected: RuleDetail | None
+    review: ReviewFilter
+    hidden_errors: int
+    hidden_warnings: int
 
 
 def overview(opened: OpenedReturn) -> Overview:
@@ -274,6 +279,7 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
     template: str = "",
     rule_id: str = "",
     page: int = 1,
+    review: ReviewFilter = SHOW_ALL,
 ) -> RulesPage:
     """The rules page: ``status`` filtered by severity, template and text, paged."""
     report = opened.validation.report
@@ -290,17 +296,39 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
         and (not template or template in row.templates)
         and (not needle or needle in f"{row.rule_id} {row.label}".lower())
     ]
+    visible = {}
+    hidden_errors = hidden_warnings = 0
+    if status == STATUS_FAIL and review.active:
+        by_rule = {item.rule_id: item for item in results}
+        kept = []
+        for row in matched:
+            result = by_rule[row.rule_id]
+            failures = visible[row.rule_id] = review.visible(result)
+            hidden = len(result.failures) - len(failures)
+            if row.is_error:
+                hidden_errors += hidden
+            else:
+                hidden_warnings += hidden
+            if hidden < row.unsatisfied:
+                kept.append(replace(row, hidden=hidden))
+        matched = kept
     if status == STATUS_FAIL:
         matched.sort(key=lambda row: (not row.is_error, row.rule_id))
     pages = max(1, math.ceil(len(matched) / RULES_PER_PAGE))
     page = min(max(page, 1), pages)
     shown = matched[(page - 1) * RULES_PER_PAGE : page * RULES_PER_PAGE]
     picked = next((row for row in matched if row.rule_id == rule_id), None)
-    if picked is None and rule_id:
+    if picked is None and rule_id and not review.active:
         picked = next((row for row in rows if row.rule_id == rule_id), None)
     if picked is None and shown:
         picked = shown[0]
+    detail = _detail(opened, picked, results) if picked else None
+    if detail and detail.row.rule_id in visible:
+        detail = replace(detail, failures=visible[detail.row.rule_id])
     return RulesPage(
+        review=review,
+        hidden_errors=hidden_errors,
+        hidden_warnings=hidden_warnings,
         status=status,
         severity=severity,
         query=query,
@@ -311,7 +339,7 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
         matched=len(matched),
         page=page,
         pages=pages,
-        selected=_listed(_detail(opened, picked, results)) if picked else None,
+        selected=_listed(detail) if detail else None,
     )
 
 

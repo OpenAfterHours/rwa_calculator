@@ -135,7 +135,7 @@ from rwa_filer.boe import deny_importer
 from rwa_filer.boe import importer as boe_importer
 from rwa_filer.boe.catalogue import RULEBOOKS_DIRECTORY, available_rulebooks, load_rulebook
 from rwa_filer.boe.deny import DENY_DIRECTORY, deny_list_file
-from rwa_filer.boe.engine import Accuracy
+from rwa_filer.boe.engine import MAX_FAILURES, Accuracy
 from rwa_filer.boe.issues_document import render_document, render_issue, render_listing
 from rwa_filer.entry import keep_collecting, run
 from rwa_filer.evidence import collect_evidence, write_evidence
@@ -180,6 +180,7 @@ from rwa_filer.taxonomy.pack import write_pack
 from rwa_filer.validate.identity import source_identity
 from rwa_filer.validate.report import render_text, to_record
 from rwa_filer.validate.returns import VERDICT_INCOMPLETE, validate_return
+from rwa_filer.validate.review import ReviewFilter
 from rwa_filer.workflow.acts import (
     ledger_beside,
     ledger_for_instance,
@@ -291,6 +292,23 @@ def _add_validate_command(commands: argparse._SubParsersAction[argparse.Argument
     _add_header_arguments(validate)
     _add_detail_arguments(validate)
     _add_accuracy_arguments(validate)
+    validate.add_argument(
+        "--warning-materiality",
+        default="",
+        metavar="AMOUNT",
+        help="hide monetary warning occurrences below this excess in reporting currency (text working list)",
+    )
+    validate.add_argument(
+        "--warning-materiality-bps",
+        default="",
+        metavar="BPS",
+        help="hide percentage warnings below this excess in basis points (text working list)",
+    )
+    validate.add_argument(
+        "--hide-zero-null-errors",
+        action="store_true",
+        help="hide occurrences caused solely by reporting zero in a must-be-empty cell (text working list)",
+    )
     validate.add_argument("--format", choices=["text", "json"], default="text", help=_FORMAT_HELP)
     validate.add_argument(
         "--report", type=Path, metavar="FILE", help="also write the full JSON report here"
@@ -450,6 +468,14 @@ def _validate(args: argparse.Namespace) -> int:
     if problem := _unwritable(args.report, "--report") or _unwritable(args.evidence, "--evidence"):
         return _fail(problem)
     try:
+        review = ReviewFilter.from_text(
+            args.warning_materiality, args.warning_materiality_bps, args.hide_zero_null_errors
+        )
+        limit = (
+            None
+            if review.active or args.report is not None or args.format == "json"
+            else MAX_FAILURES
+        )
         with _watching(args) as progress:
             source = _load(args, progress=progress)
             accuracy, identity = _accuracy(args), source_identity(args.file)
@@ -458,6 +484,7 @@ def _validate(args: argparse.Namespace) -> int:
             if args.evidence is not None:
                 evidence = collect_evidence(
                     source.ret,
+                    max_failures=None,
                     release=source.release,
                     accuracy=accuracy,
                     source_findings=source.findings,
@@ -473,6 +500,7 @@ def _validate(args: argparse.Namespace) -> int:
                     accuracy=accuracy,
                     source_findings=source.findings,
                     source=identity,
+                    max_failures=limit,
                     submission_date=args.submission_date,
                     progress=progress,
                 )
@@ -508,9 +536,11 @@ def _validate(args: argparse.Namespace) -> int:
     _out(
         json.dumps(record, indent=2)
         if args.format == "json"
-        else render_text(source.ret, validation)
+        else render_text(source.ret, validation, review=review)
     )
     if breakdown and args.format != "json":
+        if review.active:
+            _out("Breakdown across all filing findings (unfiltered)")
         labels = {
             rule.rule_id: (rule.label or "").rstrip("|").strip() for rule in _rules_of(validation)
         }

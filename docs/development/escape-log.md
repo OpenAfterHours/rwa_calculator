@@ -5493,3 +5493,25 @@ and each gate was observed red against the code as it shipped before the fix.
   damaged bytes themselves stay chance-dependent and are not asserted.
 - **Not covered**: `read_evidence` raises `UnicodeDecodeError`, not its own
   "incomplete or altered" error, on a damaged file (plan item P6.64).
+
+
+## 2026-11-25 · PRA001 filing boundaries and monetary accuracy
+
+**Escape classes.** The inclusive penny boundary and the sub-penny XBRL round
+trip were `path-never-exercised`. The existing Arelle rounding fixtures used
+larger denominations and the writer test expected currency to round to pence.
+The missing monetary accuracy floor was `no-gate-exists`. Accuracy tests
+exercised changes to defaults without checking the Banking Filing Manual's
+permitted range.
+
+**New gate.** `packages/rwa-filer/tests/boe/test_filing_materiality.py` exercises
+both sides of the one-penny boundary of `boe_b0768`, a two-penny break, a
+positive sub-penny fact on `boe_b1037` before and after writing, and an invalid
+PRA001 accuracy supplied per fact or as the default. Structure finding STR012
+blocks a monetary fact below the module's floor. The independent reference is
+the Bank's v4.1.1 formula evaluated with Arelle 2.47.5 and Filing Manual §2.18.
+
+**Observed red.** On the original 0.1.6 package the new gate gave five failures
+and one pass. Both one-penny boundaries failed, the writer returned 0 instead
+of 0.004, and both inputs at decimals -6 produced no blocking accuracy finding.
+The two-penny break was correctly identified.

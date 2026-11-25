@@ -228,4 +228,4 @@ def _figure(evaluation: engine._Evaluation, node: Node, env: Mapping[str, str]) 
         amount = engine._amount(evaluation._value(node, env))
     except (engine._NotBound, ZeroDivisionError):
         return None
-    return None if amount is None else amount.value
+    return None if amount is None else float(amount.value)

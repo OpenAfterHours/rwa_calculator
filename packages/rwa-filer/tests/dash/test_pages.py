@@ -671,5 +671,54 @@ def test_mixed_zero_breaks_on_the_rules_page(client: TestClient, tmp_path: Path)
     assert "1 error occurrence(s) and 0 warning occurrence(s) hidden" in response.text
     assert 'name="money"' in response.text and "Show all occurrences" in response.text
     assert "column of v0 0102" in response.text and "column of v0 0101" not in response.text
-    assert "column of v0 0101" in client.get(url, params={"rule": "boe_b1039"}).text
+    assert "column of v0 0101" not in client.get(url, params={"rule": "boe_b1039"}).text
     assert client.get(url, params={"money": "NaN"}).status_code == 400
+
+
+def test_review_settings_follow_the_return_through_tabs_and_reset(
+    client: TestClient, tmp_path: Path
+) -> None:
+    source = tmp_path / "review.csv"
+    source.write_text(
+        "table,sheet,row,column,value\nOF08.01.01.01,0006,0010,0101,0\n"
+        "OF08.01.01.01,0006,0010,0102,1\nOF08.03.01.01,0012,0070,0010,-5\n"
+    )
+    base = _open(client, source, **HEADER_FORM)
+    other = _open(client, source, **HEADER_FORM)
+    query = "table=OF08.01.01.01&sheet=0006&row=0010&col=0101"
+    mark = 'data-rule="boe_b1039"'
+    warning_url = f"{base}/templates?table=OF08.03.01.01&sheet=0012&row=0070&col=0010"
+    warning = 'data-rule="boe_b0317"'
+    assert warning in client.get(warning_url).text
+    assert mark in client.get(f"{base}/templates?{query}").text
+    evidence = client.get(f"{base}/evidence.jsonl")
+    assert evidence.status_code == 200 and "boe_b1039" in evidence.text
+    saved = client.post(
+        f"{base}/review",
+        data={
+            "section": "rules",
+            "query": "rule=boe_b1039",
+            "money": "5.01",
+            "bps": "1",
+            "hide_zero": "1",
+        },
+    )
+    assert saved.status_code == 200 and saved.url.path == f"{base}/rules"
+    assert saved.url.params["rule"] == "boe_b1039"
+    (templates_url,) = re.findall(r'<a href="(/returns/[0-9a-f]+/templates)">', saved.text)
+    assert mark not in client.get(f"{templates_url}?{query}").text
+    nonzero = query.replace("col=0101", "col=0102")
+    assert mark in client.get(f"{templates_url}?{nonzero}").text
+    assert warning not in client.get(warning_url).text
+    for tab in ("", "/rules", "/investigate", "/compare", "/filing", "/referee"):
+        assert 'name="money" min="0" step="any" value="5.01"' in client.get(base + tab).text
+    assert 'data-verdict="blocked"' in client.get(base).text
+    assert client.get(f"{base}/evidence.jsonl").content == evidence.content
+    assert mark in client.get(f"{other}/templates?{query}").text
+    assert client.post(f"{base}/review", data={"money": "-1"}).status_code == 400
+    assert mark not in client.get(f"{base}/templates?{query}").text
+    reset = client.post(
+        f"{base}/review", data={"reset": "1", "section": "templates", "query": query}
+    )
+    assert reset.url.params["col"] == "0101" and mark in reset.text
+    assert warning in client.get(warning_url).text

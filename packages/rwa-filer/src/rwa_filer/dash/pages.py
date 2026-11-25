@@ -13,8 +13,8 @@ Key responsibilities:
 - Draw the overview, the rules and the template viewer for an opened return as
   a build would file it now: with the overrides drafted for it applied, and
   validated again once per change of them (``Workspace.working``).
-- Keep every filter in the address, so a page can be bookmarked, reloaded and
-  shared with whoever else is looking at the same screen.
+- Keep tab selections in the address and share this browser's review settings
+  across the pages of the open return.
 - Hand over the evidence behind an opened return's verdict as the file
   ``rwa-filer validate --evidence`` writes.
 - For a return opened with breakdown columns, split the picked cell by one of
@@ -34,8 +34,22 @@ from starlette.responses import FileResponse, RedirectResponse
 from starlette.routing import Route
 
 from rwa_filer.boe.engine import STATUS_FAIL
-from rwa_filer.dash.breakdown import breakdown_summary, cell_breakdown, pick_dimension
-from rwa_filer.dash.context import THEME_COOKIE, THEMES
+from rwa_filer.dash.breakdown import (
+    breakdown_summary,
+    cell_breakdown,
+    pick_dimension,
+    reviewed_attribution,
+)
+from rwa_filer.dash.context import (
+    REVIEW_KEYS,
+    SECTIONS,
+    THEME_COOKIE,
+    THEMES,
+    read_review,
+    review_of,
+    review_query,
+    save_review,
+)
 from rwa_filer.dash.forms import form_values, page_number, read_open_form
 from rwa_filer.dash.grid import template_grid
 from rwa_filer.dash.security import served_securely
@@ -43,7 +57,7 @@ from rwa_filer.dash.task_pages import follow
 from rwa_filer.dash.views import overview, rules_page
 from rwa_filer.progress import PHASE_READING, PHASE_RULES, PHASE_STRUCTURE
 from rwa_filer.release import release_packs, shipped_releases
-from rwa_filer.validate.review import ReviewFilter
+from rwa_filer.validate.review import SHOW_ALL, ReviewFilter
 from rwa_filer.workflow.attribution import attribute
 
 if TYPE_CHECKING:
@@ -75,6 +89,7 @@ def routes(context: DashContext) -> list[Route]:
         Route("/open", pages.open_return, methods=["POST"], name="open"),
         Route("/returns/{return_id}", pages.overview, name="overview"),
         Route("/returns/{return_id}/rules", pages.rules, name="rules"),
+        Route("/returns/{return_id}/review", pages.set_review, methods=["POST"], name="review"),
         Route("/returns/{return_id}/templates", pages.templates, name="templates"),
         Route(
             "/returns/{return_id}/taxonomy",
@@ -160,7 +175,7 @@ class ReturnPages:
             "overview.html",
             working=working,
             section="overview",
-            view=overview(working.current),
+            view=overview(working.current, review=review_of(request)),
             breakdown=breakdown_summary(detail) if detail is not None else None,
         )
 
@@ -168,10 +183,9 @@ class ReturnPages:
         """The rules, filtered as the address says, with one picked in full."""
         working = self.context.working(request)
         query = request.query_params
+        legacy = any(key in query for key in REVIEW_KEYS)
         try:
-            review = ReviewFilter.from_text(
-                query.get("money", ""), query.get("bps", ""), query.get("hide_zero") == "1"
-            )
+            review = read_review(query) if legacy else review_of(request)
         except ValueError as exc:
             return self.context.render(
                 request,
@@ -191,9 +205,44 @@ class ReturnPages:
             rule_id=query.get("rule", ""),
             page=page_number(query.get("page")),
         )
-        return self.context.render(
-            request, "rules.html", working=working, section="rules", view=view
+        response = self.context.render(
+            request, "rules.html", working=working, section="rules", view=view, review=review
         )
+        if legacy:
+            save_review(request, response, working.opened.return_id, review)
+        return response
+
+    async def set_review(self, request: Request) -> Response:
+        """Save the browser's review settings and return to the same tab and selection."""
+        opened = self.context.opened(request)
+        form = await request.form()
+        try:
+            review = (
+                SHOW_ALL
+                if form.get("reset") == "1"
+                else ReviewFilter.from_text(
+                    str(form.get("money", "")),
+                    str(form.get("bps", "")),
+                    form.get("hide_zero") == "1",
+                )
+            )
+        except ValueError as exc:
+            return self.context.render(
+                request,
+                "error.html",
+                working=self.context.workspace.working(opened),
+                status_code=400,
+                title="Invalid review filter",
+                message=str(exc),
+            )
+        suffix = next((s.suffix for s in SECTIONS if s.key == form.get("section")), "/rules")
+        query = review_query(str(form.get("query", "")))
+        destination = f"/returns/{opened.return_id}{suffix}"
+        response = RedirectResponse(
+            f"{destination}?{query}" if query else destination, status_code=303
+        )
+        save_review(request, response, opened.return_id, review)
+        return response
 
     def evidence(self, request: Request) -> Response:
         """The evidence behind the verdict the pages show, as the file ``--evidence`` writes.
@@ -214,8 +263,10 @@ class ReturnPages:
         """One table of the return on its grid, with the broken rules' cells marked."""
         working = self.context.working(request)
         query = request.query_params
+        review = review_of(request)
         grid = template_grid(
             working,
+            review=review,
             table=query.get("table", ""),
             sheet=query.get("sheet", ""),
             key=query.get("key", ""),
@@ -232,7 +283,7 @@ class ReturnPages:
             section="templates",
             grid=grid,
             by=by,
-            breakdown=self._cell_breakdown(working, grid, by),
+            breakdown=self._cell_breakdown(working, grid, by, review),
             flash=self.context.take_flash(working.opened.return_id),
         )
 
@@ -258,7 +309,11 @@ class ReturnPages:
     # -- helpers ----------------------------------------------------------------
 
     def _cell_breakdown(
-        self, working: WorkingReturn, grid: TemplateGrid | None, dimension: str
+        self,
+        working: WorkingReturn,
+        grid: TemplateGrid | None,
+        dimension: str,
+        review: ReviewFilter,
     ) -> CellBreakdown | None:
         """The picked cell split by ``dimension``, with its broken rules member by member.
 
@@ -279,6 +334,7 @@ class ReturnPages:
                 rule_ids=rule_ids,
                 search_hidden=False,
             )
+            attribution = reviewed_attribution(working.current, attribution, review)
         return cell_breakdown(working, cell, dimension, rule_ids, attribution)
 
     def _home(

@@ -34,7 +34,7 @@
 <nav class="sheet-tabs" aria-label="Sheets">
   {% for page in grid.pages %}
   <a href="{{ link(base, table=grid.table, sheet=page.sheet or '', key=page.open_key or '', by=by) }}"{% if page == grid.page %} aria-current="true"{% endif %}>
-    <span class="code mono">{% if page.sheet %}z{{ page.sheet }}{% endif %}{% if page.open_key %} {{ page.open_key }}{% endif %} {% if page.marks %}<span class="chip chip-fail">{{ page.marks }} flagged</span>{% else %}<span class="chip chip-pass">clean</span>{% endif %}</span>
+    <span class="code mono">{% if page.sheet %}z{{ page.sheet }}{% endif %}{% if page.open_key %} {{ page.open_key }}{% endif %} {% if page.marks %}<span class="chip chip-fail">{{ page.marks }} flagged</span>{% else %}<span class="chip {{ 'chip-ne' if review.active else 'chip-pass' }}">{{ "no visible flags" if review.active else "clean" }}</span>{% endif %}</span>
     <span class="name">{{ page.label }}</span>
   </a>
   {% endfor %}
@@ -115,7 +115,7 @@
       <p class="small muted" style="margin: 0">{{ split.detail_rows | count }} row{{ "s" if split.detail_rows != 1 }} of the file, from {{ split.rows | length }} {{ split.dimension }} member{{ "s" if split.rows | length != 1 }}.{% if split.unexplained %} The figure differs from the rows' total by an override drafted on it.{% else %} They add up to the figure exactly.{% endif %}{% if split.rows | selectattr("flagged") | list %} A member marked in amber breaks a rule below on its own figures.{% endif %}</p>
     </section>
     {% endif %}
-    <h3>{{ "Broken rules that read this cell" if cell.marks else "No broken rule reads this cell" }}</h3>
+    <h3>{% if cell.marks %}Broken rules that read this cell{% elif review.active %}No visible breaks for this cell{% else %}No broken rule reads this cell{% endif %}</h3>
     {% set cell_at = (grid.table, grid.page.sheet, grid.page.open_key, cell.row, cell.column) %}
     {% for item in cell.rules %}
     {% set mark = item.mark %}{% set rule = item.rule %}{% set focused = grid.focus == mark.rule_id %}
@@ -144,7 +144,7 @@
       <details class="mark-more" data-rule="{{ mark.rule_id }}"{% if focused %} open{% endif %}>
         <summary>Read the rule</summary>
         <div class="mark-body">
-          <div class="small muted">Breaks in {{ rule.row.unsatisfied | count }} of {{ rule.row.evaluations | count }} evaluation{{ "s" if rule.row.evaluations != 1 }}{% if rule.row.templates %} · reads {{ rule.row.templates | join(" · ") }}{% endif %}</div>
+          <div class="small muted">Breaks in {{ (rule.row.unsatisfied - rule.row.hidden) | count }}{% if rule.row.hidden %} visible{% endif %} of {{ rule.row.evaluations | count }} evaluation{{ "s" if rule.row.evaluations != 1 }}{% if rule.row.templates %} · reads {{ rule.row.templates | join(" · ") }}{% endif %}</div>
           {% if rule.failures %}
           <div class="mark-breaks">
             <h3>{{ "The break" if rule.failures | length == 1 else "The breaks" }} that read this cell</h3>

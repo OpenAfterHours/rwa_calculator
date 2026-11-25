@@ -14,19 +14,12 @@
 <div class="filters">
   <nav class="seg" aria-label="Status">
     {% for status in ["FAIL", "PASS", "NOT_EVALUATED"] %}
-    <a href="{{ link(base, money=view.review.money, bps=view.review.basis_points, hide_zero='1' if view.review.hide_zero_null else '', status=status, severity=view.severity if status == 'FAIL' else '', template=view.template, q=view.query) }}"{% if view.status == status %} aria-current="true"{% endif %}>{{ labels[status] }} {{ view.counts[status] | count }}</a>
+    <a href="{{ link(base, status=status, severity=view.severity if status == 'FAIL' else '', template=view.template, q=view.query) }}"{% if view.status == status %} aria-current="true"{% endif %}>{{ labels[status] }} {{ (visible_rule_count if status == 'FAIL' else view.counts[status]) | count }}</a>
     {% endfor %}
   </nav>
   <form method="get" action="{{ base }}">
     <input type="hidden" name="status" value="{{ view.status }}">
     {% if view.status == "FAIL" %}
-    <label>Warning threshold ({{ current.ret.header.currency }})
-      <input type="number" name="money" min="0" step="any" value="{{ view.review.money if view.review.money is not none else '' }}">
-    </label>
-    <label>Warning threshold (basis points)
-      <input type="number" name="bps" min="0" step="any" value="{{ view.review.basis_points if view.review.basis_points is not none else '' }}">
-    </label>
-    <label><input type="checkbox" name="hide_zero" value="1"{% if view.review.hide_zero_null %} checked{% endif %}> Hide zero-only errors in must-be-empty cells</label>
     <label class="visually-hidden" for="severity">Severity</label>
     <select id="severity" name="severity">
       <option value="">Every severity</option>
@@ -49,13 +42,13 @@
   <section class="wide" aria-label="Rule list">
     {% if view.status == "FAIL" and view.review.active %}
     <p>{{ current.validation.status | title }} · {{ view.hidden_errors }} error occurrence(s) and {{ view.hidden_warnings }} warning occurrence(s) hidden.
-      <a href="{{ link(base, status=view.status, severity=view.severity, template=view.template, q=view.query) }}">Show all occurrences</a></p>
+      <a href="#review-filters">Review filter settings</a></p>
     {% endif %}
     <div class="small muted">{{ view.matched | count }} {{ labels[view.status] | lower }} rule{{ "s" if view.matched != 1 }}{% if view.pages > 1 %} · page {{ view.page }} of {{ view.pages }}{% endif %}</div>
     {% if view.rows %}
     <div class="rule-list">
       {% for row in view.rows %}
-      <a class="rule-item" href="{{ link(base, money=view.review.money, bps=view.review.basis_points, hide_zero='1' if view.review.hide_zero_null else '', status=view.status, severity=view.severity, template=view.template, q=view.query, page=view.page if view.page > 1 else '', rule=row.rule_id) }}"{% if view.selected and view.selected.row.rule_id == row.rule_id %} aria-current="true"{% endif %}>
+      <a class="rule-item" href="{{ link(base, status=view.status, severity=view.severity, template=view.template, q=view.query, page=view.page if view.page > 1 else '', rule=row.rule_id) }}"{% if view.selected and view.selected.row.rule_id == row.rule_id %} aria-current="true"{% endif %}>
         <span class="top">{{ status_chip(row) }}{{ deny_chip(row) }}{{ issue_chip(row) }}<span class="mono small muted">{{ row.rule_id }}</span>
           <span class="evals">{% if row.status == "FAIL" %}{{ row.unsatisfied }} of {{ row.evaluations }} break{% if row.hidden %} · {{ row.hidden }} hidden{% endif %}{% elif row.status == "PASS" %}{{ row.satisfied }} hold{% else %}{{ row.reason }}{% endif %}</span>
         </span>
@@ -66,8 +59,8 @@
     </div>
     {% if view.pages > 1 %}
     <div class="pager">
-      {% if view.page > 1 %}<a class="btn" href="{{ link(base, money=view.review.money, bps=view.review.basis_points, hide_zero='1' if view.review.hide_zero_null else '', status=view.status, severity=view.severity, template=view.template, q=view.query, page=view.page - 1) }}">Previous</a>{% endif %}
-      {% if view.page < view.pages %}<a class="btn" href="{{ link(base, money=view.review.money, bps=view.review.basis_points, hide_zero='1' if view.review.hide_zero_null else '', status=view.status, severity=view.severity, template=view.template, q=view.query, page=view.page + 1) }}">Next</a>{% endif %}
+      {% if view.page > 1 %}<a class="btn" href="{{ link(base, status=view.status, severity=view.severity, template=view.template, q=view.query, page=view.page - 1) }}">Previous</a>{% endif %}
+      {% if view.page < view.pages %}<a class="btn" href="{{ link(base, status=view.status, severity=view.severity, template=view.template, q=view.query, page=view.page + 1) }}">Next</a>{% endif %}
     </div>
     {% endif %}
     {% else %}
@@ -87,7 +80,7 @@
     {% for item in rule.issues %}{{ issue_callout(item) }}{% endfor %}
     <div class="stats">
       <div class="stat"><div class="small muted">Evaluations that hold</div><div class="value">{{ rule.row.satisfied | count }}</div></div>
-      <div class="stat"><div class="small muted">Evaluations that break</div><div class="value" style="color: var({{ '--fail' if rule.row.unsatisfied else '--strong' }})">{{ rule.row.unsatisfied | count }}</div></div>
+      <div class="stat"><div class="small muted">{{ "Visible breaks" if review.active else "Evaluations that break" }}</div><div class="value" style="color: var({{ '--fail' if rule.row.unsatisfied > rule.row.hidden else '--strong' }})">{{ (rule.row.unsatisfied - rule.row.hidden) | count }}</div></div>
       {% if rule.row.status == "NOT_EVALUATED" %}
       <div class="stat" style="flex: 2 1 240px"><div class="small muted">Not evaluated because</div><div class="mono" style="color: var(--strong)">{{ rule.row.reason }}</div><div class="small muted">{{ rule.reason_text }}{% if rule.detail %}: {{ rule.detail }}{% endif %}</div></div>
       {% endif %}

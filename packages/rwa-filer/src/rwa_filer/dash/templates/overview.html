@@ -32,13 +32,13 @@
       {% if view.warnings %}{{ view.warnings }} Warning-severity break{{ "s" if view.warnings != 1 }} must be explained.{% endif %}{% if view.missing %} <a href="#missing-templates">{{ view.missing | length }} template{{ "s" if view.missing | length != 1 }} the reported ones are checked against {{ "are" if view.missing | length != 1 else "is" }} not in this return</a>, so {{ view.missing_rules | count }} rule{{ "s" if view.missing_rules != 1 }} did not run.{% endif %}
     </p>
   </div>
-  {% if view.errors or view.warnings %}<a class="btn" href="{{ rules_url }}" style="align-self: center">Review the {{ view.errors + view.warnings }} break{{ "s" if view.errors + view.warnings != 1 }}</a>{% endif %}
+  {% if visible_rule_count %}<a class="btn" href="{{ rules_url }}" style="align-self: center">Review {{ visible_rule_count }} {{ "visible " if review.active }}break{{ "s" if visible_rule_count != 1 }}</a>{% elif view.errors or view.warnings %}<a class="btn" href="#review-filters" style="align-self: center">All rule breaks hidden by review filters</a>{% endif %}
 </section>
 {% endif %}
 
 <div class="tiles">
   <div class="tile"><div class="label"><span class="swatch" style="background: var({{ '--pass' if not view.structure else '--fail' }})"></span>Structure findings</div><div class="value">{{ view.structure | length }}</div><div class="sub">{{ "every fact has a cell in the taxonomy" if not view.structure else "the taxonomy cannot express these" }}</div></div>
-  <div class="tile"><div class="label"><span class="swatch" style="background: var({{ '--fail' if view.errors + view.warnings else '--pass' }})"></span>Rule breaks</div><div class="value">{{ view.errors + view.warnings }}</div><div class="sub">{{ view.errors }} error · {{ view.warnings }} warning</div></div>
+  <div class="tile"><div class="label"><span class="swatch" style="background: var({{ '--fail' if view.errors + view.warnings else '--pass' }})"></span>{{ "Filing rule breaks" if review.active else "Rule breaks" }}</div><div class="value">{{ view.errors + view.warnings }}</div><div class="sub">{{ view.errors }} error · {{ view.warnings }} warning</div></div>
   <div class="tile"><div class="label"><span class="swatch" style="background: var(--ne)"></span>Rules executed</div><div class="value">{{ view.executed | count }}</div><div class="sub">of {{ view.enforced | count }} the module enforces</div></div>
   <div class="tile"><div class="label"><span class="swatch" style="background: var({{ '--fail' if view.shortfall else '--pass' }})"></span>Templates covered</div><div class="value">{{ (view.templates | length) - (current.validation.report.templates_uncovered | length if current.validation.report else 0) }} of {{ view.templates | length }}</div><div class="sub">reported templates at least one rule ran on</div></div>
 </div>
@@ -132,7 +132,7 @@
           <div class="small muted" style="margin-top: 4px">{{ item.passed }} passed · {{ item.failed }} failed · {{ item.not_evaluated }} not evaluated</div>
           {% else %}<span class="small muted">no rule reads it</span>{% endif %}
         </td>
-        <td>{% if item.failed %}<a class="chip chip-fail" href="{{ link(rules_url, template=item.code) }}">{{ item.failed }} break{{ "s" if item.failed != 1 }}</a>{% else %}<span class="chip chip-pass">no breaks</span>{% endif %}</td>
+        <td>{% if item.visible_failed %}<a class="chip chip-fail" href="{{ link(rules_url, template=item.code) }}">{{ item.visible_failed }} break{{ "s" if item.visible_failed != 1 }}</a>{% elif item.failed %}<span class="chip chip-ne">no visible breaks</span>{% else %}<span class="chip chip-pass">no breaks</span>{% endif %}</td>
         <td class="num">{% if item.tables %}<a href="{{ link('/returns/' ~ current.return_id ~ '/templates', table=item.tables[0]) }}">View</a>{% endif %}</td>
       </tr>
       {% endfor %}
@@ -169,11 +169,11 @@
 
 {% if view.breaks %}
 <section class="panel" id="breaks">
-  <div class="panel-head"><h2>Breaks to resolve</h2><a class="small" href="{{ rules_url }}">All {{ view.errors + view.warnings }} in Rules</a></div>
+  <div class="panel-head"><h2>Breaks to resolve</h2><a class="small" href="{{ rules_url }}">All {{ visible_rule_count }} in Rules</a></div>
   <div class="rule-list">
   {% for row in view.breaks %}
     <a class="rule-item" href="{{ link(rules_url, rule=row.rule_id) }}">
-      <span class="top">{{ severity_chip(row.severity) }}{{ deny_chip(row) }}{{ issue_chip(row) }}<span class="mono small muted">{{ row.rule_id }}</span><span class="evals">{{ row.unsatisfied }} of {{ row.evaluations }} evaluation{{ "s" if row.evaluations != 1 }} break</span></span>
+      <span class="top">{{ severity_chip(row.severity) }}{{ deny_chip(row) }}{{ issue_chip(row) }}<span class="mono small muted">{{ row.rule_id }}</span><span class="evals">{{ row.unsatisfied - row.hidden }}{% if row.hidden %} visible{% endif %} of {{ row.evaluations }} evaluation{{ "s" if row.evaluations != 1 }} break</span></span>
       <span class="label">{{ row.label or "No label published" }}</span>
     </a>
   {% endfor %}

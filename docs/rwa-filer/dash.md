@@ -123,16 +123,24 @@ the expression as the Bank's workbook states it, how many of its evaluations
 held and how many broke, and for each of the first breaks the cells it read with
 the values they held. Each of those cells links to the template grid.
 
-On the Failed tab, enter a warning threshold in the return's currency or in
-basis points. The threshold applies to the excess beyond the published rule's
+Open **Review filters** on any return tab. Enter a warning threshold in the
+return's currency or in basis points, then choose **Apply to this return**.
+The threshold applies to the excess beyond the published rule's
 rounding allowance. An excess equal to the threshold stays visible. A warning
 without a measurable excess in that unit also stays visible.
 
 **Hide zero-only errors in must-be-empty cells** hides an Error occurrence when
 the rule requires an empty cell and it contains a reported numeric zero. A
-nonzero occurrence of the same rule still appears. The page shows the number of
-error and warning occurrences hidden and offers **Show all occurrences**.
-Filters start off. The filing verdict, evidence and build use all occurrences.
+nonzero occurrence of the same rule still appears. Settings follow the open
+return in this browser, including reloads and links to individual cells.
+Each newly opened return starts with all occurrences visible.
+
+The rule lists, template and sheet flag counts, grid highlights, cell details
+and Investigate breakdown use the same visible occurrences. The Investigate
+CSV follows that view. Compare and Build & sign off apply the settings to their
+lists of rule changes. Filing verdicts, downloaded validation evidence and
+the independent referee results use every occurrence. **Show all occurrences**
+clears the settings across tabs for this return.
 
 **Known issues with the published rules.** A result a known issue explains (see
 [Known issues with the published rules](index.md#known-issues-with-the-published-rules))

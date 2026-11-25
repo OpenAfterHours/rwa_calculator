@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from dash_builders import CELL, HEADER_ARGS_CLI, draft, make_fileable
+from dash_builders import CELL, HEADER, HEADER_ARGS_CLI, draft, make_fileable
 from rwa_filer.cli import main
 from rwa_filer.dash.filing import parse_value
 from rwa_filer.workflow.ledger import EVENT_ADJUSTMENT, EVENT_BUILD, EVENT_SIGNOFF, read_ledger
@@ -108,6 +108,27 @@ def test_the_overrides_are_checked_before_anything_is_built(
     assert blocking > 0
     assert "With these overrides: nothing blocks submission" in page
     assert f"Blocking findings {blocking} → 0" in page
+
+
+def test_filing_filters_rule_changes_and_keeps_the_blocking_total(
+    client: TestClient, workspace: Workspace, clean_csv: Path
+) -> None:
+    opened = workspace.open(clean_csv, HEADER)
+    base = f"/returns/{opened.return_id}"
+    draft(
+        client, opened, "0101", table="OF08.01.01.01", sheet="0006", value="0", reason="Test zero"
+    )
+    before = client.get(f"{base}/filing")
+    assert 'data-rule="boe_b1039"' in before.text
+
+    reviewed = client.post(f"{base}/review", data={"section": "filing", "hide_zero": "1"})
+
+    assert 'data-rule="boe_b1039"' not in reviewed.text
+    assert (
+        reviewed.context["view"].effect.blocking_after
+        == before.context["view"].effect.blocking_after
+        > 0
+    )
 
 
 @pytest.mark.parametrize(

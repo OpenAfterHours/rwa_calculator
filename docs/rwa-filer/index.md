@@ -416,7 +416,35 @@ over amounts are searched. `--format json` and `--report` carry the same under
 `breakdown`; the dashboard's Investigate page lays it out
 ([The dashboard](dash.md)).
 
-What is read, and what is refused:
+#### When the file already contains the group return
+
+Give the reporting-unit column and its group code to either `validate` or `build`.
+For a file with `Group`, `Retail` and `Commercial` in `reporting_unit`, run:
+
+```bash
+rwa-filer validate detail.csv --breakdown reporting_unit --group-code Group \
+    --entity 5493001KJTIIGC8Y1R12 --reference-date 2027-03-31 --module PRA001
+```
+
+Only the group rows supply the return, including its comments, percentages, zeros and
+absent cells. A repeated group fact goes through the usual duplicate-fact check.
+Specify one breakdown column in this mode. The group code matches case-sensitively
+after trimming spaces. An unknown code stops the load.
+
+The other codes identify units. Each can report its own text, dates, percentages
+and row identifiers for the same cell. Monetary lines within a unit are added.
+Line-reference checks apply within each unit. Blank unit codes appear as their own
+member. Open rows are compared by the taxonomy's row keys.
+
+The report traces failed group rules to the units. Where a unit lacks an input the
+group evaluation read, the dashboard shows **Insufficient detail**. For additive
+monetary comparisons, any difference between the group gap and the assessed unit
+gaps is shown as unexplained. The JSON report includes group and unit text under
+`breakdown.text_cells`. On the dashboard use **Open a return → Reporting unit breakdown → Load
+choices from file** to select the column and group, then **Investigate** to review
+the unit results or read the text.
+
+#### When the detail supplies the return
 
 - **Breakdown columns** are matched ignoring case and surrounding spaces. A row
   that leaves one empty is a member of its own, named `no <column>`. A fact

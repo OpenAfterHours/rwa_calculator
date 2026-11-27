@@ -49,6 +49,7 @@ FORM_FIELDS: Final = (
     "currency",
     "taxonomy",
     "breakdown",
+    "group_code",
     "line_ref",
     "on_repeat",
 )
@@ -145,7 +146,10 @@ def detail_spec(values: dict[str, str]) -> DetailSpec | None:
             a column is named twice.
     """
     spec = DetailSpec.from_text(
-        values.get("breakdown"), values.get("line_ref"), values.get("on_repeat")
+        values.get("breakdown"),
+        values.get("line_ref"),
+        values.get("on_repeat"),
+        values.get("group_code") or None,
     )
     return spec if spec.active else None
 

@@ -26,7 +26,7 @@ import json
 import logging
 import secrets
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
@@ -55,13 +55,9 @@ STATUS_FAILED: Final = "failed"
 PROGRESS_FILE: Final = "progress.json"
 
 
-@dataclass
+@dataclass(frozen=True)
 class RefereeJob:
-    """One referee run: what it was asked, how far it has got, what it found.
-
-    Mutable on purpose: the worker thread fills it in while pages read it,
-    under the board's lock.
-    """
+    """One snapshot of a referee run, consistent throughout a page render."""
 
     job_id: str
     return_id: str
@@ -181,13 +177,17 @@ class JobBoard:
         differential: Differential | None = None,
         error: str | None = None,
     ) -> None:
+        finished = replace(
+            job,
+            result=result,
+            differential=differential,
+            error=error,
+            status=STATUS_FAILED if error else STATUS_DONE,
+            finished_at=datetime.now(UTC),
+        )
         with self._lock:
-            job.result = result
-            job.differential = differential
-            job.error = error
-            job.status = STATUS_FAILED if error else STATUS_DONE
-            job.finished_at = datetime.now(UTC)
-        logger.info("referee run %s %s", job.job_id, job.status)
+            self._jobs[job.job_id] = finished
+        logger.info("referee run %s %s", job.job_id, finished.status)
 
 
 def arelle_status(python: Path | None = None) -> tuple[bool, str]:

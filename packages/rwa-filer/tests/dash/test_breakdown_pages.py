@@ -16,6 +16,7 @@ from detail_builders import (
     HEADER_FIELDS,
     HEADER_FORM,
     TABLE,
+    group_files,
     write_detail,
 )
 from rwa_filer.dash import create_app
@@ -42,6 +43,17 @@ def broken_down(workspace: Workspace, detail_csv: Path) -> OpenedReturn:
 def _text(page: str) -> str:
     """A page's text with its tags and runs of space taken out."""
     return re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", " ", page)))
+
+
+def test_reporting_unit_fields_are_visible_on_the_start_page(client: TestClient) -> None:
+    page = client.get("/").text
+    panel = re.search(r'<details\b[^>]*id="breakdown-fields"[^>]*>', page)
+    assert panel is not None
+    assert " open" in panel.group()
+    section = page[panel.end() :].split("</details>", 1)[0]
+    assert "Reporting unit breakdown" in section
+    assert 'name="breakdown"' in section
+    assert 'name="group_code"' in section
 
 
 def test_the_open_form_reads_a_file_as_a_detail_when_given_breakdown_columns(
@@ -259,3 +271,80 @@ def test_a_new_draft_is_a_new_attribution(workspace: Workspace, broken_down: Ope
     # Assert
     assert after is not before
     assert any(item.unexplained for item in after.broken)
+
+
+def test_dashboard_selects_group_and_shows_each_units_text(
+    client: TestClient, workspace: Workspace, tmp_path: Path
+) -> None:
+    plain, combined = group_files(tmp_path)
+    options = client.post(
+        "/open/breakdown-options", data={"path": str(combined), "breakdown": "reporting_unit"}
+    )
+    assert options.json() == {
+        "columns": ["reporting_unit"],
+        "codes": ["Commercial", "Group", "Partial", "Retail"],
+    }
+    page = client.post(
+        "/open",
+        data={
+            **HEADER_FORM,
+            "path": str(combined),
+            "breakdown": "reporting_unit",
+            "group_code": "Group",
+        },
+    )
+    assert page.status_code == 200
+    base = page.url.path
+    assert "Group" in page.text
+    cells = client.get(
+        base + "/templates", params={"table": "C32.01.01.01", "row": "0010", "col": "0070"}
+    ).text
+    assert all(
+        wording in cells for wording in ("Group wording", "Commercial wording", "Retail wording")
+    )
+    investigation = client.get(base + "/investigate").text
+    assert "boe_b0708" in investigation
+    assert "Insufficient detail" in investigation
+    assert "Commercial wording" in investigation
+    source = workspace.get(base.rsplit("/", 1)[-1])
+    alone = workspace.open(plain, HEADER_FIELDS)
+    assert source is not None
+    assert source.validation.findings == alone.validation.findings
+    for opened in (source, alone):
+        response = client.post(
+            f"/returns/{opened.return_id}/build",
+            data={
+                "directory": str(tmp_path / opened.return_id),
+                "author": "Preparer",
+                "reproducible": "yes",
+                "force": "yes",
+                "name": "return",
+            },
+        )
+        assert response.status_code == 200
+    assert (
+        next((tmp_path / source.return_id).glob("*.xbrl")).read_bytes()
+        == next((tmp_path / alone.return_id).glob("*.xbrl")).read_bytes()
+    )
+
+
+def test_uploaded_file_offers_group_codes_and_reopening_keeps_the_group(
+    client: TestClient, workspace: Workspace, tmp_path: Path
+) -> None:
+    _, combined = group_files(tmp_path)
+    options = client.post(
+        "/open/breakdown-options",
+        data={"breakdown": "reporting_unit"},
+        files={"file": ("units.csv", combined.read_bytes(), "text/csv")},
+    )
+    assert options.json()["codes"] == ["Commercial", "Group", "Partial", "Retail"]
+    plain = workspace.open(combined, HEADER_FIELDS)
+    page = client.post(
+        f"/returns/{plain.return_id}/breakdown",
+        data={"breakdown": "reporting_unit", "group_code": "Group"},
+    )
+    assert "Reported text by unit" in page.text
+    opened = workspace.get(page.url.path.split("/")[2])
+    assert opened is not None
+    assert opened.ret.facts.height == 3
+    assert workspace.reopen(opened, opened.release.version).ret.facts.equals(opened.ret.facts)

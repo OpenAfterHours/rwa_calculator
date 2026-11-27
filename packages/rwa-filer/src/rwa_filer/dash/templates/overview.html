@@ -46,10 +46,10 @@
 {% if breakdown %}
 <section class="panel" id="breakdown">
   <div class="panel-head">
-    <h2>Summed from {{ breakdown.rows_summed | count }} row{{ "s" if breakdown.rows_summed != 1 }}</h2>
+    <h2>{% if breakdown.group_code %}Validated group {{ breakdown.group_code }} · {{ breakdown.group_rows | count }} facts{% else %}Summed from {{ breakdown.rows_summed | count }} row{{ "s" if breakdown.rows_summed != 1 }}{% endif %}</h2>
     <a class="small" href="/returns/{{ current.return_id }}/investigate">Where the breaks come from</a>
   </div>
-  <p class="small muted" style="margin: 0">Rows of <span class="mono">{{ breakdown.file }}</span> for the same cell are added together, and the sum is the figure validated and filed. The rows are kept, so any figure can be split by {{ breakdown.dimensions | map("first") | join(" or ") }}.</p>
+  <p class="small muted" style="margin: 0">{% if breakdown.group_code %}The remaining {{ breakdown.rows_summed | count }} unit rows are available for investigation.{% else %}Rows of <span class="mono">{{ breakdown.file }}</span> for the same cell are added together, and the sum is the figure validated and filed. The rows are kept, so any figure can be split by {{ breakdown.dimensions | map("first") | join(" or ") }}.{% endif %}</p>
   <div class="stats">
     <div class="stat"><div class="small muted">Rows read</div><div class="value">{{ breakdown.rows_read | count }}</div></div>
     <div class="stat"><div class="small muted">Cells they make</div><div class="value">{{ breakdown.cells | count }}</div></div>
@@ -66,7 +66,7 @@
       </tbody>
     </table>
   </div>
-  <p class="small muted" style="margin: 0">{% if breakdown.line_ref %}Line reference <span class="mono">{{ breakdown.line_ref }}</span>: {{ "a reference given twice in one cell stopped the file" if breakdown.on_repeat == "stop" else "a reference given twice in one cell with the same figures was kept once" }}; none is left.{% else %}No line reference was named, so every row counts: two rows that agree on everything are two amounts, and both are added.{% endif %}</p>
+  <p class="small muted" style="margin: 0">{% if breakdown.line_ref %}Line reference <span class="mono">{{ breakdown.line_ref }}</span>: {{ "a reference given twice in one cell stopped the file" if breakdown.on_repeat == "stop" else "a reference given twice in one cell with the same figures was kept once" }}; none is left.{% elif not breakdown.group_code %}No line reference was named, so every row counts: two rows that agree on everything are two amounts, and both are added.{% endif %}</p>
 </section>
 {% elif current.reading.unread_columns %}
 <section class="panel" id="breakdown-offer">

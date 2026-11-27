@@ -1,0 +1,8 @@
+<label class="field">Group code <span class="hint">optional · value identifying the return to validate and file</span>
+  <input name="group_code" type="text" list="group-codes" value="{{ group_code or '' }}" placeholder="Group" spellcheck="false" class="mono">
+  <datalist id="group-codes"></datalist>
+</label>
+<div class="field"><button type="button" class="btn" id="load-unit-options">Load choices from file</button>
+  <output class="hint" id="unit-options-status"></output>
+</div>
+<script src="/static/group-picker.js" defer></script>

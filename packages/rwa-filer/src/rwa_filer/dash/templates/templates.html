@@ -87,7 +87,7 @@
     {% set split = breakdown.split %}
     <section class="breakdown" aria-label="Where this figure comes from" id="cell-breakdown">
       <div class="breakdown-head">
-        <h3>Where this figure comes from</h3>
+        <h3>{{ "Values by reporting unit" if split.show_values else "Where this figure comes from" }}</h3>
         {% if split.dimensions | length > 1 %}
         <nav class="seg" aria-label="Break down by">
           {% for dimension in split.dimensions %}<a href="{{ link(base, table=grid.table, sheet=grid.page.sheet or '', key=grid.page.open_key or '', row=cell.row, col=cell.column, focus=grid.focus, by=dimension) }}"{% if dimension == split.dimension %} aria-current="true"{% endif %}>{{ dimension }}</a>{% endfor %}
@@ -98,7 +98,7 @@
         {% for share in split.rows %}
         <div class="share{% if share.flagged %} flagged{% endif %}">
           <span class="share-name">{{ share.label }}</span>
-          <span class="share-bar" aria-hidden="true"><span style="width: {{ share.width }}%"></span></span>
+          {% if not split.show_values %}<span class="share-bar" aria-hidden="true"><span style="width: {{ share.width }}%"></span></span>{% endif %}
           <span class="share-value">{{ share.value }}</span>
           <span class="share-pct">{{ share.share }}</span>
         </div>
@@ -112,7 +112,7 @@
         </div>
         {% endif %}
       </div>
-      <p class="small muted" style="margin: 0">{{ split.detail_rows | count }} row{{ "s" if split.detail_rows != 1 }} of the file, from {{ split.rows | length }} {{ split.dimension }} member{{ "s" if split.rows | length != 1 }}.{% if split.unexplained %} The figure differs from the rows' total by an override drafted on it.{% else %} They add up to the figure exactly.{% endif %}{% if split.rows | selectattr("flagged") | list %} A member marked in amber breaks a rule below on its own figures.{% endif %}</p>
+      <p class="small muted" style="margin: 0">{{ split.detail_rows | count }} source row{{ "s" if split.detail_rows != 1 }}.{% if split.show_values %} Each value is shown as reported.{% elif current.detail.spec.group_code %} Percentages show each unit's share of the group figure where available.{% elif split.unexplained %} The figure differs from the rows' total by an override drafted on it.{% else %} They add up to the figure exactly.{% endif %}{% if split.rows | selectattr("flagged") | list %} A member marked in amber breaks a rule below on its own figures.{% endif %}</p>
     </section>
     {% endif %}
     <h3>{% if cell.marks %}Broken rules that read this cell{% elif review.active %}No visible breaks for this cell{% else %}No broken rule reads this cell{% endif %}</h3>
@@ -132,7 +132,7 @@
             <thead><tr><th scope="col">{{ breakdown.dimension }}</th><th scope="col">{{ split.left_label }}</th><th scope="col">{{ split.right_label }}</th><th scope="col">Out by</th></tr></thead>
             <tbody>
               {% for row in split.rows %}
-              <tr{% if row.breaks %} class="breaks"{% endif %}><td>{{ row.label }}{% if row.breaks %} <span class="chip chip-warn">BREAKS</span>{% endif %}</td><td>{{ row.left }}</td><td>{{ row.right }}</td><td>{{ row.gap }}</td></tr>
+              <tr{% if row.breaks %} class="breaks"{% endif %}><td>{{ row.label }}{% if not row.evaluated %} <span class="small muted">Insufficient detail</span>{% endif %}{% if row.breaks %} <span class="chip chip-warn">BREAKS</span>{% endif %}</td><td>{{ row.left }}</td><td>{{ row.right }}</td><td>{{ row.gap }}</td></tr>
               {% endfor %}
               <tr class="whole"><td>{{ split.whole.label }}</td><td>{{ split.whole.left }}</td><td>{{ split.whole.right }}</td><td>{{ split.whole.gap }}</td></tr>
             </tbody>

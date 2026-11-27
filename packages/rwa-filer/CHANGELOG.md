@@ -7,6 +7,16 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
+- (Next release changes will go here)
+
+### Changed
+- (Next release changes will go here)
+
+---
+
+## [0.1.10] - 2026-11-27
+
+### Added
 - Choose a supplied group in a CSV or Parquet file with `--breakdown reporting_unit
   --group-code Group` or the dashboard's **Group code** field. Validation and filing
   use the group's facts. Investigate shows the contributing units' figures and text.

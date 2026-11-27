@@ -12,11 +12,11 @@ function fill(list, values) {
 
 async function refreshChoices() {
   const request = ++requestNumber;
-  const data = new FormData(form);
-  choicesLoaded = true;
-  fill(codes, []);
-  statusText.textContent = "Reading choices…";
   try {
+    const data = new FormData(form);
+    choicesLoaded = true;
+    fill(codes, []);
+    statusText.textContent = "Reading choices.";
     const response = await fetch("/open/breakdown-options", {method: "POST", body: data});
     const options = await response.json();
     if (request !== requestNumber) return;
@@ -32,7 +32,7 @@ async function refreshChoices() {
 }
 
 loadChoices.addEventListener("click", refreshChoices);
-form.addEventListener("change", event => {
+form.addEventListener("change", async event => {
   if (["file", "path"].includes(event.target.name)) {
     requestNumber++;
     choicesLoaded = false;
@@ -40,6 +40,6 @@ form.addEventListener("change", event => {
     fill(codes, []);
     statusText.textContent = "";
   } else if (event.target.name === "breakdown" && choicesLoaded) {
-    refreshChoices();
+    await refreshChoices();
   }
 });

@@ -40,7 +40,7 @@ References:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -75,7 +75,8 @@ ON_REPEAT_KEEP_ONE: Final = "keep-one"
 ON_REPEAT_CHOICES: Final = (ON_REPEAT_STOP, ON_REPEAT_KEEP_ONE)
 
 #: The files a detail is read from.
-DETAIL_SUFFIXES: Final = (".parquet", ".csv")
+PARQUET_SUFFIX: Final = ".parquet"
+DETAIL_SUFFIXES: Final = (PARQUET_SUFFIX, ".csv")
 
 #: The one data type whose figures add up.
 SUMMABLE_TYPE: Final = "monetary"
@@ -526,7 +527,7 @@ def breakdown_options(source: Path | BinaryIO, suffix: str, column: str) -> dict
     """Read column names and the selected column's distinct codes for the dashboard picker."""
     if suffix not in DETAIL_SUFFIXES:
         raise ValueError("Choose a CSV or Parquet fact table to see its reporting units.")
-    if suffix == ".parquet":
+    if suffix == PARQUET_SUFFIX:
         names = list(pl.read_parquet_schema(source))
     else:
         names = pl.read_csv(source, n_rows=0, infer_schema=False, encoding="utf8-lossy").columns
@@ -538,7 +539,7 @@ def breakdown_options(source: Path | BinaryIO, suffix: str, column: str) -> dict
             source.seek(0)
         frame = (
             pl.read_parquet(source, columns=selected)
-            if suffix == ".parquet"
+            if suffix == PARQUET_SUFFIX
             else pl.read_csv(source, columns=selected, infer_schema=False, encoding="utf8-lossy")
         )
         values = frame.to_series().cast(pl.String).str.strip_chars().drop_nulls()
@@ -586,10 +587,11 @@ def _resolve(spec: DetailSpec, columns: Sequence[str], file: str) -> DetailSpec:
             raise ValueError(f"{file} has {len(matches)} columns named like {name!r}")
         return matches[0]
 
-    return replace(
-        spec,
+    return DetailSpec(
         breakdown=tuple(find(name) for name in spec.breakdown),
         line_ref=find(spec.line_ref) if spec.line_ref else None,
+        on_repeat=spec.on_repeat,
+        group_code=spec.group_code,
     )
 
 

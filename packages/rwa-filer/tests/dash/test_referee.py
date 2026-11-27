@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from threading import Event
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -102,11 +103,21 @@ def test_a_run_checks_the_built_instance_and_shows_where_the_engines_part(
     broken: OpenedReturn,
     built: Path,
     arelle: list[dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Arrange — natively boe_b0708 breaks; the stand-in Arelle says it holds.
     report = broken.validation.report
     assert report is not None
     assert any(r.rule_id == "boe_b0708" and r.status == STATUS_FAIL for r in report.results)
+    release = Event()
+    run = jobs.run_referee
+
+    def delayed_run(instance: Path, package: Path, **options: Any) -> RefereeResult:
+        if not release.wait(timeout=20):
+            raise AssertionError("the running page did not release the referee")
+        return run(instance, package, **options)
+
+    monkeypatch.setattr(jobs, "run_referee", delayed_run)
 
     # Act
     start = client.post(
@@ -114,13 +125,21 @@ def test_a_run_checks_the_built_instance_and_shows_where_the_engines_part(
         data={"instance": "build:0", "package": str(built)},
         follow_redirects=False,
     )
-    page = _wait(client, start.headers["location"])
+    location = start.headers["location"]
+    try:
+        running_page = client.get(location)
+        assert 'data-status="running"' in running_page.text
+        snapshot = running_page.context["job"]
+    finally:
+        release.set()
+    page = _wait(client, location)
 
     # Assert — the instance the build wrote, the package given, and the disagreement.
     assert start.status_code == 303
     (call,) = arelle
     assert call["instance"].suffix == ".xbrl" and call["package"] == built
     assert 'data-status="done"' in page
+    assert snapshot.status == jobs.STATUS_RUNNING
     disagreements = page[page.index('id="disagreements"') :]
     assert "boe_b0708" in disagreements
     assert "DISAGREEMENT" in page

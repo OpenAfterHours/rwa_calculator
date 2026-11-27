@@ -483,9 +483,7 @@ def breaks_csv(attribution: Attribution, picked: int | None = None) -> str:
                         kind,
                         item.place_text,
                         " ".join(address(cell) for cell in item.cells),
-                        ("yes" if standing.breaks else "no")
-                        if standing.evaluated
-                        else "insufficient detail",
+                        _csv_verdict(standing),
                         _plain(standing.left),
                         _plain(standing.right),
                         _plain(standing.gap) if standing.evaluated else "",
@@ -500,6 +498,12 @@ def breaks_csv(attribution: Attribution, picked: int | None = None) -> str:
 # =============================================================================
 # Private helpers
 # =============================================================================
+
+
+def _csv_verdict(standing: Standing) -> str:
+    if not standing.evaluated:
+        return "insufficient detail"
+    return "yes" if standing.breaks else "no"
 
 
 def _value(opened: OpenedReturn, cell: Cell) -> float | None:
@@ -578,24 +582,20 @@ def _verdict(attribution: Attribution, item: TracedBreak) -> str:
     if len(breaking) == 1:
         standing = breaking[0]
         whole = item.gap
-        if standing.gap is None:
+        gap = standing.gap
+        if gap is None:
             return (
                 f"{attribution.label(standing.member)} breaks the rule on its reported values."
                 + rest
             )
-        if (
-            item.additive
-            and whole is not None
-            and standing.gap is not None
-            and _same(standing.gap, whole)
-        ):
+        if item.additive and whole is not None and _same(gap, whole):
             return (
                 f"All of the {amount_text(abs(whole))} is in {attribution.label(standing.member)}."
                 + rest
             )
         return (
             f"{attribution.label(standing.member)} breaks it on its own figures, out by "
-            f"{amount_text(standing.gap, signed=True)}." + rest
+            f"{amount_text(gap, signed=True)}." + rest
         )
     named = ", ".join(
         f"{attribution.label(standing.member)} ({amount_text(standing.gap, signed=True)})"
@@ -643,30 +643,7 @@ def _matrix_row(
     items: list[TracedBreak],
     columns: list[int],
 ) -> MatrixRow:
-    cells: list[MatrixCell | None] = []
     tone = "error" if items[0].severity == SEVERITY_ERROR else "warning"
-    for index in columns:
-        member = attribution.members[index]
-        gaps = [
-            standing.gap
-            for item in items
-            if (standing := item.standing(member)) is not None and standing.breaks
-        ]
-        if not gaps:
-            if attribution.group_code is None:
-                cells.append(None)
-            else:
-                assessed = sum(1 for item in items if (s := item.standing(member)) and s.evaluated)
-                label = (
-                    "Met"
-                    if assessed == len(items)
-                    else f"Met {assessed}, insufficient detail for {len(items) - assessed}"
-                    if assessed
-                    else "Insufficient detail"
-                )
-                cells.append(MatrixCell(count=0, of=len(items), amount=label, tone=""))
-            continue
-        cells.append(MatrixCell(count=len(gaps), of=len(items), amount=_amounts(gaps), tone=tone))
     whole = [item.gap for item in items]
     unexplained = [item.unexplained for item in items if item.unexplained]
     return MatrixRow(
@@ -674,10 +651,32 @@ def _matrix_row(
         severity=items[0].severity,
         label=rule_label(opened.pack.info, rule_id),
         breaks=len(items),
-        cells=tuple(cells),
+        cells=tuple(
+            _matrix_cell(items, attribution.members[index], tone, attribution.group_code)
+            for index in columns
+        ),
         whole=_amounts(whole),
         unexplained=_amounts(unexplained) if unexplained else "",
     )
+
+
+def _matrix_cell(
+    items: list[TracedBreak], member: Member, tone: str, group_code: str | None
+) -> MatrixCell | None:
+    standings = [standing for item in items if (standing := item.standing(member)) is not None]
+    gaps = [standing.gap for standing in standings if standing.breaks]
+    if gaps:
+        return MatrixCell(count=len(gaps), of=len(items), amount=_amounts(gaps), tone=tone)
+    if group_code is None:
+        return None
+    assessed = sum(standing.evaluated for standing in standings)
+    if assessed == len(items):
+        label = "Met"
+    elif assessed:
+        label = f"Met {assessed}, insufficient detail for {len(items) - assessed}"
+    else:
+        label = "Insufficient detail"
+    return MatrixCell(count=0, of=len(items), amount=label, tone="")
 
 
 def _amounts(gaps: Sequence[float | None]) -> str:

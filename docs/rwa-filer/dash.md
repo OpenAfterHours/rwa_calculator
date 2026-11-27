@@ -49,7 +49,7 @@ The form also names the taxonomy release to validate against; left at its
 default, it is the release live for the return's module. Returns you open stay
 listed until the dashboard is stopped.
 
-Under **Break it down (optional)**, a fact table can be opened as a detail:
+Under **Reporting unit breakdown (optional)**, a fact table can be opened as a detail:
 several rows per cell, each saying in its own columns where it came from — a
 business unit, a source system, a journal. Name those columns, and optionally
 the column holding each line's own reference (see
@@ -208,7 +208,7 @@ page; the result is kept until the drafted overrides change. A return opened
 without breakdown columns shows the columns its file has and opens it again
 with the ones you pick.
 
-**Files with a supplied group.** On **Open return**, expand **Break it down** and
+**Files with a supplied group.** On **Open a return**, find **Reporting unit breakdown** and
 use **Load choices from file**. Select the reporting-unit column, then choose
 the group code. The overview names the group used for validation and filing.
 **Investigate** shows how each unit stands on the failed group checks and lists

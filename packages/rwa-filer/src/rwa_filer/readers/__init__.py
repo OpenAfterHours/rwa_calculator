@@ -210,15 +210,17 @@ def open_source(
         source = replace(
             source, release=resolve_release(source.ret.header.module, taxonomy, today=today)
         )
-    if source.detail is not None and source.pack is not None:
-        check_amounts(source.detail, source.pack)
-        code = source.detail.spec.group_code
-        if code is not None:
-            aligned = align_open_rows(
-                source.detail.rows, source.ret.facts, source.detail.dimensions[0], code, source.pack
-            )
-            if aligned is not None:
-                source = replace(source, detail=replace(source.detail, aligned_rows=aligned))
+    rows = source.detail
+    pack = source.pack
+    if rows is None or pack is None:
+        return source
+    check_amounts(rows, pack)
+    code = rows.spec.group_code
+    if code is None:
+        return source
+    aligned = align_open_rows(rows.rows, source.ret.facts, rows.dimensions[0], code, pack)
+    if aligned is not None:
+        source = replace(source, detail=replace(rows, aligned_rows=aligned))
     return source
 
 

@@ -45,6 +45,17 @@ def _text(page: str) -> str:
     return re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", " ", page)))
 
 
+def test_reporting_unit_fields_are_visible_on_the_start_page(client: TestClient) -> None:
+    page = client.get("/").text
+    panel = re.search(r'<details\b[^>]*id="breakdown-fields"[^>]*>', page)
+    assert panel is not None
+    assert " open" in panel.group()
+    section = page[panel.end() :].split("</details>", 1)[0]
+    assert "Reporting unit breakdown" in section
+    assert 'name="breakdown"' in section
+    assert 'name="group_code"' in section
+
+
 def test_the_open_form_reads_a_file_as_a_detail_when_given_breakdown_columns(
     client: TestClient, detail_csv: Path
 ) -> None:
@@ -292,11 +303,13 @@ def test_dashboard_selects_group_and_shows_each_units_text(
         wording in cells for wording in ("Group wording", "Commercial wording", "Retail wording")
     )
     investigation = client.get(base + "/investigate").text
-    assert "boe_b0708" in investigation and "Insufficient detail" in investigation
+    assert "boe_b0708" in investigation
+    assert "Insufficient detail" in investigation
     assert "Commercial wording" in investigation
     source = workspace.get(base.rsplit("/", 1)[-1])
     alone = workspace.open(plain, HEADER_FIELDS)
-    assert source is not None and source.validation.findings == alone.validation.findings
+    assert source is not None
+    assert source.validation.findings == alone.validation.findings
     for opened in (source, alone):
         response = client.post(
             f"/returns/{opened.return_id}/build",
@@ -332,5 +345,6 @@ def test_uploaded_file_offers_group_codes_and_reopening_keeps_the_group(
     )
     assert "Reported text by unit" in page.text
     opened = workspace.get(page.url.path.split("/")[2])
-    assert opened is not None and opened.ret.facts.height == 3
+    assert opened is not None
+    assert opened.ret.facts.height == 3
     assert workspace.reopen(opened, opened.release.version).ret.facts.equals(opened.ret.facts)

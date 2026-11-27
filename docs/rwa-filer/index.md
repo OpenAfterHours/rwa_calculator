@@ -440,7 +440,7 @@ The report traces failed group rules to the units. Where a unit lacks an input t
 group evaluation read, the dashboard shows **Insufficient detail**. For additive
 monetary comparisons, any difference between the group gap and the assessed unit
 gaps is shown as unexplained. The JSON report includes group and unit text under
-`breakdown.text_cells`. On the dashboard use **Open return → Break it down → Load
+`breakdown.text_cells`. On the dashboard use **Open a return → Reporting unit breakdown → Load
 choices from file** to select the column and group, then **Investigate** to review
 the unit results or read the text.
 

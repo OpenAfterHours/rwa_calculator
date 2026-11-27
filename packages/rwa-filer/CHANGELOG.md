@@ -14,6 +14,10 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ### Changed
 - Monetary detail aggregation now refuses repeated numeric open-row identifiers.
 
+### Fixed
+- The Referee dashboard shows the completed run and its disagreements together,
+  including when a worker finishes while the page is rendering.
+
 ---
 
 ## [0.1.9] - 2026-11-25

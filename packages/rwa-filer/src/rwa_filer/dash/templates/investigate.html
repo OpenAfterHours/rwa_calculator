@@ -104,7 +104,7 @@
     <details class="panel" id="unit-text">
       <summary>Reported text by unit</summary>
       <div class="table-wrap"><table class="data">
-        <thead><tr><th>Template cell</th><th>{{ view.dimension }}</th><th>Reported text</th></tr></thead>
+        <thead><tr><th scope="col">Template cell</th><th scope="col">{{ view.dimension }}</th><th scope="col">Reported text</th></tr></thead>
         <tbody>{% for fact in current.detail.text_cells(current.ret) %}
           <tr><td>{% if fact[view.dimension] == current.detail.spec.group_code %}<a href="{{ link(grid_url, table=fact.table, sheet=fact.sheet or '', key=fact.open_key or '', row=fact.row, col=fact.column) }}">{% endif %}{{ fact.table }}{% if fact.sheet %} [z{{ fact.sheet }}]{% endif %}{% if fact.open_key %} [{{ fact.open_key }}]{% endif %} [r{{ fact.row }}][c{{ fact.column }}]{% if fact[view.dimension] == current.detail.spec.group_code %}</a>{% endif %}</td>
             <td>{{ fact[view.dimension] or 'Unspecified unit' }}</td><td>{{ fact.text_value }}</td></tr>

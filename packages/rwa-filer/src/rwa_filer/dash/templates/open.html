@@ -16,10 +16,11 @@
 <div class="split">
   <form class="wide" method="post" action="/open" enctype="multipart/form-data">
     {% call open_fields(values, modules, releases) %}
-      <details class="mark-more" id="breakdown-fields"{% if values.breakdown or values.line_ref or values.group_code %} open{% endif %}>
-        <summary>Break it down (optional)</summary>
+      <details class="mark-more" id="breakdown-fields" open>
+        <summary>Reporting unit breakdown (optional)</summary>
+        <p class="small muted">For a CSV or Parquet with group and unit rows, load choices from the file, choose the reporting unit column and select the group code to validate.</p>
         <div class="fields" style="padding: 4px 0 8px">
-          <label class="field" style="flex: 2 1 260px">Breakdown columns <span class="hint">a fact table's columns that say where each row came from, separated by commas</span>
+          <label class="field" style="flex: 2 1 260px">Reporting unit column <span class="hint">for detail-only files, enter one or more breakdown columns separated by commas</span>
             <input type="text" name="breakdown" list="breakdown-columns" value="{{ values.breakdown or '' }}" placeholder="reporting_unit" spellcheck="false" class="mono">
             <datalist id="breakdown-columns"></datalist>
           </label>
@@ -34,7 +35,7 @@
             </select>
           </label>
         </div>
-        <p class="small muted" style="margin: 0 0 8px">For a supplied group, choose one reporting-unit column and its group code. The other units provide figures and text for investigation. Leave the code blank to build the return by adding monetary detail.</p>
+        <p class="small muted" style="margin: 0 0 8px">Investigate shows each unit’s figures and text. For a return built by adding monetary detail, leave the group code blank.</p>
       </details>
       <div class="btn-row">
         <button class="btn btn-primary" type="submit">Validate</button>

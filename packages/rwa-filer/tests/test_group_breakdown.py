@@ -74,7 +74,8 @@ def test_cli_group_findings_and_filing_match_group_alone(
         "Commercial wording",
     }
     breaks = [b for b in breakdown["by"][0]["broken"] if b["rule_id"] == "boe_b0708"]
-    assert breaks and breaks[0]["breaking"] == ["Commercial"]
+    assert breaks
+    assert breaks[0]["breaking"] == ["Commercial"]
     assert abs(breaks[0]["unexplained"]) == 10
     assert not next(s for s in breaks[0]["members"] if s["member"] == "Partial")["evaluated"]
     assert (tmp_path / "group/return.xbrl").read_bytes() == (

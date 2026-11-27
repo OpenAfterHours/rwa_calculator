@@ -5567,3 +5567,16 @@ key in detail-only mode and separately checks explicitly supplied groups with
 different local row numbers. **Verified red** with
 `pytest packages/rwa-filer/tests/test_group_breakdown.py -k numeric_open`,
 which reported `Failed: DID NOT RAISE ValueError` on the unguarded reader.
+
+### 2026-11-27 · Referee could show a completed run before its disagreements
+
+PR #570's isolated filer job saw a Referee page marked done without the table
+for a known disagreement. The handler read the running status and the template
+later read the same mutable job after its worker had finished.
+
+**Escape class** `path-never-exercised`. **Gate change** in
+`packages/rwa-filer/tests/dash/test_referee.py` holds the worker until the first
+page captures the running job, then checks that page's snapshot and the
+completed page's disagreement. **Observed red** on the mutable job with
+`pytest packages/rwa-filer/tests/dash/test_referee.py -k built_instance`:
+`AssertionError: assert 'done' == 'running'`.

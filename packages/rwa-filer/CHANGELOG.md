@@ -7,10 +7,12 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
-- (Next release changes will go here)
+- Choose a supplied group in a CSV or Parquet file with `--breakdown reporting_unit
+  --group-code Group` or the dashboard's **Group code** field. Validation and filing
+  use the group's facts. Investigate shows the contributing units' figures and text.
 
 ### Changed
-- (Next release changes will go here)
+- Monetary detail aggregation now refuses repeated numeric open-row identifiers.
 
 ---
 

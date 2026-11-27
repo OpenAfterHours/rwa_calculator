@@ -5552,3 +5552,18 @@ checks that applying the filter on Rules also removes the warning from its templ
 **Observed red.** On 0.1.8 the CLI test found no hidden occurrence and the dashboard
 test found no hidden warning. The severity test also failed when updated to require
 the same visible nonzero occurrence at both severities.
+
+### 2026-11-27 · Numeric open-row identifiers were summed by the detail reader
+
+In rwa-filer 0.1.9, two units supplying obligor grade 1 on OF 08.02's same
+local row produced grade 2, which passed the structure check. The monetary
+aggregation check looked up data-point metrics. Row identifiers live in the
+taxonomy's open-key definitions and consequently had no metric to check.
+
+**Escape class** `path-never-exercised`. The existing percentage test covered
+non-additive metrics only. **Gate change** in
+`packages/rwa-filer/tests/test_group_breakdown.py` exercises the published grade
+key in detail-only mode and separately checks explicitly supplied groups with
+different local row numbers. **Verified red** with
+`pytest packages/rwa-filer/tests/test_group_breakdown.py -k numeric_open`,
+which reported `Failed: DID NOT RAISE ValueError` on the unguarded reader.

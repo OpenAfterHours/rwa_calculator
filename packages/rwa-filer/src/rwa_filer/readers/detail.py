@@ -1,5 +1,5 @@
 """
-Detail files — a fact table with several rows per cell, summed into the return and kept beside it.
+Detail files - construct a return from contributions or select its supplied group.
 
 Pipeline position:
     detail file (.parquet / .csv)  ->  read_detail  ->  (CanonicalReturn, ReturnDetail)
@@ -18,7 +18,8 @@ Key responsibilities:
   a cell some rows give a number and others text. A refusal stops the whole
   file: a return with some of its rows quietly left out is one nobody can
   describe.
-- Never change a figure. The summed return is exactly the sum of the rows.
+- With a group code, take the group's facts as supplied and keep the other
+  units separately. Repeats and monetary aggregation are scoped to each unit.
 
 What a line reference is: the identifier the source system gives each line — a
 loan, a lease, a journal line. One loan is reported in many cells (its total,
@@ -39,7 +40,8 @@ References:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 import polars as pl
@@ -54,7 +56,7 @@ from rwa_filer.readers.tabular import read_table, table_columns
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
-    from pathlib import Path
+    from typing import BinaryIO
 
     from rwa_filer.model import ReturnHeader
     from rwa_filer.taxonomy.pack import TaxonomyPack
@@ -130,8 +132,14 @@ class DetailSpec:
     breakdown: tuple[str, ...] = ()
     line_ref: str | None = None
     on_repeat: str = ON_REPEAT_STOP
+    #: Value of the reporting-unit column that contains the authoritative return.
+    group_code: str | None = None
 
     def __post_init__(self) -> None:
+        if self.group_code is not None and (
+            len(self.breakdown) != 1 or not self.group_code.strip()
+        ):
+            raise ValueError("a group code requires one breakdown column and a non-empty code")
         if self.on_repeat not in ON_REPEAT_CHOICES:
             choices = ", ".join(ON_REPEAT_CHOICES)
             raise ValueError(f"on a repeated line reference: {self.on_repeat!r} is not {choices}")
@@ -154,6 +162,7 @@ class DetailSpec:
         breakdown: str | None = None,
         line_ref: str | None = None,
         on_repeat: str | None = None,
+        group_code: str | None = None,
     ) -> DetailSpec:
         """A spec from what a person typed: ``business_unit, source`` and a column name.
 
@@ -166,6 +175,7 @@ class DetailSpec:
             breakdown=names,
             line_ref=(line_ref or "").strip() or None,
             on_repeat=(on_repeat or "").strip() or ON_REPEAT_STOP,
+            group_code=group_code.strip() if group_code is not None else None,
         )
 
     def as_record(self) -> dict[str, Any]:
@@ -174,6 +184,7 @@ class DetailSpec:
             "breakdown": list(self.breakdown),
             "line_reference": self.line_ref,
             "on_repeat": self.on_repeat,
+            **({"group_code": self.group_code} if self.group_code is not None else {}),
         }
 
 
@@ -209,6 +220,8 @@ class ReturnDetail:
     rows: pl.DataFrame
     rows_read: int
     repeats_dropped: int = 0
+    group_rows: int = 0
+    aligned_rows: pl.DataFrame | None = None
 
     @property
     def dimensions(self) -> tuple[str, ...]:
@@ -216,14 +229,21 @@ class ReturnDetail:
         return self.spec.breakdown
 
     @property
+    def comparison_rows(self) -> pl.DataFrame:
+        """Unit rows in comparable coordinates; `rows` keeps the file's original addresses."""
+        return self.aligned_rows if self.aligned_rows is not None else self.rows
+
+    @property
     def cells(self) -> int:
         """How many cells the rows make."""
-        return self.rows.select(COORDINATE_COLUMNS).unique().height
+        return self.comparison_rows.select(COORDINATE_COLUMNS).unique().height
 
     @property
     def summed_cells(self) -> int:
         """How many cells are made of more than one row."""
-        return self.rows.group_by(COORDINATE_COLUMNS).len().filter(pl.col("len") > 1).height
+        return (
+            self.comparison_rows.group_by(COORDINATE_COLUMNS).len().filter(pl.col("len") > 1).height
+        )
 
     def members(self, dimension: str) -> tuple[Member, ...]:
         """Every member of ``dimension``, by name, then ``None`` for rows that leave it empty.
@@ -240,7 +260,7 @@ class ReturnDetail:
         """How many cells hold rows of more than one member of ``dimension``."""
         column = self._column(dimension)
         return (
-            self.rows.group_by(COORDINATE_COLUMNS)
+            self.comparison_rows.group_by(COORDINATE_COLUMNS)
             .agg(pl.col(column).n_unique().alias(_COUNT))
             .filter(pl.col(_COUNT) > 1)
             .height
@@ -248,7 +268,7 @@ class ReturnDetail:
 
     def cell_rows(self, cell: Cell) -> pl.DataFrame:
         """The rows of one cell, in the order the file gives them."""
-        return self.rows.filter(_at(cell))
+        return self.comparison_rows.filter(_at(cell))
 
     def shares(self, cell: Cell, dimension: str) -> tuple[Share, ...]:
         """``cell`` split by ``dimension``: each member's amount, the largest first.
@@ -275,7 +295,7 @@ class ReturnDetail:
     def member_facts(self, dimension: str, member: Member) -> pl.DataFrame:
         """The facts ``member``'s rows alone make, summed as the return is (``FACT_SCHEMA``)."""
         column = self._column(dimension)
-        return summed_facts(self.rows.filter(pl.col(column).eq_missing(member)))
+        return summed_facts(self.comparison_rows.filter(pl.col(column).eq_missing(member)))
 
     def as_record(self) -> dict[str, Any]:
         """A JSON-ready summary, for a manifest or a report."""
@@ -283,12 +303,26 @@ class ReturnDetail:
             "file": self.file,
             **self.spec.as_record(),
             "rows_read": self.rows_read,
-            "rows_summed": self.rows.height,
+            **(
+                {"group_rows": self.group_rows, "unit_rows": self.rows.height}
+                if self.spec.group_code is not None
+                else {"rows_summed": self.rows.height}
+            ),
             "repeats_dropped": self.repeats_dropped,
             "cells": self.cells,
             "cells_from_several_rows": self.summed_cells,
             "members": {dimension: len(self.members(dimension)) for dimension in self.dimensions},
         }
+
+    def text_cells(self, ret: CanonicalReturn) -> list[dict[str, Any]]:
+        """Reported text in the group and its units, including unit-only comments."""
+        dimension = self.dimensions[0]
+        columns = [*COORDINATE_COLUMNS, "text_value", dimension]
+        group = ret.facts.filter(pl.col("text_value").is_not_null()).with_columns(
+            pl.lit(self.spec.group_code, dtype=pl.String).alias(dimension)
+        )
+        units = self.rows.filter(pl.col("text_value").is_not_null())
+        return pl.concat([group.select(columns), units.select(columns)]).to_dicts()
 
     def _column(self, dimension: str) -> str:
         if dimension not in self.spec.breakdown:
@@ -299,7 +333,7 @@ class ReturnDetail:
 def read_detail(
     path: Path, header: ReturnHeader, spec: DetailSpec
 ) -> tuple[CanonicalReturn, ReturnDetail]:
-    """Read a detail file and sum it into a return.
+    """Read contributions or take the named reporting unit as the return.
 
     Args:
         path: A ``.parquet`` or ``.csv`` fact table with several rows per cell.
@@ -323,17 +357,33 @@ def read_detail(
     ).with_columns(pl.col(LINE_COLUMN).cast(pl.Int64))
     rows_read = rows.height
     where = "line" if first == 2 else "row"  # noqa: PLR2004 - the offset chosen above
+    group = None
+    if resolved.group_code is not None:
+        column = resolved.breakdown[0]
+        selected = pl.col(column).eq_missing(resolved.group_code)
+        if not frame.select(
+            pl.col(column).cast(pl.String).str.strip_chars().eq_missing(resolved.group_code).any()
+        ).item():
+            raise ValueError(f"{path.name}: no {column} has group code {resolved.group_code!r}")
+        group = rows.filter(selected).select(FACT_SCHEMA.names())
+        rows = rows.filter(~selected)
     rows, dropped, problems = _drop_repeats(rows, resolved, where)
-    problems.extend(_unsummable(rows, where))
+    scope = resolved.breakdown if group is not None else ()
+    problems.extend(_unsummable(rows, where, scope))
     if problems:
         raise DetailError(path.name, problems)
-    ret = CanonicalReturn.from_frame(header, summed_facts(rows))
+    ret = CanonicalReturn.from_frame(header, group if group is not None else summed_facts(rows))
     detail = ReturnDetail(
-        file=path.name, spec=resolved, rows=rows, rows_read=rows_read, repeats_dropped=dropped
+        file=path.name,
+        spec=resolved,
+        rows=rows,
+        rows_read=rows_read,
+        repeats_dropped=dropped,
+        group_rows=group.height if group is not None else 0,
     )
     logger.info(
-        "summed %d row(s) of %s into %d cell(s); %d repeat(s) dropped",
-        rows.height,
+        "read %d row(s) of %s with %d return fact(s); %d repeat(s) dropped",
+        rows_read,
         path.name,
         ret.facts.height,
         dropped,
@@ -355,8 +405,9 @@ def check_amounts(detail: ReturnDetail, pack: TaxonomyPack) -> None:
     Raises:
         DetailError: each cell of several rows whose data type is not monetary.
     """
+    scope = detail.dimensions if detail.spec.group_code is not None else ()
     several = (
-        detail.rows.group_by(COORDINATE_COLUMNS, maintain_order=True)
+        detail.rows.group_by([*COORDINATE_COLUMNS, *scope], maintain_order=True)
         .agg(pl.len().alias(_ROWS), pl.col(LINE_COLUMN))
         .filter(pl.col(_ROWS) > 1)
     )
@@ -367,12 +418,14 @@ def check_amounts(detail: ReturnDetail, pack: TaxonomyPack) -> None:
         for row in several.iter_rows(named=True)
     ]
     types = cell_data_types(pack, cells)
+    row_keys = {(table.code, key.code) for table in pack.tables.values() for key in table.open_keys}
     where = "line" if detail.file.lower().endswith(".csv") else "row"
     problems = [
         f"{address(cell)} is {kind}, so its {rows} rows cannot be added together "
         f"({where}s {_lines(lines)})"
         for cell, rows, lines in zip(cells, several[_ROWS], several[LINE_COLUMN], strict=True)
-        if (kind := types.get(cell)) and kind != SUMMABLE_TYPE
+        if (kind := "row identifier" if (cell[0], cell[4]) in row_keys else types.get(cell))
+        and kind != SUMMABLE_TYPE
     ]
     if problems:
         raise DetailError(detail.file, problems)
@@ -469,6 +522,30 @@ def unread_columns(path: Path) -> tuple[str, ...]:
     )
 
 
+def breakdown_options(source: Path | BinaryIO, suffix: str, column: str) -> dict[str, list[str]]:
+    """Read column names and the selected column's distinct codes for the dashboard picker."""
+    if suffix not in DETAIL_SUFFIXES:
+        raise ValueError("Choose a CSV or Parquet fact table to see its reporting units.")
+    if suffix == ".parquet":
+        names = list(pl.read_parquet_schema(source))
+    else:
+        names = pl.read_csv(source, n_rows=0, infer_schema=False, encoding="utf8-lossy").columns
+    columns = [name for name in names if name.strip().lower() not in FACT_SCHEMA]
+    selected = [name for name in columns if name.strip().lower() == column.strip().lower()]
+    codes: list[str] = []
+    if len(selected) == 1:
+        if not isinstance(source, Path):
+            source.seek(0)
+        frame = (
+            pl.read_parquet(source, columns=selected)
+            if suffix == ".parquet"
+            else pl.read_csv(source, columns=selected, infer_schema=False, encoding="utf8-lossy")
+        )
+        values = frame.to_series().cast(pl.String).str.strip_chars().drop_nulls()
+        codes = values.filter(values != "").unique().sort().to_list()
+    return {"columns": columns, "codes": codes}
+
+
 def address(cell: Cell) -> str:
     """A cell's address as a person writes it: ``OF07.00.01.01[z0008][r0070][c0200]``."""
     table, sheet, key, row, column = cell
@@ -509,10 +586,10 @@ def _resolve(spec: DetailSpec, columns: Sequence[str], file: str) -> DetailSpec:
             raise ValueError(f"{file} has {len(matches)} columns named like {name!r}")
         return matches[0]
 
-    return DetailSpec(
+    return replace(
+        spec,
         breakdown=tuple(find(name) for name in spec.breakdown),
         line_ref=find(spec.line_ref) if spec.line_ref else None,
-        on_repeat=spec.on_repeat,
     )
 
 
@@ -527,7 +604,8 @@ def _drop_repeats(
     reference = spec.line_ref
     if reference is None:
         return rows, 0, []
-    keys = [*COORDINATE_COLUMNS, reference]
+    scope = spec.breakdown if spec.group_code is not None else ()
+    keys = [*scope, *COORDINATE_COLUMNS, reference]
     content = ["value", "text_value", "decimals", *spec.breakdown]
     marked = rows.with_columns(
         pl.len().over(keys).alias(_COUNT),
@@ -542,7 +620,7 @@ def _drop_repeats(
         offending = marked.filter(repeated & (pl.col(_KINDS) > 1))
         verb = "is given differently"
     problems = [
-        f"line reference {ref!r} {verb} {count} times in {address(tuple(cell))} "
+        f"line reference {ref!r} {verb} {count} times in {address(tuple(cell[len(scope) :]))} "
         f"({where}s {_lines(lines)})"
         for (*cell, ref), count, lines in _grouped(offending, keys)
     ]
@@ -553,16 +631,17 @@ def _drop_repeats(
     return kept, rows.height - kept.height, []
 
 
-def _unsummable(rows: pl.DataFrame, where: str) -> list[str]:
+def _unsummable(rows: pl.DataFrame, where: str, scope: tuple[str, ...]) -> list[str]:
     """A refusal for each cell of several rows that any row gives as text."""
+    keys = [*scope, *COORDINATE_COLUMNS]
     offending = rows.with_columns(
-        pl.len().over(COORDINATE_COLUMNS).alias(_COUNT),
-        pl.col("text_value").is_not_null().any().over(COORDINATE_COLUMNS).alias(_KINDS),
+        pl.len().over(keys).alias(_COUNT),
+        pl.col("text_value").is_not_null().any().over(keys).alias(_KINDS),
     ).filter((pl.col(_COUNT) > 1) & pl.col(_KINDS))
     return [
-        f"{address(tuple(cell))} has {count} rows and at least one is not a number, "
+        f"{address(tuple(cell[len(scope) :]))} has {count} rows and at least one is not a number, "
         f"so they cannot be added together ({where}s {_lines(lines)})"
-        for cell, count, lines in _grouped(offending, COORDINATE_COLUMNS)
+        for cell, count, lines in _grouped(offending, keys)
     ]
 
 

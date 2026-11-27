@@ -26,7 +26,8 @@ Commands:
     rwa-filer validate FILE [--entity ID --reference-date DATE --module CODE]
                        [--monetary-decimals N] [--evidence FILE] [--require-complete]
                        [--taxonomy VERSION] [--submission-date DATE]
-                       [--breakdown COLUMNS [--line-ref COLUMN] [--on-repeat stop|keep-one]]
+                       [--breakdown COLUMNS [--group-code CODE] [--line-ref COLUMN]
+                        [--on-repeat stop|keep-one]]
                        [--progress | --no-progress]
         Validate a return (.parquet / .csv / .xlsx, or an XBRL instance .xbrl /
         .zip): structure against the taxonomy, then the published rules, as the
@@ -44,7 +45,8 @@ Commands:
         break it on their own figures. --line-ref names the column each line's
         reference is in; one given twice in a cell stops the run, or with
         --on-repeat keep-one an exact repeat is dropped. ``build`` takes the
-        same three, and its manifest records them.
+        same options. With --group-code both commands use the named group's facts
+        and keep the other units for investigation. The manifest records the selection.
     rwa-filer build FILE --out DIR [--monetary-decimals N] [--zip] [--force]
                     [--evidence FILE]
         Validate a return and write its filing package: the .xbrl instance, a
@@ -341,8 +343,14 @@ def _add_detail_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--breakdown",
         metavar="COLUMNS",
-        help="read a fact table of several rows per cell: its rows are added together, and "
-        "these columns (comma-separated, e.g. business_unit,source) say where each came from",
+        help="columns identifying the parts of each cell (e.g. business_unit,source); "
+        "monetary lines are added unless a supplied group is selected",
+    )
+    parser.add_argument(
+        "--group-code",
+        metavar="CODE",
+        help="validate and file the rows bearing this code in the reporting-unit breakdown "
+        "column; use the other units to investigate breaks",
     )
     parser.add_argument(
         "--line-ref",
@@ -530,6 +538,8 @@ def _validate(args: argparse.Namespace) -> int:
                 "detail": source.detail.as_record() if source.detail else None,
                 "by": [attribution_record(item) for item in breakdown],
             }
+            if source.detail is not None and source.detail.spec.group_code is not None:
+                record["breakdown"]["text_cells"] = source.detail.text_cells(source.ret)
     if args.report is not None:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
@@ -547,6 +557,11 @@ def _validate(args: argparse.Namespace) -> int:
         else render_text(source.ret, validation, review=review)
     )
     if breakdown and args.format != "json":
+        if source.detail is not None and source.detail.spec.group_code is not None:
+            _out(
+                f"Validated group {source.detail.spec.group_code!r} in "
+                f"{source.detail.dimensions[0]} ({source.detail.group_rows} group facts)."
+            )
         labels = {
             rule.rule_id: (rule.label or "").rstrip("|").strip() for rule in _rules_of(validation)
         }
@@ -579,9 +594,10 @@ def _load(args: argparse.Namespace, *, progress: StreamProgress | None = None) -
 def _detail_spec(args: argparse.Namespace) -> DetailSpec | None:
     """The detail ``--breakdown`` / ``--line-ref`` ask for; ``None`` for a command without them."""
     breakdown, line_ref = getattr(args, "breakdown", None), getattr(args, "line_ref", None)
-    if not breakdown and not line_ref:
+    group_code = getattr(args, "group_code", None)
+    if not breakdown and not line_ref and group_code is None:
         return None
-    return DetailSpec.from_text(breakdown, line_ref, getattr(args, "on_repeat", None))
+    return DetailSpec.from_text(breakdown, line_ref, getattr(args, "on_repeat", None), group_code)
 
 
 def _attributions(source: SourceReading, validation: ReturnValidation) -> list[Attribution]:

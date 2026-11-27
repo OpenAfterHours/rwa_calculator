@@ -42,6 +42,7 @@ import math
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Final
 
+from rwa_filer.boe import grammar
 from rwa_filer.boe.engine import STATUS_FAIL, STATUS_PASS, trace_rules
 from rwa_filer.model import CanonicalReturn
 from rwa_filer.progress import PHASE_BREAKDOWN, Progress, notify
@@ -141,6 +142,7 @@ class TracedBreak:
     standings: tuple[Standing, ...]
     left_cells: tuple[Cell, ...] = ()
     right_cells: tuple[Cell, ...] = ()
+    additive: bool = True
 
     @property
     def gap(self) -> float | None:
@@ -155,6 +157,8 @@ class TracedBreak:
     @property
     def explained(self) -> float | None:
         """The members' gaps added up; ``None`` where a member's has no number."""
+        if not self.additive:
+            return None
         gaps = [standing.gap for standing in self.standings]
         if any(gap is None for gap in gaps):
             return None
@@ -209,6 +213,7 @@ class Attribution:
     hidden: tuple[TracedBreak, ...] = ()
     searched_hidden: bool = False
     rules_run: int = 0
+    group_code: str | None = None
 
     def reviewed(self, validation: ReturnValidation, review: ReviewFilter) -> Attribution:
         """Select breaks for display while retaining the full attribution for evidence."""
@@ -275,7 +280,7 @@ def attribute(  # noqa: PLR0913 - the return, its detail, and how much of it to 
     dimension: str,
     *,
     rule_ids: Collection[str] | None = None,
-    search_hidden: bool = True,
+    search_hidden: bool | None = None,
     progress: ProgressCallback | None = None,
 ) -> Attribution:
     """Set every break of ``ret`` against each member of ``dimension``.
@@ -300,7 +305,11 @@ def attribute(  # noqa: PLR0913 - the return, its detail, and how much of it to 
     members = detail.members(dimension)
     report, rulebook = validation.report, validation.rulebook
     if report is None or rulebook is None:
-        return Attribution(dimension=dimension, members=members, broken=())
+        return Attribution(
+            dimension=dimension, members=members, broken=(), group_code=detail.spec.group_code
+        )
+    if search_hidden is None:
+        search_hidden = detail.spec.group_code is None
     wanted = {STATUS_FAIL, STATUS_PASS} if search_hidden else {STATUS_FAIL}
     results = {
         result.rule_id: result
@@ -309,11 +318,31 @@ def attribute(  # noqa: PLR0913 - the return, its detail, and how much of it to 
     }
     enforced = rulebook.enforced(validation.pack.info.module)
     rules = [rule for rule in enforced if rule.rule_id in results]
+    if detail.spec.group_code is not None and not rules:
+        return Attribution(
+            dimension,
+            members,
+            broken=(),
+            searched_hidden=search_hidden,
+            group_code=detail.spec.group_code,
+        )
     severity = {rule_id: result.severity for rule_id, result in results.items()}
 
     steps = len(members) + 1
     notify(progress, Progress(PHASE_BREAKDOWN, 0, steps, subject="the return"))
     whole = _evaluations(ret, validation, rules)
+    group_mode = detail.spec.group_code is not None
+    additive_rules = {
+        rule.rule_id for rule in rules if group_mode and _additive_rule(rule.expression)
+    }
+    types = (
+        cell_data_types(
+            validation.pack,
+            {cell for evaluation in whole.values() for cell in _reported(evaluation.cells)},
+        )
+        if group_mode
+        else {}
+    )
     by_member: list[dict[_Key, Evaluation]] = []
     for done, member in enumerate(members, start=1):
         facts = detail.member_facts(dimension, member)
@@ -327,12 +356,22 @@ def attribute(  # noqa: PLR0913 - the return, its detail, and how much of it to 
     broken: list[TracedBreak] = []
     candidates: list[tuple[Evaluation, tuple[Standing, ...]]] = []
     for key, evaluation in whole.items():
+        required = _reported(evaluation.cells) if group_mode else None
         standings = tuple(
-            _standing(member, found.get(key))
+            _standing(member, found.get(key), required)
             for member, found in zip(members, by_member, strict=True)
         )
         if not evaluation.holds:
-            broken.append(_traced(evaluation, severity[evaluation.rule_id], standings))
+            item = _traced(evaluation, severity[evaluation.rule_id], standings)
+            if group_mode:
+                item = replace(
+                    item,
+                    additive=evaluation.rule_id in additive_rules
+                    and required is not None
+                    and bool(required)
+                    and all(types.get(cell) == SUMMABLE_TYPE for cell in required),
+                )
+            broken.append(item)
         elif search_hidden and any(standing.breaks for standing in standings):
             candidates.append((evaluation, standings))
 
@@ -352,6 +391,7 @@ def attribute(  # noqa: PLR0913 - the return, its detail, and how much of it to 
         hidden=hidden,
         searched_hidden=search_hidden,
         rules_run=len(rules),
+        group_code=detail.spec.group_code,
     )
 
 
@@ -404,6 +444,16 @@ def describe(attribution: Attribution, *, labels: Mapping[str, str] | None = Non
         if label := labels.get(rule_id):
             lines.append(f"    {label}")
         lines.extend(f"    {text}" for text in _members_line(attribution, items))
+        if attribution.group_code is not None:
+            for member in attribution.members:
+                incomplete = sum(
+                    1 for item in items if (s := item.standing(member)) and not s.evaluated
+                )
+                if incomplete:
+                    lines.append(
+                        f"    {attribution.label(member)}: insufficient detail for "
+                        f"{incomplete} of {len(items)} evaluation(s)"
+                    )
         unexplained = [item.unexplained for item in items if item.unexplained]
         if unexplained:
             lines.append(
@@ -432,7 +482,7 @@ def as_record(attribution: Attribution) -> dict[str, Any]:
             "holds": item.holds,
             "left": item.left,
             "right": item.right,
-            "gap": item.gap,
+            "gap": item.gap if item.evaluated or attribution.group_code is None else None,
         }
 
     def traced(item: TracedBreak) -> dict[str, Any]:
@@ -476,8 +526,13 @@ def _evaluations(
     return {(item.rule_id, item.place): item for item in trace.evaluations}
 
 
-def _standing(member: Member, evaluation: Evaluation | None) -> Standing:
-    if evaluation is None:
+def _standing(
+    member: Member, evaluation: Evaluation | None, required: set[Cell] | None
+) -> Standing:
+    if evaluation is None or (
+        required is not None
+        and (not required or not required.issubset(_reported(evaluation.cells)))
+    ):
         return Standing(member=member, evaluated=False, holds=None)
     return Standing(
         member=member,
@@ -485,6 +540,35 @@ def _standing(member: Member, evaluation: Evaluation | None) -> Standing:
         holds=evaluation.holds,
         left=evaluation.left_value,
         right=evaluation.right_value,
+    )
+
+
+def _additive_rule(expression: str) -> bool:
+    """Only sum unit gaps for comparisons of sums and differences of amounts."""
+
+    def additive(node: grammar.Node) -> bool:
+        match node:
+            case grammar.Reference():
+                return True
+            case grammar.Number(value=0):
+                return True
+            case grammar.Negate(operand):
+                return additive(operand)
+            case grammar.Binary(operator="+" | "-", left=left, right=right):
+                return additive(left) and additive(right)
+            case grammar.Call(name="sum" | "isum", arguments=args):
+                return all(additive(arg) for arg in args)
+            case _:
+                return False
+
+    try:
+        tree = grammar.parse_expression(expression)
+    except grammar.GrammarError:
+        return False
+    return (
+        isinstance(tree, grammar.Binary)
+        and tree.operator in grammar.COMPARISONS
+        and (additive(tree.left) and additive(tree.right))
     )
 
 

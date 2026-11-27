@@ -177,3 +177,28 @@ def _reportable() -> frozenset[tuple[str, str, str]]:
     """The (sheet, row, column) cells of OF 07.00 the PRA001 taxonomy accepts."""
     cells = resolve_release("PRA001", None).pack.cells.filter(pl.col("table") == TABLE)
     return frozenset(cells.select("sheet", "row", "column").iter_rows())
+
+
+GROUP_CSV_HEADER = "table,sheet,row,column,value,text_value,decimals,reporting_unit\n"
+GROUP_CSV_ROWS = (
+    "C32.01.01.01,,0010,0070,,Group wording,,Group\n"
+    "OF07.00.01.01,0008,0010,0010,100,,2,Group\n"
+    "OF07.00.01.01,0008,0010,0040,80,,2,Group\n"
+)
+UNIT_CSV_ROWS = (
+    "C32.01.01.01,,0010,0070,,Retail wording,,Retail\n"
+    "C32.01.01.01,,0010,0070,,Commercial wording,,Commercial\n"
+    "OF07.00.01.01,0008,0010,0010,50,,2,Retail\n"
+    "OF07.00.01.01,0008,0010,0040,50,,2,Retail\n"
+    "OF07.00.01.01,0008,0010,0010,30,,2,Commercial\n"
+    "OF07.00.01.01,0008,0010,0040,20,,2,Commercial\n"
+    "OF07.00.01.01,0008,0010,0200,90,,2,Partial\n"
+    "OF07.00.01.01,0008,0010,0010,5,,2,Partial\n"
+)
+
+
+def group_files(tmp_path: Path) -> tuple[Path, Path]:
+    plain, combined = tmp_path / "group.csv", tmp_path / "combined.csv"
+    plain.write_text(GROUP_CSV_HEADER + GROUP_CSV_ROWS)
+    combined.write_text(GROUP_CSV_HEADER + UNIT_CSV_ROWS + GROUP_CSV_ROWS)
+    return plain, combined

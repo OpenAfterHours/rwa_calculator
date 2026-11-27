@@ -208,6 +208,15 @@ page; the result is kept until the drafted overrides change. A return opened
 without breakdown columns shows the columns its file has and opens it again
 with the ones you pick.
 
+**Files with a supplied group.** On **Open return**, expand **Break it down** and
+use **Load choices from file**. Select the reporting-unit column, then choose
+the group code. The overview names the group used for validation and filing.
+**Investigate** shows how each unit stands on the failed group checks and lists
+the text reported by the group and its units. The template cell panel shows
+each unit's percentage, date or wording as supplied. Monetary cells also show
+each unit's share of the group figure. **Insufficient detail** identifies unit
+comparisons missing an input the group check read.
+
 **Build & sign off.** The same three acts as `rwa-filer build`, `signoff` and
 `verify`, recording the same things:
 

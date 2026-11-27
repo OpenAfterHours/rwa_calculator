@@ -9,7 +9,7 @@
   <div style="min-width: 0">
     <div class="small muted">Investigate</div>
     <h1>Where the breaks come from</h1>
-    <p class="lede">Every broken rule, run again on each part of the return by itself. A part that breaks a rule on its own figures is where to look; one that meets it is not.</p>
+    <p class="lede">{% if current.detail and current.detail.spec.group_code %}The return uses the supplied group <strong>{{ current.detail.spec.group_code }}</strong>. Select a rule to investigate it on the template or compare the unit results below.{% else %}Every broken rule, run again on each part of the return by itself. A part that breaks a rule on its own figures is where to look; one that meets it is not.{% endif %}</p>
   </div>
   {% if view and view.dimensions | length > 1 %}
   <nav class="seg" aria-label="Break down by">
@@ -22,7 +22,7 @@
 {% set unread = current.reading.unread_columns %}
 <section class="panel" id="no-breakdown">
   <h2>This return was opened without breakdown columns</h2>
-  <p class="small">To see which business unit, source system or other part of the return a break comes from, open the file with a column that says where each row came from. Rows for the same cell are then added together, and the sum is the figure validated and filed.</p>
+  <p class="small">Choose a breakdown column to investigate a break. If the file includes group figures, select their code to validate and file those rows. Otherwise the return is built from the monetary detail.</p>
   {% if unread %}
   <form method="post" action="/returns/{{ current.return_id }}/breakdown" style="display: flex; flex-direction: column; gap: 14px">
     <fieldset class="panel" style="padding: 14px; margin: 0">
@@ -32,6 +32,8 @@
       </div>
     </fieldset>
     <div class="fields">
+      <input type="hidden" name="path" value="{{ current.path }}">
+      {% include "_group_picker.html" %}
       <label class="field">Line reference <span class="hint">optional: the ID each line has in its own system</span>
         <select name="line_ref">
           <option value="">None</option>
@@ -57,7 +59,7 @@
   <div class="tile"><div class="label"><span class="swatch" style="background: var({{ '--fail' if view.broken else '--pass' }})"></span>{{ "Visible breaks in the return" if review.active else "Breaks in the return" }}</div><div class="value">{{ view.broken | count }}</div><div class="sub">{{ view.error_rules }} Error rule{{ "s" if view.error_rules != 1 }} · {{ view.warning_rules }} Warning rule{{ "s" if view.warning_rules != 1 }}</div></div>
   <div class="tile"><div class="label">Traced to one {{ view.dimension }}</div><div class="value">{{ view.traced | count }} of {{ view.broken | count }}</div><div class="sub">break on one member's figures alone</div></div>
   <div class="tile"><div class="label">Members behind them</div><div class="value">{{ view.breaking | length }} of {{ view.members }}</div><div class="sub">{{ view.breaking[:3] | join(" · ") }}{% if view.breaking | length > 3 %} and {{ view.breaking | length - 3 }} more{% endif %}</div></div>
-  <div class="tile"><div class="label">Hidden by the total</div><div class="value">{{ view.hidden_count | count }}</div><div class="sub">hold in the return, break inside a member</div></div>
+  {% if view.searched_hidden %}<div class="tile"><div class="label">Hidden by the total</div><div class="value">{{ view.hidden_count | count }}</div><div class="sub">hold in the return, break inside a member</div></div>{% endif %}
 </div>
 
 <section class="panel" id="matrix">
@@ -79,14 +81,18 @@
           <td class="whole"><span class="none mono" style="color: var(--strong)">{{ row.whole }}</span>{% if row.unexplained %}<span class="small muted" style="display: block">{{ row.unexplained }} in no member</span>{% endif %}</td>
           {% for hit in row.cells %}
           {% set column = view.columns[loop.index0] %}
-          <td{% if column.selected %} class="picked"{% endif %}>{% if hit %}<a class="hit hit-{{ hit.tone }}" href="{{ link(base, by=view.dimension, m=column.index) }}">{{ hit.amount }}<small>{{ ("all " ~ hit.of) if hit.count == hit.of and hit.of > 2 else ("both" if hit.count == hit.of and hit.of == 2 else (hit.count ~ " of " ~ hit.of)) }}</small></a>{% else %}<span class="none">—</span>{% endif %}</td>
+          <td{% if column.selected %} class="picked"{% endif %}>{% if hit and hit.count %}<a class="hit hit-{{ hit.tone }}" href="{{ link(base, by=view.dimension, m=column.index) }}">{{ hit.amount }}<small>{{ ("all " ~ hit.of) if hit.count == hit.of and hit.of > 2 else ("both" if hit.count == hit.of and hit.of == 2 else (hit.count ~ " of " ~ hit.of)) }}</small></a>{% else %}<span class="none">{{ hit.amount if hit else "-" }}</span>{% endif %}</td>
           {% endfor %}
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  {% if current.detail.spec.group_code %}
+  <p class="small muted" style="margin: 0">Insufficient detail means the unit figures do not cover the inputs to the group check.</p>
+  {% else %}
   <p class="small muted" style="margin: 0">A dash means the member meets the rule on its own rows, or has no figure in the cells it reads.{% if view.clean %} Meet every {{ "visible " if review.active }}broken rule on their own figures: {{ view.clean[:12] | join(", ") }}{% if view.clean | length > 12 %} and {{ view.clean | length - 12 }} more{% endif %}.{% endif %}</p>
+  {% endif %}
   {% else %}
   <p class="muted" style="margin: 0">{{ "No return breaks match the review filters." if review.active else "No rule breaks in this return." }}</p>
   {% endif %}
@@ -94,6 +100,19 @@
 
 <div class="split">
   <div class="wide">
+    {% if current.detail.spec.group_code %}
+    <details class="panel" id="unit-text">
+      <summary>Reported text by unit</summary>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Template cell</th><th>{{ view.dimension }}</th><th>Reported text</th></tr></thead>
+        <tbody>{% for fact in current.detail.text_cells(current.ret) %}
+          <tr><td>{% if fact[view.dimension] == current.detail.spec.group_code %}<a href="{{ link(grid_url, table=fact.table, sheet=fact.sheet or '', key=fact.open_key or '', row=fact.row, col=fact.column) }}">{% endif %}{{ fact.table }}{% if fact.sheet %} [z{{ fact.sheet }}]{% endif %}{% if fact.open_key %} [{{ fact.open_key }}]{% endif %} [r{{ fact.row }}][c{{ fact.column }}]{% if fact[view.dimension] == current.detail.spec.group_code %}</a>{% endif %}</td>
+            <td>{{ fact[view.dimension] or 'Unspecified unit' }}</td><td>{{ fact.text_value }}</td></tr>
+        {% else %}<tr><td colspan="3">No text values supplied.</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </details>
+    {% endif %}
+    {% if view.searched_hidden %}
     <section class="panel" id="hidden">
       <div class="panel-head"><h2>Hold in the return, break inside a member</h2><span class="small muted">{{ view.hidden_count | count }} place{{ "s" if view.hidden_count != 1 }}</span></div>
       <p class="small muted" style="margin: 0">None of these blocks the return. They are listed because a figure that only ties in total is usually two figures that are wrong. Only rules over amounts are searched: a percentage or a count cannot be judged on part of the rows.</p>
@@ -111,6 +130,7 @@
       <p class="small" style="margin: 0">Nothing: every {{ view.dimension }} meets, on its own figures, each rule the return meets.</p>
       {% endif %}
     </section>
+    {% endif %}
   </div>
 
   <aside class="narrow" aria-label="The member picked">
@@ -154,4 +174,4 @@
 </script>
 {% endif %}
 {% endblock %}
-{% block command %}{% if view %}<div>Same breakdown on the command line: <span class="mono" style="color: var(--fg)">rwa-filer validate {{ current.name }} --breakdown {{ view.dimensions | join(",") }}</span></div>{% endif %}{% endblock %}
+{% block command %}{% if view %}<div>Same breakdown on the command line: <span class="mono" style="color: var(--fg)">rwa-filer validate {{ current.name }} --breakdown {{ view.dimensions | join(",") }}{% if current.detail.spec.group_code %} --group-code {{ current.detail.spec.group_code }}{% endif %}</span></div>{% endif %}{% endblock %}

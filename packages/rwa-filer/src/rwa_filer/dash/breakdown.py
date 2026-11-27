@@ -34,8 +34,9 @@ from typing import TYPE_CHECKING, Final
 import polars as pl
 
 from rwa_filer.boe.catalogue import SEVERITY_ERROR
+from rwa_filer.dash.grid import display_value
 from rwa_filer.dash.views import rule_label
-from rwa_filer.readers.detail import address
+from rwa_filer.readers.detail import SUMMABLE_TYPE, address, cell_data_types
 from rwa_filer.release import long_date
 from rwa_filer.workflow.attribution import amount_text, member_label
 
@@ -88,6 +89,7 @@ class CellSplit:
     rows: tuple[ShareRow, ...]
     detail_rows: int
     unexplained: str = ""
+    show_values: bool = False
 
 
 @dataclass(frozen=True)
@@ -204,6 +206,7 @@ class InvestigatePage:
     hiding: tuple[str, ...]
     panel: MemberPanel | None
     rules_run: int
+    searched_hidden: bool
 
 
 @dataclass(frozen=True)
@@ -237,6 +240,8 @@ class BreakdownSummary:
     summed_cells: int
     line_ref: str | None
     on_repeat: str
+    group_code: str | None
+    group_rows: int
     dimensions: tuple[tuple[str, int, int], ...]
 
 
@@ -251,6 +256,8 @@ def breakdown_summary(detail: ReturnDetail) -> BreakdownSummary:
         summed_cells=detail.summed_cells,
         line_ref=detail.spec.line_ref,
         on_repeat=detail.spec.on_repeat,
+        group_code=detail.spec.group_code,
+        group_rows=detail.group_rows,
         dimensions=tuple(
             (dimension, len(detail.members(dimension)), detail.fed_by_several(dimension))
             for dimension in detail.dimensions
@@ -277,12 +284,38 @@ def cell_split(
     detail = working.opened.detail
     if detail is None:
         return None
+    if detail.spec.group_code is not None:
+        kind = cell_data_types(working.opened.pack, [cell]).get(cell, "")
+        rows = detail.cell_rows(cell)
+        if not rows.is_empty() and (
+            kind != SUMMABLE_TYPE or rows["text_value"].is_not_null().any()
+        ):
+            return CellSplit(
+                dimension=dimension,
+                dimensions=detail.dimensions,
+                detail_rows=rows.height,
+                show_values=True,
+                rows=tuple(
+                    ShareRow(
+                        member_label(dimension, member),
+                        display_value(value, text, kind),
+                        "",
+                        0,
+                        1,
+                        member in flagged,
+                    )
+                    for member, value, text in rows.select(
+                        dimension, "value", "text_value"
+                    ).iter_rows()
+                ),
+            )
     shares = detail.shares(cell, dimension)
     if not shares:
         return None
     total = math.fsum(share.value for share in shares)
     largest = max(abs(share.value) for share in shares) or 1.0
     held = _value(working.current, cell)
+    denominator = held if detail.spec.group_code is not None else total
     difference = None if held is None else held - total
     return CellSplit(
         dimension=dimension,
@@ -291,7 +324,7 @@ def cell_split(
             ShareRow(
                 label=member_label(dimension, share.member),
                 value=amount_text(share.value),
-                share=f"{100 * share.value / total:.1f}%" if total else "",
+                share=f"{100 * share.value / denominator:.1f}%" if denominator else "",
                 width=round(100 * abs(share.value) / largest, 1),
                 rows=share.rows,
                 flagged=share.member in flagged,
@@ -363,10 +396,14 @@ def investigate_page(
     assert detail is not None  # noqa: S101 - the page is drawn only for a return with one
     breaking = attribution.breaking_members
     columns_for = [
-        index for index, member in enumerate(attribution.members) if member in set(breaking)
+        index
+        for index, member in enumerate(attribution.members)
+        if attribution.group_code is not None or member in breaking
     ]
     if picked is None or not 0 <= picked < len(attribution.members):
-        picked = columns_for[0] if columns_for else None
+        picked = (
+            attribution.members.index(breaking[0]) if breaking else next(iter(columns_for), None)
+        )
     rules = _rules(attribution.broken)
     error_rules = sum(1 for items in rules.values() if items[0].severity == SEVERITY_ERROR)
     return InvestigatePage(
@@ -400,6 +437,7 @@ def investigate_page(
         hiding=tuple(attribution.label(member) for member in attribution.hiding_members),
         panel=_panel(opened, attribution, picked) if picked is not None else None,
         rules_run=attribution.rules_run,
+        searched_hidden=attribution.searched_hidden,
     )
 
 
@@ -435,7 +473,7 @@ def breaks_csv(attribution: Attribution, picked: int | None = None) -> str:
             for standing in item.standings:
                 if picked is not None and standing.member != chosen:
                     continue
-                if not standing.evaluated:
+                if not standing.evaluated and attribution.group_code is None:
                     continue
                 writer.writerow(
                     [
@@ -445,10 +483,12 @@ def breaks_csv(attribution: Attribution, picked: int | None = None) -> str:
                         kind,
                         item.place_text,
                         " ".join(address(cell) for cell in item.cells),
-                        "yes" if standing.breaks else "no",
+                        ("yes" if standing.breaks else "no")
+                        if standing.evaluated
+                        else "insufficient detail",
                         _plain(standing.left),
                         _plain(standing.right),
-                        _plain(standing.gap),
+                        _plain(standing.gap) if standing.evaluated else "",
                         _plain(item.left),
                         _plain(item.right),
                         _plain(item.gap),
@@ -477,7 +517,11 @@ def _value(opened: OpenedReturn, cell: Cell) -> float | None:
 def _break_split(attribution: Attribution, item: TracedBreak) -> BreakSplit:
     dimension = attribution.dimension
     ordered = sorted(
-        (standing for standing in item.standings if standing.evaluated),
+        (
+            standing
+            for standing in item.standings
+            if standing.evaluated or attribution.group_code is not None
+        ),
         key=lambda standing: (not standing.breaks, -abs(standing.left or 0.0)),
     )
     return BreakSplit(
@@ -497,7 +541,7 @@ def _break_split(attribution: Attribution, item: TracedBreak) -> BreakSplit:
             breaks=True,
             evaluated=True,
         ),
-        unexplained=_unexplained(item, dimension),
+        unexplained=_unexplained(item, dimension, attribution.group_code),
     )
 
 
@@ -525,6 +569,8 @@ def _verdict(attribution: Attribution, item: TracedBreak) -> str:
         else ""
     )
     if not breaking:
+        if attribution.group_code is not None:
+            return "The supplied unit figures do not identify a breaking member."
         return (
             f"No single {dimension} breaks it on its own figures: it breaks only when "
             "they are added together."
@@ -532,7 +578,17 @@ def _verdict(attribution: Attribution, item: TracedBreak) -> str:
     if len(breaking) == 1:
         standing = breaking[0]
         whole = item.gap
-        if whole is not None and standing.gap is not None and _same(standing.gap, whole):
+        if standing.gap is None:
+            return (
+                f"{attribution.label(standing.member)} breaks the rule on its reported values."
+                + rest
+            )
+        if (
+            item.additive
+            and whole is not None
+            and standing.gap is not None
+            and _same(standing.gap, whole)
+        ):
             return (
                 f"All of the {amount_text(abs(whole))} is in {attribution.label(standing.member)}."
                 + rest
@@ -548,10 +604,12 @@ def _verdict(attribution: Attribution, item: TracedBreak) -> str:
     return f"{len(breaking)} {dimension} members break it on their own figures: {named}." + rest
 
 
-def _unexplained(item: TracedBreak, dimension: str) -> str:
+def _unexplained(item: TracedBreak, dimension: str, group_code: str | None) -> str:
     remainder = item.unexplained
     if not remainder:
         return ""
+    if group_code is not None:
+        return f"{amount_text(remainder, signed=True)} of the group gap is unexplained by the supplied units."
     return (
         f"{amount_text(remainder, signed=True)} of the return's gap is in no {dimension}'s rows: "
         "an override drafted on a figure the rule reads, or a rule that is not a plain sum."
@@ -595,7 +653,18 @@ def _matrix_row(
             if (standing := item.standing(member)) is not None and standing.breaks
         ]
         if not gaps:
-            cells.append(None)
+            if attribution.group_code is None:
+                cells.append(None)
+            else:
+                assessed = sum(1 for item in items if (s := item.standing(member)) and s.evaluated)
+                label = (
+                    "Met"
+                    if assessed == len(items)
+                    else f"Met {assessed}, insufficient detail for {len(items) - assessed}"
+                    if assessed
+                    else "Insufficient detail"
+                )
+                cells.append(MatrixCell(count=0, of=len(items), amount=label, tone=""))
             continue
         cells.append(MatrixCell(count=len(gaps), of=len(items), amount=_amounts(gaps), tone=tone))
     whole = [item.gap for item in items]

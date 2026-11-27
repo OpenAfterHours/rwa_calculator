@@ -49,6 +49,7 @@ from rwa_filer.readers.detail import (
     require_fact_table,
     unread_columns,
 )
+from rwa_filer.readers.group_rows import align_open_rows
 from rwa_filer.readers.tabular import read_csv, read_parquet
 from rwa_filer.release import resolve_release
 
@@ -211,6 +212,13 @@ def open_source(
         )
     if source.detail is not None and source.pack is not None:
         check_amounts(source.detail, source.pack)
+        code = source.detail.spec.group_code
+        if code is not None:
+            aligned = align_open_rows(
+                source.detail.rows, source.ret.facts, source.detail.dimensions[0], code, source.pack
+            )
+            if aligned is not None:
+                source = replace(source, detail=replace(source.detail, aligned_rows=aligned))
     return source
 
 

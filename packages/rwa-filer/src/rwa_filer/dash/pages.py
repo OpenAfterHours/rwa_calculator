@@ -28,9 +28,13 @@ References:
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from starlette.responses import FileResponse, RedirectResponse
+from polars.exceptions import PolarsError
+from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import UploadFile
+from starlette.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.routing import Route
 
 from rwa_filer.boe.engine import STATUS_FAIL
@@ -55,6 +59,7 @@ from rwa_filer.dash.security import served_securely
 from rwa_filer.dash.task_pages import follow
 from rwa_filer.dash.views import overview, rules_page
 from rwa_filer.progress import PHASE_READING, PHASE_RULES, PHASE_STRUCTURE
+from rwa_filer.readers.detail import breakdown_options
 from rwa_filer.release import release_packs, shipped_releases
 from rwa_filer.validate.review import SHOW_ALL, ReviewFilter
 from rwa_filer.workflow.attribution import attribute
@@ -86,6 +91,7 @@ def routes(context: DashContext) -> list[Route]:
     return [
         Route("/", pages.home, name="home"),
         Route("/open", pages.open_return, methods=["POST"], name="open"),
+        Route("/open/breakdown-options", pages.breakdown_options, methods=["POST"]),
         Route("/returns/{return_id}", pages.overview, name="overview"),
         Route("/returns/{return_id}/rules", pages.rules, name="rules"),
         Route("/returns/{return_id}/review", pages.set_review, methods=["POST"], name="review"),
@@ -110,6 +116,22 @@ class ReturnPages:
     def home(self, request: Request) -> Response:
         """The open page: the returns opened so far, and the form to open another."""
         return self._home(request)
+
+    async def breakdown_options(self, request: Request) -> Response:
+        """Offer the actual reporting columns and group codes before validation."""
+        async with request.form() as form:
+            upload = form.get("file")
+            path = Path(str(form.get("path") or "")).expanduser()
+            column = str(form.get("breakdown") or "")
+            if isinstance(upload, UploadFile) and upload.filename:
+                source, suffix = upload.file, Path(upload.filename).suffix
+            else:
+                source, suffix = path, path.suffix
+            try:
+                options = await run_in_threadpool(breakdown_options, source, suffix.lower(), column)
+            except (OSError, ValueError, PolarsError) as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+        return JSONResponse(options)
 
     async def open_return(self, request: Request) -> Response:
         """Open the uploaded file, or the file at the given path, and show its overview.

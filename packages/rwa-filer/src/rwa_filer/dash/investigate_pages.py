@@ -135,7 +135,12 @@ class InvestigatePages:
         line_ref = str(form.get("line_ref") or "").strip() or None
         on_repeat = str(form.get("on_repeat") or "").strip() or None
         try:
-            spec = DetailSpec.from_text(",".join(chosen), line_ref, on_repeat)
+            spec = DetailSpec.from_text(
+                ",".join(chosen),
+                line_ref,
+                on_repeat,
+                str(form.get("group_code") or "").strip() or None,
+            )
         except ValueError as exc:
             return self._refuse(request, str(exc), 400)
         if not spec.active:

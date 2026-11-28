@@ -170,13 +170,13 @@ def test_only_the_rules_asked_for_are_run_again_once_per_member_and_once_for_the
     source, validation = book
     assert source.detail is not None
     runs: list[tuple[str, ...]] = []
-    real = attribution.trace_rules
+    real = attribution._trace_indexed
 
     def counted(*args: object, **kwargs: object) -> object:
-        runs.append(tuple(rule.rule_id for rule in args[2]))  # type: ignore[attr-defined]
+        runs.append(tuple(rule.rule_id for rule in args[1]))  # type: ignore[attr-defined]
         return real(*args, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(attribution, "trace_rules", counted)
+    monkeypatch.setattr(attribution, "_trace_indexed", counted)
 
     # Act
     found = attribute(

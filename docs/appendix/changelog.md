@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The RWA Filer dashboard now prepares reporting unit breakdowns when opening a
+return and shows which template cell is loading during longer calculations.
+
 ### Added
 - (Next release changes will go here)
 - **`regulation-text` skill: an article's text on demand, and the code that

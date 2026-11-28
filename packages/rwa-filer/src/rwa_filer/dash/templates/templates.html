@@ -52,6 +52,7 @@
 </div>
 
 <div class="split">
+  {% if by %}<div class="cell-loading" role="status" aria-live="polite" aria-atomic="true"></div>{% endif %}
   <div class="grid-wrap">
     <table class="grid">
       <thead>
@@ -83,6 +84,9 @@
       <div class="small muted">{% if not cell.reportable %}Not reportable on this sheet{% elif cell.value %}Reported{% if cell.data_type %} · {{ cell.data_type }}{% endif %}{% else %}Reportable, not reported{% if cell.data_type %} · {{ cell.data_type }}{% endif %}{% endif %}</div>
       <div class="value">{{ cell.value or "—" }}</div>
     </div>
+    {% if breakdown_failed %}
+    <div class="callout callout-fail" role="alert">The reporting unit breakdown could not be calculated. <a href="{{ request.url.path }}?{{ request.url.query }}">Retry this cell</a></div>
+    {% endif %}
     {% if breakdown and breakdown.split %}
     {% set split = breakdown.split %}
     <section class="breakdown" aria-label="Where this figure comes from" id="cell-breakdown">
@@ -216,5 +220,6 @@
     }
   })();
 </script>
+{% if by %}<script src="/static/cell-loading.js"></script>{% endif %}
 {% endif %}
 {% endblock %}

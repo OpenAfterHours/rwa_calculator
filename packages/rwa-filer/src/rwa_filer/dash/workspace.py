@@ -55,12 +55,13 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Final
 
+from rwa_filer.boe.engine import STATUS_FAIL
 from rwa_filer.evidence import collect_evidence, write_evidence
 from rwa_filer.readers import HeaderFields, SourceReading, open_source
 from rwa_filer.validate.identity import source_identity
 from rwa_filer.validate.returns import validate_return
 from rwa_filer.workflow.adjustments import AdjustmentError, apply_adjustments
-from rwa_filer.workflow.attribution import attribute
+from rwa_filer.workflow.attribution import PreparedAttribution
 from rwa_filer.workflow.compare import compare_returns
 from rwa_filer.workflow.explain import Names
 
@@ -216,6 +217,7 @@ class Workspace:
         self._flights: dict[tuple[object, ...], _Flight[Any]] = {}
         #: Keyed by return, the drafts applied to it, and the breakdown column.
         self._attributions: dict[_AttributionKey, Attribution] = {}
+        self._prepared: dict[_AttributionKey, PreparedAttribution] = {}
         self._lock = threading.Lock()
 
     def open(
@@ -271,6 +273,7 @@ class Workspace:
         )
         with self._lock:
             self._returns[opened.return_id] = opened
+        self._warm_breakdown(WorkingReturn(opened, opened))
         logger.info("opened %s as %s", opened.name, opened.return_id)
         return opened
 
@@ -350,13 +353,13 @@ class Workspace:
             drafted = self._adjustments.setdefault(return_id, {})
             drafted.pop(adjustment.cell, None)
             drafted[adjustment.cell] = adjustment
-            self._revisions[return_id] = self._revisions.get(return_id, 0) + 1
+            self._drafts_changed(return_id)
 
     def drop_adjustment(self, return_id: str, cell: Cell) -> None:
         """Withdraw the override drafted for ``cell``, if there is one."""
         with self._lock:
             if self._adjustments.get(return_id, {}).pop(cell, None) is not None:
-                self._revisions[return_id] = self._revisions.get(return_id, 0) + 1
+                self._drafts_changed(return_id)
 
     def working(
         self, opened: OpenedReturn, *, progress: ProgressCallback | None = None
@@ -385,10 +388,16 @@ class Workspace:
             if self._revisions.get(return_id, 0) == revision:
                 self._working[return_id] = (revision, made)
 
+        def make() -> WorkingReturn:
+            made = _work_out(opened, drafts, progress)
+            if made.adjusted:
+                self._warm_breakdown(made)
+            return made
+
         return self._once(
             ("working", return_id, revision),
             kept,
-            lambda: _work_out(opened, drafts, progress),
+            make,
             keep,
         )
 
@@ -441,6 +450,7 @@ class Workspace:
         working: WorkingReturn,
         dimension: str,
         *,
+        rule_ids: tuple[str, ...] | None = None,
         progress: ProgressCallback | None = None,
     ) -> Attribution:
         """``working``'s breaks attributed to the members of ``dimension``, worked out once.
@@ -448,25 +458,23 @@ class Workspace:
         Kept per return, per set of drafted overrides and per column: an
         override moves the return's figures but not the detail's, so another
         set of drafts is another attribution. The search for breaks the total
-        hides is included.
+        hides is included for summed detail. Templates can request only their
+        marked rules; Investigate and subsequent selections reuse those traces.
 
         Raises:
             KeyError: the return has no detail, or ``dimension`` is not one of
                 its breakdown columns.
         """
-        detail = working.opened.detail
-        if detail is None:
-            raise KeyError(f"{working.opened.name} was not opened with breakdown columns")
+        prepared = self._prepared_attribution(working, dimension)
+        if rule_ids is not None:
+            return prepared.select(rule_ids)
         key = _attribution_key(working, dimension)
-        with self._lock:
-            found = self._attributions.get(key)
-        if found is not None:
-            return found
-        made = attribute(
-            working.current.ret, working.current.validation, detail, dimension, progress=progress
+        return self._once(
+            ("attribution", *key),
+            lambda: self._attributions.get(key),
+            lambda: prepared.select(None, progress),
+            lambda made: self._keep_breakdown(self._attributions, key, made),
         )
-        with self._lock:
-            return self._attributions.setdefault(key, made)
 
     def kept_attribution(self, working: WorkingReturn, dimension: str) -> Attribution | None:
         """The attribution ``attribution`` would return, if it has been worked out; else ``None``."""
@@ -522,6 +530,54 @@ class Workspace:
             return self._comparisons.get((baseline.return_id, candidate.return_id))
 
     # -- helpers ------------------------------------------------------------------
+
+    def _drafts_changed(self, return_id: str) -> None:
+        """Release obsolete indexes and rule results while retaining the as-opened ones."""
+        self._revisions[return_id] = self._revisions.get(return_id, 0) + 1
+        for cache in (self._prepared, self._attributions):
+            for key in list(cache):
+                if key[0] == return_id and key[1]:
+                    del cache[key]
+
+    def _keep_breakdown[T](
+        self, cache: dict[_AttributionKey, T], key: _AttributionKey, made: T
+    ) -> None:
+        """An earlier request may finish after its draft was withdrawn. Called under the lock."""
+        return_id, drafts, _dimension = key
+        if not drafts or drafts == tuple(self._adjustments.get(return_id, {}).values()):
+            cache[key] = made
+
+    def _prepared_attribution(self, working: WorkingReturn, dimension: str) -> PreparedAttribution:
+        detail = working.opened.detail
+        if detail is None:
+            raise KeyError(f"{working.opened.name} was not opened with breakdown columns")
+        key = _attribution_key(working, dimension)
+        current = working.current
+        return self._once(
+            ("prepare", *key),
+            lambda: self._prepared.get(key),
+            lambda: PreparedAttribution(current.ret, current.validation, detail, dimension),
+            lambda made: self._keep_breakdown(self._prepared, key, made),
+        )
+
+    def _warm_breakdown(self, working: WorkingReturn) -> None:
+        detail, report = working.opened.detail, working.current.validation.report
+        if not (
+            detail
+            and detail.dimensions
+            and report
+            and any(r.status == STATUS_FAIL for r in report.results)
+        ):
+            return
+        dimension = detail.dimensions[0]
+
+        def prepare() -> None:
+            try:
+                self._prepared_attribution(working, dimension)
+            except Exception:  # A click retries through _once; opening the return still succeeds.
+                logger.exception("could not prepare %s by %s", working.opened.name, dimension)
+
+        threading.Thread(target=prepare, name="dash-prepare-breakdown", daemon=True).start()
 
     def _validations_drawn(self, return_id: str) -> tuple[ReturnValidation, ...]:
         """The validations a page of the return can draw now; call it under the lock.

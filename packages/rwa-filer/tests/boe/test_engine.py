@@ -14,6 +14,8 @@ established against Arelle, on the Bank's own sample, in
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
@@ -38,7 +40,7 @@ from rwa_filer.boe.engine import (
     evaluate_rules,
 )
 from rwa_filer.model import DECIMALS_EXACT, CanonicalReturn
-from rwa_filer.taxonomy.pack import TaxonomyPack
+from rwa_filer.taxonomy.pack import DataPoint, TaxonomyPack
 from rwa_filer.validate.review import ReviewFilter
 from rwa_filer.xbrl.reader import read_instance
 from rwa_filer.xbrl.writer import write_instance
@@ -82,6 +84,24 @@ TOTAL = f"{ref(T01, '0010', '0010')} i= {ref(T01, '0020', '0010')} i+ {ref(T01, 
 FOOTING = rule("footing", TOTAL, tables=(T01,))
 #: RWEA (row 0020) may not exceed exposure (row 0010) — on every sheet of T02.
 CAP = rule("cap", f"{ref(T02, '0020', '0010')} i<= {ref(T02, '0010', '0010')}", tables=(T02,))
+
+
+def test_indexing_another_return_does_not_scan_every_taxonomy_point(pack: TaxonomyPack) -> None:
+    class Points(tuple[DataPoint, ...]):
+        scans = 0
+
+        def __iter__(self) -> Iterator[DataPoint]:
+            self.scans += 1
+            return super().__iter__()
+
+    points = Points(pack.datapoints)
+    pack = replace(pack, datapoints=points)
+    # The shared taxonomy frames are allowed to be built once.
+    run(pack, FOOTING, t01("0010", "0010", 100))
+    before = points.scans
+    result = run(pack, FOOTING, t01("0010", "0010", 25))
+    assert result.unsatisfied == 1
+    assert points.scans == before
 
 
 # ---------------------------------------------------------------------------

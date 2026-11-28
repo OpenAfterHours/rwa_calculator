@@ -27,8 +27,8 @@ Key responsibilities:
 How the work is kept small: only the rules that matter are run again — the
 broken ones, plus those that hold when the search for hidden breaks is asked
 for, or only the ones a caller names — and every run goes through the engine's
-public ``trace_rules``, so it gains from whatever makes the engine faster.
-Members are run one after another, on the caller's thread.
+indexed trace. One-shot callers index one member at a time. The dashboard can
+prepare those indexes once and trace further rules as cells are selected.
 
 References:
 - rwa_filer.boe.engine.trace_rules — the evaluations, and the cells each read
@@ -39,17 +39,18 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Final
 
 from rwa_filer.boe import grammar
-from rwa_filer.boe.engine import STATUS_FAIL, STATUS_PASS, trace_rules
+from rwa_filer.boe.engine import STATUS_FAIL, STATUS_PASS, _Store, _trace_indexed
 from rwa_filer.model import CanonicalReturn
 from rwa_filer.progress import PHASE_BREAKDOWN, Progress, notify
 from rwa_filer.readers.detail import SUMMABLE_TYPE, address, cell_data_types
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping
+    from collections.abc import Collection, Iterable, Iterator, Mapping
 
     from rwa_filer.boe.catalogue import Rule
     from rwa_filer.boe.engine import CellAddress, Evaluation
@@ -304,78 +305,66 @@ def attribute(  # noqa: PLR0913 - the return, its detail, and how much of it to 
     Raises:
         KeyError: ``dimension`` is not one of the detail's breakdown columns.
     """
-    members = detail.members(dimension)
-    report, rulebook = validation.report, validation.rulebook
-    if report is None or rulebook is None:
-        return Attribution(
-            dimension=dimension, members=members, broken=(), group_code=detail.spec.group_code
-        )
-    if search_hidden is None:
-        search_hidden = detail.spec.group_code is None
-    severity = _rule_severities(report, rule_ids, search_hidden)
-    enforced = rulebook.enforced(validation.pack.info.module)
-    rules = [rule for rule in enforced if rule.rule_id in severity]
-    if detail.spec.group_code is not None and not rules:
-        return Attribution(
-            dimension,
-            members,
-            broken=(),
-            searched_hidden=search_hidden,
-            group_code=detail.spec.group_code,
-        )
-    steps = len(members) + 1
-    notify(progress, Progress(PHASE_BREAKDOWN, 0, steps, subject="the return"))
-    whole = _evaluations(ret, validation, rules)
-    group_mode = detail.spec.group_code is not None
-    additive_checks = _additive_checks(rules, whole, validation.pack) if group_mode else set()
-    by_member: list[dict[_Key, Evaluation]] = []
-    for done, member in enumerate(members, start=1):
-        facts = detail.member_facts(dimension, member)
-        member_ret = CanonicalReturn.from_frame(ret.header, facts)
-        by_member.append(_evaluations(member_ret, validation, rules))
-        notify(
-            progress,
-            Progress(PHASE_BREAKDOWN, done, steps, subject=member_label(dimension, member)),
+    base, rules, severity = _plan(validation, detail, dimension, rule_ids, search_hidden)
+    stores = _stores(ret, validation, detail, base)
+    return _attribute_rules(base, validation, rules, severity, stores, progress)
+
+
+class PreparedAttribution:
+    """Reusable inputs and completed rule results for one validated return and column."""
+
+    def __init__(
+        self,
+        ret: CanonicalReturn,
+        validation: ReturnValidation,
+        detail: ReturnDetail,
+        dimension: str,
+    ) -> None:
+        self._base, self._rules, self._severity = _plan(validation, detail, dimension, None, None)
+        self._validation = validation
+        self._stores = tuple(_stores(ret, validation, detail, self._base)) if self._rules else ()
+        self._results: dict[str, Attribution] = {}
+        self._lock = threading.Lock()
+
+    def select(
+        self, rule_ids: Collection[str] | None, progress: ProgressCallback | None = None
+    ) -> Attribution:
+        """Trace missing rules together, then assemble completed results in publisher order."""
+        rules = [r for r in self._rules if rule_ids is None or r.rule_id in rule_ids]
+        # Finished rules are immutable and never removed. Reading them need not wait for
+        # Investigate to finish a different batch on the same stores.
+        if any(rule.rule_id not in self._results for rule in rules):
+            self._trace_missing(rules, progress)
+        parts = [self._results[r.rule_id] for r in rules]
+        return replace(
+            self._base,
+            broken=tuple(item for part in parts for item in part.broken),
+            hidden=tuple(item for part in parts for item in part.hidden),
+            rules_run=len(parts),
         )
 
-    broken: list[TracedBreak] = []
-    candidates: list[tuple[Evaluation, tuple[Standing, ...]]] = []
-    for key, evaluation in whole.items():
-        required = _reported(evaluation.cells) if group_mode else None
-        standings = tuple(
-            _standing(member, found.get(key), required)
-            for member, found in zip(members, by_member, strict=True)
-        )
-        if not evaluation.holds:
-            broken.append(
-                _traced(
-                    evaluation,
-                    severity[evaluation.rule_id],
-                    standings,
-                    additive=not group_mode or key in additive_checks,
-                )
+    def _trace_missing(self, rules: list[Rule], progress: ProgressCallback | None) -> None:
+        # Only one trace uses these stores' lazy address indexes at once. Recheck what
+        # is missing after taking the lock: another cell may just have traced it.
+        with self._lock:
+            missing = [rule for rule in rules if rule.rule_id not in self._results]
+            if not missing:
+                return
+            batch = _attribute_rules(
+                self._base, self._validation, missing, self._severity, self._stores, progress
             )
-        elif search_hidden and any(standing.breaks for standing in standings):
-            candidates.append((evaluation, standings))
-
-    hidden = _over_amounts(candidates, validation, severity)
-    logger.info(
-        "attributed %d break(s) by %s over %d member(s), %d rule(s) run; %d hidden",
-        len(broken),
-        dimension,
-        len(members),
-        len(rules),
-        len(hidden),
-    )
-    return Attribution(
-        dimension=dimension,
-        members=members,
-        broken=tuple(broken),
-        hidden=hidden,
-        searched_hidden=search_hidden,
-        rules_run=len(rules),
-        group_code=detail.spec.group_code,
-    )
+            broken, hidden = dict(_by_rule(batch.broken)), dict(_by_rule(batch.hidden))
+            self._results.update(
+                {
+                    rule.rule_id: replace(
+                        self._base,
+                        broken=tuple(broken.get(rule.rule_id, ())),
+                        hidden=tuple(hidden.get(rule.rule_id, ())),
+                        rules_run=1,
+                    )
+                    for rule in missing
+                }
+            )
 
 
 # =============================================================================
@@ -490,6 +479,95 @@ def as_record(attribution: Attribution) -> dict[str, Any]:
 # =============================================================================
 
 
+def _plan(
+    validation: ReturnValidation,
+    detail: ReturnDetail,
+    dimension: str,
+    rule_ids: Collection[str] | None,
+    search_hidden: bool | None,
+) -> tuple[Attribution, list[Rule], dict[str, str]]:
+    base = Attribution(
+        dimension, detail.members(dimension), broken=(), group_code=detail.spec.group_code
+    )
+    report, rulebook = validation.report, validation.rulebook
+    if report is None or rulebook is None:
+        return base, [], {}
+    if search_hidden is None:
+        search_hidden = detail.spec.group_code is None
+    severity = _rule_severities(report, rule_ids, search_hidden)
+    enforced = rulebook.enforced(validation.pack.info.module)
+    rules = [rule for rule in enforced if rule.rule_id in severity]
+    return replace(base, searched_hidden=search_hidden), rules, severity
+
+
+def _stores(
+    ret: CanonicalReturn, validation: ReturnValidation, detail: ReturnDetail, base: Attribution
+) -> Iterator[_Store]:
+    yield _Store(ret, validation.pack, validation.accuracy)
+    for member in base.members:
+        facts = detail.member_facts(base.dimension, member)
+        yield _Store(
+            CanonicalReturn.from_frame(ret.header, facts), validation.pack, validation.accuracy
+        )
+
+
+def _attribute_rules(  # noqa: PLR0913 - one batch over the return and its members
+    base: Attribution,
+    validation: ReturnValidation,
+    rules: list[Rule],
+    severity: Mapping[str, str],
+    stores: Iterable[_Store],
+    progress: ProgressCallback | None,
+) -> Attribution:
+    if not rules:
+        return base
+    dimension, members = base.dimension, base.members
+    steps = len(members) + 1
+    notify(progress, Progress(PHASE_BREAKDOWN, 0, steps, subject="the return"))
+    indexed = iter(stores)
+    whole = _evaluations(next(indexed), rules)
+    group_mode = base.group_code is not None
+    additive_checks = _additive_checks(rules, whole, validation.pack) if group_mode else set()
+    by_member: list[dict[_Key, Evaluation]] = []
+    for done, (member, store) in enumerate(zip(members, indexed, strict=True), start=1):
+        by_member.append(_evaluations(store, rules))
+        notify(
+            progress,
+            Progress(PHASE_BREAKDOWN, done, steps, subject=member_label(dimension, member)),
+        )
+
+    broken: list[TracedBreak] = []
+    candidates: list[tuple[Evaluation, tuple[Standing, ...]]] = []
+    for key, evaluation in whole.items():
+        required = _reported(evaluation.cells) if group_mode else None
+        standings = tuple(
+            _standing(member, found.get(key), required)
+            for member, found in zip(members, by_member, strict=True)
+        )
+        if not evaluation.holds:
+            broken.append(
+                _traced(
+                    evaluation,
+                    severity[evaluation.rule_id],
+                    standings,
+                    additive=not group_mode or key in additive_checks,
+                )
+            )
+        elif base.searched_hidden and any(standing.breaks for standing in standings):
+            candidates.append((evaluation, standings))
+
+    hidden = _over_amounts(candidates, validation, severity)
+    logger.info(
+        "attributed %d break(s) by %s over %d member(s), %d rule(s) run; %d hidden",
+        len(broken),
+        dimension,
+        len(members),
+        len(rules),
+        len(hidden),
+    )
+    return replace(base, broken=tuple(broken), hidden=hidden, rules_run=len(rules))
+
+
 def _rule_severities(
     report: RuleReport, rule_ids: Collection[str] | None, search_hidden: bool
 ) -> dict[str, str]:
@@ -502,13 +580,9 @@ def _rule_severities(
     }
 
 
-def _evaluations(
-    ret: CanonicalReturn, validation: ReturnValidation, rules: list[Any]
-) -> dict[_Key, Evaluation]:
-    """Every evaluation of ``rules`` over ``ret``, by rule and place."""
-    if not rules:
-        return {}
-    trace = trace_rules(ret, validation.pack, rules, accuracy=validation.accuracy, max_failures=0)
+def _evaluations(store: _Store, rules: list[Rule]) -> dict[_Key, Evaluation]:
+    """Every evaluation of the selected rules over these indexed facts, by rule and place."""
+    trace = _trace_indexed(store, rules, max_failures=0)
     return {(item.rule_id, item.place): item for item in trace.evaluations}
 
 

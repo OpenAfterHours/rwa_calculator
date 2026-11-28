@@ -716,16 +716,6 @@ class _Store:
         #: the member it names (``_member``). Built when the table's first
         #: keyed fact is placed.
         self._members: dict[str, dict[str, str]] = {}
-        types = [
-            pack.metrics[point.metric].data_type if point.metric in pack.metrics else ""
-            for point in pack.datapoints
-        ]
-        enumerations = [
-            pack.enumerations.get(pack.metrics[point.metric].enumeration or "", ())
-            if point.metric in pack.metrics
-            else ()
-            for point in pack.datapoints
-        ]
         resolved = resolve_datapoints(ret, pack).with_columns(key_text().alias("_key"))
         keys = resolved.filter(pl.col(IS_KEY))
         data = _shown_in_every_reported_table(
@@ -754,7 +744,11 @@ class _Store:
         for row in data.iter_rows(named=True):
             table = pack.tables[row["table"]]
             number = row["datapoint"]
-            value = _typed(row, types[number], enumerations[number], accuracy, minimum)
+            point = pack.datapoints[number]
+            metric = pack.metrics.get(point.metric)
+            kind = metric.data_type if metric is not None else ""
+            enumeration = pack.enumerations.get(metric.enumeration or "", ()) if metric else ()
+            value = _typed(row, kind, enumeration, accuracy, minimum)
             if value is None:
                 continue
             key = (row["sheet"], self._member(table, row["open_key"]), row["row"], row["column"])
@@ -763,7 +757,7 @@ class _Store:
             if number not in holder.carried:
                 holder.carried[number] = frozenset(
                     dimension
-                    for dimension, member in pack.datapoints[number].dimensions
+                    for dimension, member in point.dimensions
                     if member.rpartition(":")[2] != DEFAULT_MEMBER
                 )
 

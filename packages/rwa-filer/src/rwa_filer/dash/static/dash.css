@@ -238,6 +238,15 @@ table.grid td a { display: block; min-width: 96px; height: 34px; line-height: 34
 .cell-adjusted a, .key-adjusted { border: 2px dashed var(--info); }
 .cell-adjusted a { line-height: 30px; color: var(--info); font-weight: 600; }
 .split > .cell-panel { flex: 1 1 300px; }
+.cell-panel[aria-busy="true"] > * { visibility: hidden; }
+.split:has(.cell-panel[aria-busy="true"]) .cell-selected:not(.cell-pending) a { outline: none; }
+.split:has(.cell-panel[aria-busy="true"]) th.picked-column { color: var(--muted); }
+.cell-pending a { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.cell-loading { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); z-index: 20; }
+.cell-loading:not(:empty) { display: flex; align-items: center; gap: .65rem; padding: .75rem 1rem; border: 1px solid var(--accent); border-radius: 8px; background: var(--panel); color: var(--strong); }
+.cell-loading:not(:empty)::before { content: ""; flex: none; width: 1em; height: 1em; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: cell-spin .8s linear infinite; }
+@keyframes cell-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .cell-loading:not(:empty)::before { animation: none; } }
 /* Reading a rule needs more room than reading a cell: widen while one is open. */
 .split > .cell-panel:has(.mark-more[open]) { flex-basis: 440px; }
 .cell-panel .coords { font-family: var(--font-mono); font-size: 13px; color: var(--muted); }

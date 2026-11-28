@@ -217,6 +217,11 @@ each unit's percentage, date or wording as supplied. Monetary cells also show
 each unit's share of the group figure. **Insufficient detail** identifies unit
 comparisons missing an input the group check read.
 
+Opening a return with flagged cells starts preparing its default breakdown in
+the background. Selecting a cell runs the controls it needs and reuses controls
+already worked out for that breakdown. If a selection takes a moment, the grid
+shows which row and column are loading. You can pick another cell while you wait.
+
 **Build & sign off.** The same three acts as `rwa-filer build`, `signoff` and
 `verify`, recording the same things:
 

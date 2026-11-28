@@ -62,7 +62,6 @@ from rwa_filer.progress import PHASE_READING, PHASE_RULES, PHASE_STRUCTURE
 from rwa_filer.readers.detail import breakdown_options
 from rwa_filer.release import release_packs, shipped_releases
 from rwa_filer.validate.review import SHOW_ALL, ReviewFilter
-from rwa_filer.workflow.attribution import attribute
 
 if TYPE_CHECKING:
     from starlette.requests import Request
@@ -297,7 +296,15 @@ class ReturnPages:
             focus=query.get("focus", ""),
         )
         detail = working.opened.detail
-        by = pick_dimension(detail, query.get("by", "")) if detail is not None else ""
+        by = pick_dimension(detail, query.get("by", "")) if detail and detail.dimensions else ""
+        try:
+            breakdown = self._cell_breakdown(working, grid, by, review)
+        except Exception:  # Keep the validated grid available if the unit calculation fails.
+            logger.exception("cell breakdown failed for %s by %s", working.opened.return_id, by)
+            breakdown = None
+            breakdown_failed = True
+        else:
+            breakdown_failed = False
         return self.context.render(
             request,
             "templates.html",
@@ -305,7 +312,8 @@ class ReturnPages:
             section="templates",
             grid=grid,
             by=by,
-            breakdown=self._cell_breakdown(working, grid, by, review),
+            breakdown=breakdown,
+            breakdown_failed=breakdown_failed,
             flash=self.context.take_flash(working.opened.return_id),
         )
 
@@ -339,23 +347,15 @@ class ReturnPages:
     ) -> CellBreakdown | None:
         """The picked cell split by ``dimension``, with its broken rules member by member.
 
-        Uses the Investigate page's attribution when it has been worked out;
-        otherwise runs only the rules that mark the cell, which is quick.
+        Shares indexed inputs and finished rules with other cells and Investigate.
         """
-        if grid is None or grid.cell is None or working.opened.detail is None:
+        if grid is None or grid.cell is None or not dimension:
             return None
         cell = (grid.table, grid.page.sheet, grid.page.open_key, grid.cell.row, grid.cell.column)
         rule_ids = tuple(mark.rule_id for mark in grid.cell.marks)
         attribution = None
         if rule_ids:
-            attribution = self.context.workspace.kept_attribution(working, dimension) or attribute(
-                working.current.ret,
-                working.current.validation,
-                working.opened.detail,
-                dimension,
-                rule_ids=rule_ids,
-                search_hidden=False,
-            )
+            attribution = self.context.workspace.attribution(working, dimension, rule_ids=rule_ids)
             attribution = attribution.reviewed(working.current.validation, review)
         return cell_breakdown(working, cell, dimension, rule_ids, attribution)
 

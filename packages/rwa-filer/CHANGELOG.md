@@ -10,7 +10,8 @@ and released independently of `rwa-calc`; its release tags are prefixed
 - (Next release changes will go here)
 
 ### Changed
-- (Next release changes will go here)
+- Templates prepares reporting unit inputs in the background and reuses completed
+  controls across cell selections. A delayed loading indicator identifies the requested cell.
 
 ---
 

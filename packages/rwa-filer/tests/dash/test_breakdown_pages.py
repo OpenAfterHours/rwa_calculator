@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from html import unescape
-from typing import TYPE_CHECKING
+from threading import Event
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from starlette.testclient import TestClient
@@ -21,6 +24,7 @@ from detail_builders import (
 )
 from rwa_filer.dash import create_app
 from rwa_filer.readers import DetailSpec
+from rwa_filer.workflow import attribution
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -161,12 +165,16 @@ def test_investigate_filters_mixed_occurrences_and_keeps_the_full_attribution(
     working = workspace.working(opened)
     kept = workspace.kept_attribution(working, "team")
 
+    cell_url = f"{base}/templates?table=OF08.01.01.01&sheet=0006&row=0010&col=0101"
+    assert 'data-rule="boe_b1039"' in client.get(cell_url).text
     client.post(f"{base}/review", data={"hide_zero": "1", "section": "investigate"})
+    assert 'data-rule="boe_b1039"' not in client.get(cell_url).text
     filtered = client.get(f"{base}/investigate.csv").text
     (nonzero,) = [line for line in filtered.splitlines() if "boe_b1039" in line]
     assert "0102" in nonzero
     assert workspace.kept_attribution(working, "team") is kept
     client.post(f"{base}/review", data={"reset": "1", "section": "investigate"})
+    assert 'data-rule="boe_b1039"' in client.get(cell_url).text
     assert client.get(f"{base}/investigate.csv").text == original
 
 
@@ -348,3 +356,116 @@ def test_uploaded_file_offers_group_codes_and_reopening_keeps_the_group(
     assert opened is not None
     assert opened.ret.facts.height == 3
     assert workspace.reopen(opened, opened.release.version).ret.facts.equals(opened.ret.facts)
+
+
+def test_early_and_overlapping_cell_clicks_share_inputs_and_finished_rules(
+    client: TestClient, workspace: Workspace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Hold the first unit's input open while two clicks arrive.
+    from rwa_filer.readers import ReturnDetail
+
+    _, combined = group_files(tmp_path)
+    file = combined.rename(tmp_path / "overlapping-cells.csv")
+    started, click, resume = Event(), Event(), Event()
+    units: list[str] = []
+    traces: Counter[str] = Counter()
+    member_facts = ReturnDetail.member_facts
+    trace = attribution._trace_indexed
+
+    def held(detail: ReturnDetail, dimension: str, member: str) -> Any:
+        if detail.file == file.name:
+            units.append(member)
+            started.set()
+            assert resume.wait(10)
+        return member_facts(detail, dimension, member)
+
+    def counted(store: Any, rules: Any, **kwargs: Any) -> Any:
+        traces.update(rule.rule_id for rule in rules)
+        return trace(store, rules, **kwargs)
+
+    monkeypatch.setattr(ReturnDetail, "member_facts", held)
+    monkeypatch.setattr(attribution, "_trace_indexed", counted)
+    opened = workspace.open(
+        file, HEADER_FIELDS, detail=DetailSpec.from_text("reporting_unit", group_code="Group")
+    )
+    url = f"/returns/{opened.return_id}/templates?table={TABLE}&sheet={CORPORATES}&row=0010&col="
+    prepare = workspace._prepared_attribution
+
+    def join(*args: Any) -> Any:
+        click.set()
+        return prepare(*args)
+
+    monkeypatch.setattr(workspace, "_prepared_attribution", join)
+    try:
+        assert started.wait(5), "opening the return starts preparing its default breakdown"
+        assert not traces, "preparation does not evaluate controls"
+        with ThreadPoolExecutor(2) as pool:
+            first = pool.submit(client.get, url + "0010")
+            second = pool.submit(client.get, url + "0040")
+            assert click.wait(5), "a click reached the preparation already in flight"
+            resume.set()
+            for page in (first.result(), second.result()):
+                assert "Insufficient detail" in page.text
+                assert "Commercial breaks" in _text(page.text)
+    finally:
+        resume.set()
+    assert sorted(units) == ["Commercial", "Partial", "Retail"]
+    assert traces["boe_b0708"] == 4
+    assert set(traces.values()) == {4}, "once for the group and each unit"
+    before_repeat = traces.copy()
+    client.get(url + "0040")
+    assert traces == before_repeat
+    client.get(f"/returns/{opened.return_id}/investigate")
+    assert all(traces[key] == count for key, count in before_repeat.items())
+
+
+def test_failed_cell_trace_can_be_retried(
+    client: TestClient, broken_down: OpenedReturn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    url = f"/returns/{broken_down.return_id}/templates?table={TABLE}&sheet={CORPORATES}&row=0070&col=0200"
+
+    def fail(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("interrupted trace")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(attribution, "_trace_indexed", fail)
+        failed = client.get(url)
+    assert "Retry this cell" in failed.text
+    assert "Who breaks it" not in failed.text
+    assert "All of the 100,000 is in Asset Finance." in _text(client.get(url).text)
+
+
+def test_failed_warmup_is_retried_and_a_draft_only_changes_the_group(
+    workspace: Workspace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from rwa_filer.dash import workspace as dashboard
+    from rwa_filer.workflow.adjustments import Adjustment
+
+    _, file = group_files(tmp_path)
+    failed = Event()
+
+    def fail(*args: Any) -> Any:
+        failed.set()
+        raise RuntimeError("interrupted preparation")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(dashboard, "PreparedAttribution", fail)
+        opened = workspace.open(
+            file, HEADER_FIELDS, detail=DetailSpec.from_text("reporting_unit", group_code="Group")
+        )
+        assert failed.wait(5)
+
+    def gap() -> attribution.TracedBreak:
+        result = workspace.attribution(
+            workspace.working(opened), "reporting_unit", rule_ids=("boe_b0708",)
+        )
+        return result.broken[0]
+
+    original = gap()
+    draft = Adjustment(TABLE, "0010", "0040", "revised group", sheet=CORPORATES, value=70)
+    workspace.set_adjustment(opened.return_id, draft)
+    revised = gap()
+    assert abs(revised.gap) == 30 and abs(original.gap) == 20
+    assert revised.standings == original.standings
+    workspace.drop_adjustment(opened.return_id, draft.cell)
+    assert gap() == original

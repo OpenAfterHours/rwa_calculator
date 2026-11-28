@@ -7,10 +7,17 @@ and released independently of `rwa-calc`; its release tags are prefixed
 ## [Unreleased]
 
 ### Added
-- Export filtered failures from the Rules tab as Markdown or Excel, including cell values, published rule text and optional reporting-unit figures.
+- (Next release changes will go here)
 
 ### Changed
 - (Next release changes will go here)
+
+---
+
+## [0.1.12] - 2026-11-28
+
+### Added
+- Export filtered failures from the Rules tab as Markdown or Excel, including cell values, published rule text and optional reporting-unit figures.
 
 ---
 

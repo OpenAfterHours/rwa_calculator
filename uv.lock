@@ -1750,7 +1750,7 @@ dev = [
 
 [[package]]
 name = "rwa-filer"
-version = "0.1.11"
+version = "0.1.12"
 source = { editable = "packages/rwa-filer" }
 dependencies = [
     { name = "jinja2" },

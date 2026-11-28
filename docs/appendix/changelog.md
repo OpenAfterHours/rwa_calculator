@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+RWA Filer can export the Rules tab's filtered failures as Markdown or Excel,
+including the reported cell values and an optional reporting-unit breakdown.
+
 The RWA Filer dashboard now prepares reporting unit breakdowns when opening a
 return and shows which template cell is loading during longer calculations.
 

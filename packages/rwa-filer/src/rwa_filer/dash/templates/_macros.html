@@ -92,6 +92,22 @@
 </div>
 {%- endmacro -%}
 
+{% macro reporting_units(dimension, attribution, trace) %}
+<h3>Reporting-unit breakdown · {{ dimension }}</h3>
+{% if trace %}
+<div class="table-wrap"><table class="who">
+  <thead><tr><th>Member</th><th>Result</th><th>Left</th><th>Right</th></tr></thead>
+  <tbody>
+    {% for row in trace.standings if row.evaluated or attribution.group_code is not none %}
+    <tr><td>{{ attribution.label(row.member) }}</td><td>{{ "Insufficient detail" if not row.evaluated else "Breaks" if row.breaks else "Meets rule" }}</td><td>{{ row.left | figure }}</td><td>{{ row.right | figure }}</td></tr>
+    {% endfor %}
+    <tr class="whole"><td>The return</td><td>Breaks</td><td>{{ trace.left | figure }}</td><td>{{ trace.right | figure }}</td></tr>
+  </tbody>
+</table></div>
+{% if trace.unexplained %}<p>Unexplained gap · {{ trace.unexplained | figure }}</p>{% endif %}
+{% else %}<p>Breakdown unavailable for this occurrence.</p>{% endif %}
+{% endmacro %}
+
 {#- The file and header fields of a form that opens a return (Open and Compare pages). -#}
 {%- macro open_fields(values, modules, releases) -%}
 <label class="dropzone">

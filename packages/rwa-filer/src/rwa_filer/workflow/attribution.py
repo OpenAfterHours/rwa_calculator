@@ -44,7 +44,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Final
 
 from rwa_filer.boe import grammar
-from rwa_filer.boe.engine import STATUS_FAIL, STATUS_PASS, _Store, _trace_indexed
+from rwa_filer.boe.engine import STATUS_FAIL, STATUS_PASS, _Store, _trace_indexed, evaluation_place
 from rwa_filer.model import CanonicalReturn
 from rwa_filer.progress import PHASE_BREAKDOWN, Progress, notify
 from rwa_filer.readers.detail import SUMMABLE_TYPE, address, cell_data_types
@@ -70,7 +70,6 @@ logger = logging.getLogger(__name__)
 NO_MEMBER_PREFIX: Final = "no "
 #: Below this, a gap is rounding dust in a sum of floats, not an amount.
 _DUST: Final = 1e-6
-_AXIS_NAMES: Final = {"r": "row", "c": "column", "z": "sheet"}
 
 #: An evaluation's identity in two returns: its rule and its place.
 type _Key = tuple[str, tuple[tuple[str, str], ...]]
@@ -382,10 +381,7 @@ def place_text(place: tuple[tuple[str, str], ...]) -> str:
 
     Empty for an evaluation over the whole template.
     """
-    return ", ".join(
-        f"{_AXIS_NAMES.get(axis, axis.rsplit(':', 1)[-1])} {value.rsplit(':', 1)[-1]}"
-        for axis, value in sorted(place)
-    )
+    return evaluation_place(place)
 
 
 def amount_text(value: float | None, *, signed: bool = False) -> str:

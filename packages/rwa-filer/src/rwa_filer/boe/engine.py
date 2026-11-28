@@ -1784,9 +1784,7 @@ class _Evaluation:
                 cells.append(f"{label} = {_show(selector.data.cells[key])}")
             else:
                 cells.append(f"{label} not reported")
-        place = ", ".join(
-            f"{_axis_label(axis)} {local_name(value)}" for axis, value in sorted(env.items())
-        )
+        place = evaluation_place(env.items())
         zero, excess, unit = self._failure_measure(env)
         return Failure(
             zero_in_empty_cell=zero,
@@ -2312,6 +2310,11 @@ def _describe(reference: Reference) -> str:
             shown = ";".join(codes[:3]) + (";.." if len(codes) > 3 else "")  # noqa: PLR2004
             parts.append(f"{prefix}{shown}")
     return " ".join(parts)
+
+
+def evaluation_place(axes: Iterable[tuple[str, str]]) -> str:
+    """The displayed coordinates of one evaluation, including variable-specific axes."""
+    return ", ".join(f"{_axis_label(axis)} {local_name(value)}" for axis, value in sorted(axes))
 
 
 def _axis_label(axis: str) -> str:

@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Final
 from polars.exceptions import PolarsError
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
-from starlette.responses import FileResponse, JSONResponse, RedirectResponse
+from starlette.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
 from rwa_filer.boe.engine import STATUS_FAIL
@@ -55,9 +55,10 @@ from rwa_filer.dash.context import (
 )
 from rwa_filer.dash.forms import form_values, page_number, read_open_form
 from rwa_filer.dash.grid import template_grid
+from rwa_filer.dash.rule_exports import FailureReport, markdown, matched_traces, workbook
 from rwa_filer.dash.security import served_securely
 from rwa_filer.dash.task_pages import follow
-from rwa_filer.dash.views import overview, rules_page
+from rwa_filer.dash.views import failed_rule_details, overview, rules_page
 from rwa_filer.progress import PHASE_READING, PHASE_RULES, PHASE_STRUCTURE
 from rwa_filer.readers.detail import breakdown_options
 from rwa_filer.release import release_packs, shipped_releases
@@ -65,13 +66,13 @@ from rwa_filer.validate.review import SHOW_ALL, ReviewFilter
 
 if TYPE_CHECKING:
     from starlette.requests import Request
-    from starlette.responses import Response
 
     from rwa_filer.dash.breakdown import CellBreakdown
     from rwa_filer.dash.context import DashContext
     from rwa_filer.dash.grid import TemplateGrid
     from rwa_filer.dash.workspace import WorkingReturn
     from rwa_filer.progress import ProgressCallback
+    from rwa_filer.workflow.attribution import Attribution
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,7 @@ def routes(context: DashContext) -> list[Route]:
         Route("/open/breakdown-options", pages.breakdown_options, methods=["POST"]),
         Route("/returns/{return_id}", pages.overview, name="overview"),
         Route("/returns/{return_id}/rules", pages.rules, name="rules"),
+        Route("/returns/{return_id}/rules/export", pages.export_failures, name="export_failures"),
         Route("/returns/{return_id}/review", pages.set_review, methods=["POST"], name="review"),
         Route("/returns/{return_id}/templates", pages.templates, name="templates"),
         Route(
@@ -225,12 +227,137 @@ class ReturnPages:
             rule_id=query.get("rule", ""),
             page=page_number(query.get("page")),
         )
+        detail = working.opened.detail
+        dimensions = detail.dimensions if detail else ()
+        by = query.get("by", "")
+        dimension = by if by in dimensions else ""
+        selected = (view.selected,) if view.selected and view.selected.failures else ()
+        attribution = self._rule_attribution(
+            working, dimension, tuple(r.row.rule_id for r in selected), review
+        )
         response = self.context.render(
-            request, "rules.html", working=working, section="rules", view=view, review=review
+            request,
+            "rules.html",
+            working=working,
+            section="rules",
+            view=view,
+            review=review,
+            dimension=dimension,
+            dimensions=dimensions,
+            attribution=attribution,
+            traces=matched_traces(selected, attribution),
         )
         if legacy:
             save_review(request, response, working.opened.return_id, review)
         return response
+
+    def export_failures(self, request: Request) -> Response:
+        """Preview or download every visible occurrence from the working return."""
+        working = self.context.working(request)
+        current = working.current
+        params = request.query_params
+        try:
+            review = (
+                read_review(params)
+                if any(key in params for key in REVIEW_KEYS)
+                else review_of(request)
+            )
+        except ValueError as exc:
+            return self.context.render(
+                request,
+                "error.html",
+                working=working,
+                status_code=400,
+                title="Invalid review filter",
+                message=str(exc),
+            )
+        severity = "" if review.errors_only else params.get("severity", "")
+        template, query = params.get("template", ""), params.get("q", "")
+        dimension, download = params.get("by", ""), params.get("download", "")
+        detail = working.opened.detail
+        dimensions = detail.dimensions if detail else ()
+        if download not in ("", "md", "xlsx") or (dimension and dimension not in dimensions):
+            return self.context.render(
+                request,
+                "error.html",
+                working=working,
+                status_code=400,
+                title="Invalid export option",
+                message="Choose an available format and reporting column.",
+            )
+        rules = failed_rule_details(
+            current, severity=severity, template=template, query=query, review=review
+        )
+        header = current.ret.header
+        summary = {
+            "Return": current.name,
+            "Entity": header.entity_identifier,
+            "Reference date": str(header.reference_date),
+            "Module": header.module,
+            "Taxonomy release": current.release.version,
+            "Figures": "With drafted overrides" if working.adjusted else "As opened",
+            "Status": "Failed",
+            "Severity": "ERROR" if review.errors_only else severity or "All",
+            "Template": template or "All",
+            "Search": query or "All",
+            "Warning threshold (money)": f"{review.money} {header.currency}"
+            if review.money is not None
+            else "None",
+            "Warning threshold (bp)": str(review.basis_points)
+            if review.basis_points is not None
+            else "None",
+            "Hide zero-only null checks": "Yes" if review.hide_zero_null else "No",
+            "Reporting-unit breakdown": dimension or "Omitted",
+        }
+        # A preview traces only its sample rule. Downloads use every matching rule.
+        ids = tuple(rule.row.rule_id for rule in (rules if download else rules[:1]))
+        attribution = self._rule_attribution(working, dimension, ids, review)
+        report = FailureReport(summary, rules, dimension, attribution)
+        if not download:
+            first = rules[0] if rules else None
+            trace = (
+                matched_traces(rules[:1], attribution).get((first.row.rule_id, 1))
+                if first
+                else None
+            )
+            return self.context.render(
+                request,
+                "rule_export.html",
+                section="rules",
+                working=working,
+                review=review,
+                report=report,
+                dimensions=dimensions,
+                sample=first,
+                trace=trace,
+                severity=severity,
+                template=template,
+                query=query,
+            )
+        if download == "md":
+            body, media = markdown(report).encode(), "text/markdown"
+        else:
+            try:
+                body = workbook(report)
+            except ValueError as exc:
+                return self.context.render(
+                    request,
+                    "error.html",
+                    working=working,
+                    status_code=400,
+                    title="Workbook could not be exported",
+                    message=str(exc),
+                )
+            media = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        filename = f"failed-rules-{header.reference_date}.{download}"
+        return Response(
+            body,
+            media_type=media,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+            },
+        )
 
     async def set_review(self, request: Request) -> Response:
         """Save the browser's review settings and return to the same tab and selection."""
@@ -337,6 +464,20 @@ class ReturnPages:
         return response
 
     # -- helpers ----------------------------------------------------------------
+
+    def _rule_attribution(
+        self, working: WorkingReturn, dimension: str, ids: tuple[str, ...], review: ReviewFilter
+    ) -> Attribution | None:
+        if not dimension or not ids:
+            return None
+        try:
+            result = self.context.workspace.attribution(working, dimension, rule_ids=ids)
+            return result.reviewed(working.current.validation, review)
+        except Exception:
+            logger.exception(
+                "Rule breakdown failed for %s by %s", working.opened.return_id, dimension
+            )
+            return None
 
     def _cell_breakdown(
         self,

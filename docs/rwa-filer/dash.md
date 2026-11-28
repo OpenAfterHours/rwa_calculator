@@ -123,6 +123,15 @@ the expression as the Bank's workbook states it, how many of its evaluations
 held and how many broke, and for each of the first breaks the cells it read with
 the values they held. Each of those cells links to the template grid.
 
+On **Failed**, choose **Export failures** to preview the number of matching
+rules and occurrences. **Download Markdown** produces a report to read or paste
+into a message. **Download Excel** records the filters on a Summary sheet and
+links each occurrence to its Rules entry by rule ID. Both include visible
+breaks across all pages, with their published expressions, values and cell
+addresses. When the return has breakdown columns, select one to include each
+member's result and figures. An occurrence with no matching attribution is
+marked as unavailable.
+
 Open **Review filters** on any return tab. Enter a warning threshold in the
 return's currency or in basis points, then choose **Apply to this return**.
 The threshold applies to the excess beyond the published rule's

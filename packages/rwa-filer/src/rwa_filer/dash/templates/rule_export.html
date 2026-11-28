@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_macros.html" import failure_card, reporting_units, rule_text, severity_chip %}
+{% block title %}Export failures · {{ current.name }} — rwa-filer dash{% endblock %}
+{% block content %}
+{% set base = "/returns/" ~ current.return_id ~ "/rules" %}
+<div>
+  <a href="{{ link(base, severity=severity, template=template, q=query, by=report.dimension) }}">Back to Rules</a>
+  <h1>Export failures</h1>
+  <p class="lede">{{ report.occurrences | count }} occurrence{{ "s" if report.occurrences != 1 }} across {{ report.rules | length | count }} failed rule{{ "s" if report.rules | length != 1 }} on all matching pages.</p>
+</div>
+<div class="split">
+  <section class="narrow panel" aria-label="Export settings">
+    <h2>Applied filters</h2>
+    <dl>
+      {% for field in ["Status", "Severity", "Template", "Search", "Warning threshold (money)", "Warning threshold (bp)", "Hide zero-only null checks"] %}
+      <dt class="small muted">{{ field }}</dt><dd>{{ report.summary[field] }}</dd>
+      {% endfor %}
+    </dl>
+    {% if sample %}
+    <form method="get" action="{{ base }}/export">
+      <input type="hidden" name="errors_only" value="{{ '1' if review.errors_only else '0' }}">
+      <input type="hidden" name="hide_zero" value="{{ '1' if review.hide_zero_null else '0' }}">
+      <input type="hidden" name="money" value="{{ review.money if review.money is not none else '' }}">
+      <input type="hidden" name="bps" value="{{ review.basis_points if review.basis_points is not none else '' }}">
+      {% for name, value in [('severity', severity), ('template', template), ('q', query)] %}
+      {% if value %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endif %}
+      {% endfor %}
+      {% if dimensions %}
+      <label class="field">Reporting-unit breakdown
+        <select name="by"><option value="">Omit breakdown</option>{% for by in dimensions %}<option value="{{ by }}"{% if by == report.dimension %} selected{% endif %}>{{ by }}</option>{% endfor %}</select>
+      </label>
+      <button class="btn" type="submit">Update preview</button>
+      {% else %}<p class="small muted">Reporting-unit breakdown unavailable for this return.</p>{% endif %}
+      <div class="filters">
+        <button class="btn" type="submit" name="download" value="md">Download Markdown</button>
+        <button class="btn" type="submit" name="download" value="xlsx">Download Excel</button>
+      </div>
+    </form>
+    {% endif %}
+  </section>
+  <section class="wide panel" aria-label="Export preview">
+    {% if sample %}
+    <div class="small muted">Preview · first matching occurrence</div>
+    <div>{{ severity_chip(sample.row.severity) }} <span class="mono">{{ sample.row.rule_id }}</span></div>
+    <h2>{{ sample.row.label or "No label published" }}</h2>
+    <p>{{ sample.row.templates | join(" · ") }}</p>
+    {{ rule_text(sample) }}
+    {{ failure_card(sample.failures[0], "/returns/" ~ current.return_id ~ "/templates", sample.row.rule_id) }}
+    {% if report.dimension %}
+    {{ reporting_units(report.dimension, report.attribution, trace) }}
+    {% endif %}
+    {% else %}<p>No failures match the applied filters.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

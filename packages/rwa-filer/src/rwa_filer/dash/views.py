@@ -294,22 +294,12 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
         if result.status == STATUS_FAIL or not review.hides_severity(result.severity)
     ]
     counts = Counter(row.status for row in rows)
-    needle = query.strip().lower()
-    matched = [
-        row
-        for row in rows
-        if row.status == status
-        and (not severity or row.severity == severity)
-        and (not template or template in row.templates)
-        and (not needle or needle in f"{row.rule_id} {row.label}".lower())
-    ]
+    matched = _matched(rows, status, severity, template, query)
     hidden_errors = hidden_warnings = 0
     if status == STATUS_FAIL and review.active:
         hidden_errors = sum(row.hidden for row in matched if row.is_error)
         hidden_warnings = sum(row.hidden for row in matched if not row.is_error)
         matched = [row for row in matched if row.unsatisfied > row.hidden]
-    if status == STATUS_FAIL:
-        matched.sort(key=lambda row: (not row.is_error, row.rule_id))
     pages = max(1, math.ceil(len(matched) / RULES_PER_PAGE))
     page = min(max(page, 1), pages)
     shown = matched[(page - 1) * RULES_PER_PAGE : page * RULES_PER_PAGE]
@@ -318,7 +308,11 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
         picked = next((row for row in rows if row.rule_id == rule_id), None)
     if picked is None and shown:
         picked = shown[0]
-    detail = _detail(opened, picked, results, review) if picked else None
+    detail = (
+        _detail(opened, picked, next(r for r in results if r.rule_id == picked.rule_id), review)
+        if picked
+        else None
+    )
     return RulesPage(
         review=review,
         hidden_errors=hidden_errors,
@@ -337,6 +331,40 @@ def rules_page(  # noqa: PLR0913 - one keyword per filter the page takes
     )
 
 
+def failed_rule_details(
+    opened: OpenedReturn, *, severity: str, template: str, query: str, review: ReviewFilter
+) -> tuple[RuleDetail, ...]:
+    """Every visible failure for the current filters, before either display limit."""
+    report = opened.validation.report
+    if report is None:
+        return ()
+    failed = {result.rule_id: result for result in report.results if result.status == STATUS_FAIL}
+    rows = [_row(result, opened.pack, report, review) for result in failed.values()]
+    matches = _matched(rows, STATUS_FAIL, "" if review.errors_only else severity, template, query)
+    return tuple(
+        _detail(opened, row, failed[row.rule_id], review)
+        for row in matches
+        if row.unsatisfied > row.hidden
+    )
+
+
+def _matched(
+    rows: list[RuleRow], status: str, severity: str, template: str, query: str
+) -> list[RuleRow]:
+    needle = query.strip().lower()
+    matched = [
+        row
+        for row in rows
+        if row.status == status
+        and (not severity or row.severity == severity)
+        and (not template or template in row.templates)
+        and (not needle or needle in f"{row.rule_id} {row.label}".lower())
+    ]
+    if status == STATUS_FAIL:
+        matched.sort(key=lambda row: (not row.is_error, row.rule_id))
+    return matched
+
+
 def rule_detail(
     opened: OpenedReturn, rule_id: str, review: ReviewFilter = SHOW_ALL
 ) -> RuleDetail | None:
@@ -349,7 +377,7 @@ def rule_detail(
     results = report.results if report else ()
     result = next((item for item in results if item.rule_id == rule_id), None)
     return (
-        _detail(opened, _row(result, opened.pack, report, review), results, review)
+        _detail(opened, _row(result, opened.pack, report, review), result, review)
         if result
         else None
     )
@@ -412,9 +440,8 @@ def _row(
 
 
 def _detail(
-    opened: OpenedReturn, row: RuleRow, results: tuple[RuleResult, ...], review: ReviewFilter
+    opened: OpenedReturn, row: RuleRow, result: RuleResult, review: ReviewFilter
 ) -> RuleDetail:
-    result = next(item for item in results if item.rule_id == row.rule_id)
     rule = _rule(opened.release.version, opened.pack.info.module, row.rule_id)
     return RuleDetail(
         row=row,
